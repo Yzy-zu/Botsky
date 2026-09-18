@@ -276,12 +276,7 @@ async function initializeNlp() {
     }
     manager.save(MODEL_PATH);
 
-    const rootModelPath = path.join(__dirname, '../../model.nlp');
-    try {
-        manager.save(rootModelPath);
-    } catch (e) {
-        // Ignorar si no se puede escribir en raíz
-    }
+    // Guardado centralizado exclusivamente en data/model.nlp
 
     logger.info('[NLP] Modelo élite masivo entrenado y guardado exitosamente.');
 }

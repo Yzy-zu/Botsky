@@ -509,25 +509,4 @@ process.on('uncaughtException', (err) => {
     // No salir; el bot debe seguir corriendo
 });
 
-// ─── Limpieza automática de /tmp cada 5 horas ─────────────────────────────────
-setInterval(() => {
-    const tmpDir = process.env.TMP_DIR ?? '/tmp/whatsapp-bot';
-    try {
-        if (!fs.existsSync(tmpDir)) return;
-        const files = fs.readdirSync(tmpDir);
-        const now = Date.now();
-        let deleted = 0;
-        for (const file of files) {
-            const filePath = path.join(tmpDir, file);
-            const stats = fs.statSync(filePath);
-            // Borrar archivos con más de 5 horas de antigüedad
-            if (now - stats.mtimeMs > 5 * 60 * 60 * 1000) {
-                fs.unlinkSync(filePath);
-                deleted++;
-            }
-        }
-        if (deleted > 0) logger.info(`Limpieza completada: ${deleted} archivos viejos borrados de ${tmpDir}`);
-    } catch (err) {
-        logger.error('Error limpiando /tmp:', err.message);
-    }
-}, 5 * 60 * 60 * 1000);
+// Limpieza de /tmp gestionada centralizadamente por src/services/cleanup.js

@@ -5,6 +5,7 @@ const queue = require('../core/queue');
 const logger = require('../services/logger');
 const { sendText } = require('../services/evolution');
 const nlp = require('../services/nlp');
+const { detectFormatFromRegex, extractFlagsAndModifiers, adjustCommandByContext } = require('./extractors');
 
 const { handleAyuda } = require('../commands/ayuda');
 const { handleDescargar, getSearchSession, clearSearchSession, matchSelection } = require('../commands/descargar');
@@ -244,32 +245,11 @@ async function dispatch(context) {
     const combinedText = `${rawText} ${normalizedText}`;
 
     // 1.5. Extracción de Formato por Regex (Respaldo al NLP)
-    // Corre SIEMPRE después del NLP y cubre typos/palabras coloquiales no entrenadas.
     if (!parsed.flags.f) {
-        const formatRegexMap = [
-            // Documentos
-            { regex: /\b(pdf|pidief|pidef|pedeefe|pe\s*de\s*efe|pe-de-efe|pdfe|pfd|p\.d\.f)\b/i, fmt: 'pdf' },
-            { regex: /\b(docx|word|uord|guor|wor|\.doc)\b/i,                fmt: 'docx' },
-            { regex: /\b(xlsx|excel|exel|ecel|eksel|hoja\s*de\s*calculo|tabla|tablita)\b/i, fmt: 'xlsx' },
-            { regex: /\b(pptx|ppt|powerpoint|power\s*point|pitor|diapositiva|diapos)\b/i,    fmt: 'pptx' },
-            { regex: /\b(odt|libre\s*office)\b/i,                  fmt: 'odt'  },
-            { regex: /\b(txt|texto plano|bloc de notas)\b/i,       fmt: 'txt'  },
-            // Medios
-            { regex: /\b(mp3|mp\s*tres|audio|musica|cancion|rola|rolita|temazo|temon)\b/i, fmt: 'mp3' },
-            { regex: /\b(mp4|video|videito|videocito|bideo|clip|clipcito|short|reel)\b/i,   fmt: 'mp4' },
-            { regex: /\b(ogg|nota de voz|voice note|vn|opus)\b/i,  fmt: 'ogg'  },
-            { regex: /\bwav\b/i,                                    fmt: 'wav'  },
-            { regex: /\b(flac|lossless|alta fidelidad)\b/i,         fmt: 'flac' },
-            { regex: /\bgif\b/i,                                    fmt: 'gif'  },
-            { regex: /\bwebp\b/i,                                   fmt: 'webp' },
-            { regex: /\bm4a\b/i,                                    fmt: 'm4a'  },
-        ];
-        for (const { regex, fmt } of formatRegexMap) {
-            if (regex.test(combinedText)) {
-                parsed.flags.f = fmt;
-                logger.info(`[REGEX] Extrajo formato de texto crudo: -f ${fmt}`);
-                break;
-            }
+        const detectedFmt = detectFormatFromRegex(combinedText);
+        if (detectedFmt) {
+            parsed.flags.f = detectedFmt;
+            logger.info(`[REGEX] Extrajo formato de texto crudo: -f ${detectedFmt}`);
         }
     }
 
@@ -299,112 +279,11 @@ async function dispatch(context) {
         }
     }
 
-    // 2. Autocorrección de Sesgos (Contexto Cruzado)
-    if (['convertir', 'doc'].includes(cmdToSwitch) && parsed.flags.f) {
-        const docFormats = ['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'txt'];
-        const mediaFormats = ['mp3', 'mp4', 'gif', 'ogg', 'wav', 'audio'];
-        const imgFormats = ['img'];
-
-        if (docFormats.includes(parsed.flags.f)) {
-            cmdToSwitch = 'doc'; // Forzar a modo Documento
-            logger.info(`Contexto Cruzado: Forzado a comando 'doc' por el formato ${parsed.flags.f}`);
-        } else if (mediaFormats.includes(parsed.flags.f)) {
-            cmdToSwitch = 'convertir'; // Forzar a modo Multimedia
-            logger.info(`Contexto Cruzado: Forzado a comando 'convertir' por el formato ${parsed.flags.f}`);
-        } else if (imgFormats.includes(parsed.flags.f)) {
-            const msgType = messageData?.messageType;
-            if (msgType === 'documentMessage') {
-                cmdToSwitch = 'pdf2img'; // PDF a Imágenes
-                logger.info(`Contexto Cruzado: Forzado a comando 'pdf2img' por el formato ${parsed.flags.f} y tipo de adjunto`);
-            } else {
-                cmdToSwitch = 'convertir'; // Video/Sticker a Imagen (ej: gif a jpg)
-                logger.info(`Contexto Cruzado: Forzado a comando 'convertir' por el formato ${parsed.flags.f} para multimedia`);
-            }
-        }
-    }
-
-    // 2.5. Autocorrección basada en Tipo de Adjunto (MIME/MessageType)
-    const msgType = messageData?.messageType;
-    if (msgType === 'audioMessage') {
-        const isTranscriptionIntent = rawText.match(/\b(que dice|dice|habla|transcri\w*|texto|escribe|escucha\w*|resum\w*|leer|lee|dime|entiende|audio a texto)\b/) ||
-                                      ['leer', 'doc', 'pdf2img'].includes(cmdToSwitch);
-        const hasExplicitConvertVerb = rawText.match(/\b(convertir|transformar|cambiar|formato|mutar|hazlo\s+(mp3|mp4|wav|ogg|flac)|a\s+(mp3|mp4|wav|ogg|flac))\b/);
-
-        if (isTranscriptionIntent || (cmdToSwitch === 'convertir' && !hasExplicitConvertVerb)) {
-            cmdToSwitch = 'transcribir';
-            delete parsed.flags.f; // Limpiar formato erróneo
-            logger.info(`Contexto Cruzado: Forzado a 'transcribir' porque el adjunto es un audio`);
-        }
-    } else if (msgType === 'imageMessage' || msgType === 'documentMessage') {
-        const isOcrIntent = rawText.match(/\b(que dice|leer|lee|texto|extraer|sacar texto|ocr|copiar)\b/) ||
-                            ['transcribir'].includes(cmdToSwitch);
-        if (isOcrIntent || (cmdToSwitch === 'convertir' && rawText.includes('texto'))) {
-            cmdToSwitch = 'leer';
-            delete parsed.flags.f;
-            logger.info(`Contexto Cruzado: Forzado a 'leer' porque el adjunto es una imagen/documento`);
-        }
-    }
+    // 2. Autocorrección de Sesgos (Contexto Cruzado y Tipo de Adjunto)
+    cmdToSwitch = adjustCommandByContext(cmdToSwitch, rawText, messageData, parsed);
 
     // 3. Extracción de Modificadores (Flags Universales y Específicas)
-    if (['convertir', 'descargar'].includes(cmdToSwitch)) {
-        if (combinedText.match(/\b(alta(\s+calidad)?|hq|hd|4k|1080|1080p|720p|720|full\s*hd|excelente|maxima|rica\s*calidad|buena\s*calidad|claro|nitido|chido|perron|pesadito|rico)\b/i)) {
-            parsed.flags.q = (cmdToSwitch === 'descargar') ? '1080' : 'alta';
-        } else if (combinedText.match(/\b(baja(\s+calidad)?|mala(\s+calidad)?|ligero|poco\s*peso|comprimido|fea|borroso|360|rapido|pesa\s*mucho)\b/i)) {
-            parsed.flags.q = (cmdToSwitch === 'descargar') ? '360' : 'baja';
-        }
-
-        if (combinedText.match(/subtitulos|letras|subs|cc|con texto|traducido|karaoke|ponle texto/i)) parsed.flags.s = true;
-    }
-
-    if (cmdToSwitch === 'spotify') {
-        if (combinedText.match(/flac|lossless|sin perdida|maxima calidad|hq|estudio|original|alta fidelidad/i)) parsed.flags.flac = true;
-        if (combinedText.match(/como documento|en documento|archivo|docu|fichero|sin comprimir|pesado/i)) parsed.flags.c = true;
-        if (combinedText.match(/como audio|nota de voz|audio normal|vn|voicenote|normal|mp3 normal|rapido/i)) parsed.flags.w = true;
-    }
-
-    if (cmdToSwitch === 'sticker') {
-        if (combinedText.match(/recorta|recortado|sin\s*fondo|sin\s*borde|cara|rostro|circulo|redondo|transparente|png|bolita|busto|silueta|perrona?/i)) parsed.flags.r = true;
-        if (combinedText.match(/animado|movimiento|gif|video|que\s*se\s*mueva|con\s*movimiento|animacion/i)) parsed.flags.a = true;
-    }
-
-    if (cmdToSwitch === 'pdf2img') {
-        if (rawText.match(/zip|comprimido|carpeta|paquete|rar|todo junto|en un solo archivo/)) parsed.flags.zip = true;
-    }
-
-    if (cmdToSwitch === 'efecto') {
-        const efectoMap = {
-            'ardilla': ['ardilla', 'alvin', 'chillon', 'pitufo', 'agudo', 'raton'],
-            'lento': ['lento', 'despacio', 'tortuga', 'slow', 'retrasado'],
-            'grave': ['grave', 'grueso', 'demonio', 'diablo', 'monstruo', 'ronco', 'hondo', 'oscuro'],
-            'rapido': ['rapido', 'veloz', 'flash', 'acelerado', 'fast'],
-            'robot': ['robot', 'autotune', 'ciborg', 'metalico', 'maquina'],
-            'eco': ['eco', 'cueva', 'estadio', 'repeticion', 'vacio'],
-            'reversa': ['reversa', 'al reves', 'invertido', 'vuelta']
-        };
-
-        const words = rawText.split(/\s+/);
-        let foundEffect = null;
-        for (const word of words) {
-            const cleanWord = word.replace(/[^a-z0-9]/g, '');
-            for (const [realEf, aliases] of Object.entries(efectoMap)) {
-                if (aliases.includes(cleanWord)) {
-                    foundEffect = realEf;
-                    logger.info(`Extrajo efecto automáticamente: ${realEf} (desde '${cleanWord}')`);
-                    break;
-                }
-            }
-            if (foundEffect) break;
-        }
-
-        if (foundEffect) {
-            // Forzar que el argumento 0 sea única y exclusivamente el efecto detectado
-            parsed.args = [foundEffect];
-        }
-    }
-
-    if (cmdToSwitch === 'unir') {
-        if (rawText.match(/terminar|listo|ya|fin|acabe|mezclalos/)) parsed.flags.terminar = true;
-    }
+    extractFlagsAndModifiers(cmdToSwitch, rawText, combinedText, parsed);
 
     // Verificar seguridad de comandos sensibles y de sistema
     // 1. Apagar host / bot: estrictamente super-admin (dueño)
