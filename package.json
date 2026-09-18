@@ -1,0 +1,31 @@
+{
+    "name": "whatsapp-bot",
+    "version": "1.0.0",
+    "description": "Bot de WhatsApp con comandos tipo terminal via Evolution API",
+    "main": "src/core/server.js",
+    "scripts": {
+        "start": "node src/core/server.js",
+        "dev": "nodemon src/core/server.js"
+    },
+    "dependencies": {
+        "adm-zip": "^0.5.17",
+        "axios": "^1.7.2",
+        "dotenv": "^16.6.1",
+        "express": "^4.19.2",
+        "form-data": "^4.0.0",
+        "fuse.js": "^7.3.0",
+        "googleapis": "^176.0.0",
+        "jimp": "^1.6.1",
+        "minecraft-server-util": "^5.4.4",
+        "node-cron": "^4.6.0",
+        "node-nlp": "^5.0.0-alpha.5",
+        "node-webpmux": "^3.2.1",
+        "sqlite3": "^6.0.1"
+    },
+    "devDependencies": {
+        "nodemon": "^3.1.4"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    }
+}
