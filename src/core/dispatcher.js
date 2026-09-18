@@ -145,6 +145,7 @@ async function dispatch(context) {
             const chatMsg = aiDecision.message || aiDecision.args?.message;
             if (action === 'chat' && chatMsg) {
                 logger.info(`[AI-CHAT] Respondiendo como Botsky: "${chatMsg.slice(0, 50)}..."`);
+                addMessage(from, 'assistant', chatMsg, 'Botsky');
                 await sendText(from, chatMsg);
                 return;
             } else if (action && action !== 'chat') {
@@ -508,6 +509,7 @@ async function dispatch(context) {
             handler = async () => {
                 const history = getHistory(from, 8);
                 const reply = await chatWithLlama(userMsgWithContext, userName, isGroup, history);
+                addMessage(from, 'assistant', reply, 'Botsky');
                 await sendText(from, reply);
             };
             queueTier = 'light';
