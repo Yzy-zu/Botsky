@@ -29,6 +29,10 @@ setInterval(() => {
     } else if (heapMB >= RAM_WARN_MB && !_ramWarnFired) {
         _ramWarnFired = true;
         logger.warn(`[RAM] ⚠️  ADVERTENCIA: ${heapMB.toFixed(0)}MB — acercándose al límite de PM2`);
+        if (typeof global.gc === 'function') {
+            logger.info('[RAM] 🧹 Forzando Garbage Collection preventiva...');
+            try { global.gc(); } catch (_) {}
+        }
     } else if (heapMB < RAM_WARN_MB) {
         // Resetear flags si la memoria bajó (por GC o cleanup)
         _ramWarnFired = false;

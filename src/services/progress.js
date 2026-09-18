@@ -1,114 +1,84 @@
 'use strict';
 
 const { spawn } = require('child_process');
-const { sendText, editMessage } = require('./evolution');
+const { sendReaction } = require('./evolution');
 const logger = require('./logger');
 
-// ─── Iconos por fase ──────────────────────────────────────────────────────────
-const ICONS = {
-    descargando:    '📥',
-    convirtiendo:   '🔄',
-    comprimiendo:   '🗜️',
-    transcribiendo: '🎤',
-    procesando:     '⚙️',
-    enviando:       '📤',
-    buscando:       '🔍',
-    extrayendo:     '📄',
-    aplicando:      '🎛️',
-};
-
 /**
- * Tracker de progreso con edición de mensajes en tiempo real.
- *
- * Uso:
- *   const p = new Progress(from);
- *   await p.start('descargando', 'mp4 720p');   // envía mensaje inicial
- *   await p.update(45, '8.2MB');                 // edita con barra de progreso
- *   await p.phase('comprimiendo', '23.5mb');     // cambia la fase
- *   await p.done('15.4mb · 48s');                // marca como listo
- *   await p.fail('video privado');               // o marca como error
+ * Tracker de progreso mediante reacciones nativas de WhatsApp (⏳ / ✅ / ❌).
+ * No spamea mensajes ni genera sobrecosto de ediciones de texto.
  */
 class Progress {
     /**
      * @param {string} jid - Chat destino (JID)
+     * @param {object|null} [messageKey] - Key del mensaje original de WhatsApp para reaccionar
      */
-    constructor(jid) {
+    constructor(jid, messageKey = null) {
         this.jid = jid;
-        this.key = null;           // Message key para editar
+        this.key = messageKey;
         this.phase_ = '';
         this.startTime = Date.now();
-        this.lastEditAt = 0;
-        this.minInterval = 3000;   // Mínimo 3s entre ediciones (rate limit de WhatsApp)
         this.ended = false;
     }
 
     /**
-     * Renderiza la barra de progreso visual.
-     * Usa ⬛/⬜ porque son emojis estándar que renderizan igual en todos los teléfonos.
+     * Reacciona con ⏳ en el mensaje del usuario al iniciar la tarea.
      */
-    _bar(percent) {
-        const clamped = Math.max(0, Math.min(100, percent));
-        const filled = Math.round(clamped / 10);
-        return '⬛'.repeat(filled) + '⬜'.repeat(10 - filled);
+    async start(phase = '', detail = '') {
+        this.phase_ = phase;
+        if (this.key) {
+            try {
+                await sendReaction(this.jid, '⏳', this.key);
+            } catch (_) {}
+        }
     }
 
-    /**
-     * Envía el mensaje inicial de la fase. Guarda la key para editar después.
-     * @param {string} phase  - Nombre de la fase ('descargando', 'convirtiendo', etc.)
-     * @param {string} detail - Info extra opcional ('mp4 720p', '23.5mb', etc.)
-     */
-    async start(phase, detail = '') {
-        // No-op: se usa el sistema de reacciones ⏳
-    }
-
-    /**
-     * Actualiza el progreso editando el mensaje original.
-     * Se auto-throttlea para no spamear WhatsApp.
-     * @param {number} percent - Porcentaje (0-100)
-     * @param {string} detail  - Info extra ('8.2MB', '2.1MB/s', etc.)
-     */
     async update(percent, detail = '') {
-        // No-op
+        // No-op para no saturar con llamadas de red
     }
 
-    /**
-     * Cambia de fase editando el mensaje.
-     * @param {string} phase  - Nueva fase
-     * @param {string} detail - Info extra
-     */
     async phase(phase, detail = '') {
-        // No-op
+        this.phase_ = phase;
     }
 
     /**
-     * Marca como completado. Edita el mensaje con ✅.
-     * @param {string} detail - Info final ('15.4mb · 48s')
+     * Reacciona con ✅ al terminar exitosamente la tarea.
      */
     async done(detail = '') {
-        // No-op: se usa la reacción ✅
+        this.ended = true;
+        if (this.key) {
+            try {
+                await sendReaction(this.jid, '✅', this.key);
+            } catch (_) {}
+        }
     }
 
     /**
-     * Marca como error. Edita el mensaje con ❌.
-     * @param {string} reason - Motivo del error
+     * Reacciona con ❌ al fallar y lanza el error con mensaje descriptivo.
      */
     async fail(reason = '') {
+        this.ended = true;
+        if (this.key) {
+            try {
+                await sendReaction(this.jid, '❌', this.key);
+            } catch (_) {}
+        }
         const err = new Error(reason);
         err.userMessage = reason;
         throw err;
     }
 }
 
-// ─── Helper: ejecutar proceso con progreso en tiempo real ─────────────────────
+// ─── Helper: ejecutar proceso con streaming eficiente ─────────────────────────
 
 /**
- * Ejecuta un proceso hijo y parsea su salida para extraer progreso.
- * Soporta yt-dlp y ffmpeg de forma automática.
+ * Ejecuta un proceso hijo con buffers circulares acotados para evitar acumulación
+ * excesiva de cadenas de texto en memoria RAM.
  *
- * @param {string}   cmd       - Comando a ejecutar ('yt-dlp', 'ffmpeg', etc.)
- * @param {string[]} args      - Argumentos
- * @param {object}   opts      - Opciones de spawn + { timeout }
- * @param {Function} onProgress - Callback (percent: number, detail: string)
+ * @param {string}   cmd        - Comando a ejecutar ('yt-dlp', 'ffmpeg', etc.)
+ * @param {string[]} args       - Argumentos
+ * @param {object}   opts       - Opciones de spawn + { timeout }
+ * @param {Function} onProgress - Callback opcional
  * @returns {Promise<{ stdout: string, stderr: string }>}
  */
 function spawnWithProgress(cmd, args, opts = {}, onProgress = null) {
@@ -132,29 +102,37 @@ function spawnWithProgress(cmd, args, opts = {}, onProgress = null) {
         }
 
         child.stdout.on('data', (d) => {
-            stdout += d.toString();
+            const chunk = d.toString();
+            // Acotar stdout a máximo 30KB en memoria
+            if (stdout.length < 30000) {
+                stdout += chunk;
+            } else {
+                stdout = stdout.slice(-15000) + chunk;
+            }
         });
 
         child.stderr.on('data', (d) => {
             const chunk = d.toString();
-            stderr += chunk;
-
-            if (!onProgress) return;
-
-            // ── Parsear progreso de yt-dlp ──
-            // [download]  45.2% of   15.32MiB at    2.41MiB/s ETA 00:04
-            const ytMatch = chunk.match(/\[download\]\s+(\d+\.?\d*)%\s+of\s+~?\s*(\S+)/);
-            if (ytMatch) {
-                onProgress(parseFloat(ytMatch[1]), ytMatch[2]);
-                return;
+            // Acotar stderr a máximo 15KB en memoria
+            if (stderr.length < 15000) {
+                stderr += chunk;
+            } else {
+                stderr = stderr.slice(-8000) + chunk;
             }
 
-            // ── Parsear progreso de ffmpeg ──
-            // time=00:01:23.45
-            const ffMatch = chunk.match(/time=(\d+):(\d+):(\d+\.\d+)/);
-            if (ffMatch) {
-                const secs = parseInt(ffMatch[1]) * 3600 + parseInt(ffMatch[2]) * 60 + parseFloat(ffMatch[3]);
-                onProgress(-1, `${Math.floor(secs)}s procesados`);
+            // Solo parsear regex si realmente hay un callback activo con lógica
+            if (typeof onProgress === 'function' && onProgress.length > 0) {
+                const ytMatch = chunk.match(/\[download\]\s+(\d+\.?\d*)%\s+of\s+~?\s*(\S+)/);
+                if (ytMatch) {
+                    onProgress(parseFloat(ytMatch[1]), ytMatch[2]);
+                    return;
+                }
+
+                const ffMatch = chunk.match(/time=(\d+):(\d+):(\d+\.\d+)/);
+                if (ffMatch) {
+                    const secs = parseInt(ffMatch[1]) * 3600 + parseInt(ffMatch[2]) * 60 + parseFloat(ffMatch[3]);
+                    onProgress(-1, `${Math.floor(secs)}s procesados`);
+                }
             }
         });
 

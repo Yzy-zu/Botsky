@@ -94,7 +94,7 @@ async function downloadVideoFromUrl(url, outputPath) {
  * @param {object} messageData - Datos crudos del webhook
  */
 async function handleConvertir({ flags, args }, from, messageData) {
-    const p = new Progress(from);
+    const p = new Progress(from, messageData?.key);
     // ── Parámetros ──
     const format = (flags.f ?? flags.formato ?? '').toLowerCase();
     const quality = (flags.q ?? flags.calidad ?? 'media').toLowerCase();

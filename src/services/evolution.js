@@ -164,24 +164,33 @@ async function sendMedia(to, filePath, caption = '', forceDocument = false, isHd
         throw new Error(`El archivo pesa ${sizeMB.toFixed(1)} MB y supera el límite de ${maxMB} MB.`);
     }
 
-    const media = await fileToBase64(filePath);
+    let media = await fileToBase64(filePath);
     logger.info(`Enviando ${mediatype} (${sizeMB.toFixed(2)} MB) a ${jid}`);
 
     const finalDelay = delayMs !== null ? delayMs : 1000;
+    const payload = {
+        number: jid,
+        mediatype,
+        media,
+        fileName,
+        caption,
+        isHd,
+        delay: finalDelay,
+        presence: 'composing',
+        options: { delay: finalDelay, presence: 'composing' }
+    };
 
-    return withRetry(() =>
-        http.post(`/message/sendMedia/${INSTANCE}`, {
-            number: jid,
-            mediatype,
-            media,
-            fileName,
-            caption,
-            isHd,
-            delay: finalDelay,
-            presence: 'composing',
-            options: { delay: finalDelay, presence: 'composing' }
-        })
-    );
+    try {
+        const res = await withRetry(() => http.post(`/message/sendMedia/${INSTANCE}`, payload));
+        return res;
+    } finally {
+        // Liberar referencia del string Base64 inmediatamente
+        media = null;
+        payload.media = null;
+        if (sizeMB > 15 && typeof global.gc === 'function') {
+            try { global.gc(); } catch (_) {}
+        }
+    }
 }
 
 /**
@@ -191,17 +200,22 @@ async function sendMedia(to, filePath, caption = '', forceDocument = false, isHd
  */
 async function sendSticker(to, filePath) {
     const jid = normalizeJid(to);
-    const image = await fileToBase64(filePath);
+    let image = await fileToBase64(filePath);
     logger.info(`Enviando sticker a ${jid}`);
 
-    return withRetry(() =>
-        http.post(`/message/sendSticker/${INSTANCE}`, {
-            number: jid,
-            sticker: image,
-            delay: 0,
-            options: { delay: 0 }
-        })
-    );
+    const payload = {
+        number: jid,
+        sticker: image,
+        delay: 0,
+        options: { delay: 0 }
+    };
+
+    try {
+        return await withRetry(() => http.post(`/message/sendSticker/${INSTANCE}`, payload));
+    } finally {
+        image = null;
+        payload.sticker = null;
+    }
 }
 
 /**
@@ -212,18 +226,23 @@ async function sendSticker(to, filePath) {
  */
 async function sendAnimatedSticker(to, filePath) {
     const jid = normalizeJid(to);
-    const image = await fileToBase64(filePath);
+    let image = await fileToBase64(filePath);
     logger.info(`Enviando sticker animado (notConvertSticker) a ${jid}`);
 
-    return withRetry(() =>
-        http.post(`/message/sendSticker/${INSTANCE}`, {
-            number: jid,
-            sticker: image,
-            notConvertSticker: true,
-            delay: 0,
-            options: { delay: 0 }
-        })
-    );
+    const payload = {
+        number: jid,
+        sticker: image,
+        notConvertSticker: true,
+        delay: 0,
+        options: { delay: 0 }
+    };
+
+    try {
+        return await withRetry(() => http.post(`/message/sendSticker/${INSTANCE}`, payload));
+    } finally {
+        image = null;
+        payload.sticker = null;
+    }
 }
 
 /**
@@ -329,6 +348,11 @@ async function downloadMedia(messageData) {
     }
 
     const buffer = Buffer.from(base64, 'base64');
+    // Liberar referencia en memoria del payload crudo de axios
+    if (res?.data) {
+        res.data.base64 = null;
+        res.data = null;
+    }
 
     // Para imágenes: detectar el tipo real por magic bytes del buffer.
     // WhatsApp envía GIFs como imageMessage con extensión por defecto .jpg,

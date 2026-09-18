@@ -336,7 +336,7 @@ async function dispatch(context) {
         case 'spotify':
         case 'sp':
         case 'spo':
-            handler = () => handleSpotify(parsed, from);
+            handler = () => handleSpotify(parsed, from, messageData);
             queueTier = 'heavy';
             break;
 

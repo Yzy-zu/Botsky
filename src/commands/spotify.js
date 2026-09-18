@@ -25,9 +25,9 @@ function cleanup(...dirs) {
     }
 }
 
-async function handleSpotify({ args, flags = {} }, from) {
+async function handleSpotify({ args, flags = {} }, from, messageData = null) {
     const url = extractUrl(args);
-    const p = new Progress(from);
+    const p = new Progress(from, messageData?.key);
 
     if (!url || !url.includes('spotify.com')) {
         return p.fail('falta el enlace de spotify · usa `/@spotify [url]`');

@@ -174,7 +174,7 @@ async function sendTranscription(from, text, model) {
  * @param {object} messageData - Datos crudos del webhook
  */
 async function handleTranscribir({ flags, args }, from, messageData) {
-    const p = new Progress(from);
+    const p = new Progress(from, messageData?.key);
     // ── Parámetros ──
     const model = (flags.m ?? flags.modelo ?? DEFAULT_MODEL).toLowerCase();
     const lang = (flags.l ?? flags.idioma ?? DEFAULT_LANG).toLowerCase();

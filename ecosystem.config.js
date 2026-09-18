@@ -16,7 +16,7 @@ module.exports = {
       error_file: '/home/petrov/.pm2/logs/wasa-error.log',
       out_file: '/home/petrov/.pm2/logs/wasa-out.log',
       merge_logs: true,
-      node_args: '--dns-result-order=ipv4first',
+      node_args: '--dns-result-order=ipv4first --expose-gc',
     },
   ],
 };

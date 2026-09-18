@@ -263,7 +263,7 @@ function buildArgs(url, format, quality, withSubs, outputPrefix, flags = {}) {
 async function handleDescargar({ flags, args }, from, messageData) {
     // ── Extraer parámetros ──
     let url = extractUrl(args);
-    const p = new Progress(from);
+    const p = new Progress(from, messageData?.key);
 
     let format = (flags.f ?? flags.formato ?? 'mp4').toLowerCase();
     let quality = (flags.q ?? flags.calidad ?? DEFAULT_QUALITY).toString().toLowerCase();
@@ -368,10 +368,6 @@ async function handleDescargar({ flags, args }, from, messageData) {
 
         await spawnWithProgress('yt-dlp', argsArray, {
             timeout: 10 * 60 * 1000,
-        }, (percent, detail) => {
-            if (percent >= 0) {
-                p.update(percent, detail);
-            }
         });
 
         // ── Buscar el archivo generado ──
@@ -402,8 +398,6 @@ async function handleDescargar({ flags, args }, from, messageData) {
 
             await spawnWithProgress('ffmpeg', compressArgs, {
                 timeout: 45 * 60 * 1000,
-            }, (percent, detail) => {
-                if (percent >= 0) p.update(percent, detail);
             });
 
             if (fs.existsSync(compressedFile) && fs.statSync(compressedFile).size > 0) {
