@@ -52,24 +52,35 @@ const ADULT_KEYWORDS = [
 ];
 
 // ─── Sesiones interactivas de búsqueda ────────────────────────────────────────
-const searchSessions = new Map(); // from -> { results, isAdult, searchQuery, format, quality, timestamp }
+const searchSessions = new Map(); // sessionKey -> { results, isAdult, searchQuery, format, quality, timestamp }
 
-function getSearchSession(from) {
-    const s = searchSessions.get(from);
+function getDownloadSessionKey(from, messageData) {
+    const isGroup = typeof from === 'string' && from.endsWith('@g.us');
+    if (isGroup) {
+        const participant = messageData?.key?.participant || messageData?.participant || from;
+        return `${from}_${participant}`;
+    }
+    return from;
+}
+
+function getSearchSession(sessionKey) {
+    if (!sessionKey) return null;
+    const s = searchSessions.get(sessionKey);
     if (!s) return null;
     if (Date.now() - s.timestamp > 15 * 60 * 1000) {
-        searchSessions.delete(from);
+        searchSessions.delete(sessionKey);
         return null;
     }
     return s;
 }
 
-function setSearchSession(from, data) {
-    searchSessions.set(from, { ...data, timestamp: Date.now() });
+function setSearchSession(sessionKey, data) {
+    if (!sessionKey) return;
+    searchSessions.set(sessionKey, { ...data, timestamp: Date.now() });
 }
 
-function clearSearchSession(from) {
-    searchSessions.delete(from);
+function clearSearchSession(sessionKey) {
+    if (sessionKey) searchSessions.delete(sessionKey);
 }
 
 function matchSelection(text) {
@@ -249,7 +260,7 @@ function buildArgs(url, format, quality, withSubs, outputPrefix, flags = {}) {
  * @param {object} parsed   - { command, flags, args }
  * @param {string} from     - JID del remitente
  */
-async function handleDescargar({ flags, args }, from) {
+async function handleDescargar({ flags, args }, from, messageData) {
     // ── Extraer parámetros ──
     let url = extractUrl(args);
     const p = new Progress(from);
@@ -316,7 +327,7 @@ async function handleDescargar({ flags, args }, from) {
             }
 
             // Guardar la sesión interactiva
-            setSearchSession(from, { results, isAdult, searchQuery, format, quality });
+            setSearchSession(getDownloadSessionKey(from, messageData), { results, isAdult, searchQuery, format, quality });
 
             // Formatear mensaje estilo WhatsApp
             const header = isAdult

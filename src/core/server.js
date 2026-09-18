@@ -6,7 +6,8 @@ const fs = require('fs');
 const path = require('path');
 // Dispatcher clásico autónomo con NLP sin dependencia de Ollama
 const { dispatch } = require('../core/dispatcher');
-const addGroupMessage = () => {};
+const history = require('../services/history');
+const addGroupMessage = (from, name, text) => { try { history.addMessage(from, name === 'Bot' ? 'assistant' : 'user', text, name); } catch(_) {} };
 const logger = require('../services/logger');
 const { startCleanupCron } = require('../services/cleanup');
 
@@ -323,7 +324,7 @@ app.post('/webhook', async (req, res) => {
             const { hasActiveSession } = require('../commands/documentos');
             const { hasActiveSearchSession, getSessionKey } = require('../commands/buscar');
             
-            const sessionType = hasActiveSession(from);
+            const sessionType = hasActiveSession(from, participant);
             const isImage = messageType?.toLowerCase().includes('image') || 
                             (messageType?.toLowerCase().includes('document') && 
                              (data.message?.documentMessage?.mimetype?.startsWith('image/') || 

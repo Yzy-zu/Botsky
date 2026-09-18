@@ -35,6 +35,9 @@ db.serialize(() => {
         )
     `);
     db.run(`
+        CREATE INDEX IF NOT EXISTS idx_lore_events_target ON lore_events(target_jid)
+    `);
+    db.run(`
         CREATE TABLE IF NOT EXISTS lore_profiles (
             jid TEXT PRIMARY KEY,
             alias TEXT,
@@ -54,13 +57,11 @@ const getTodayStr = () => {
 
 const getOrCreateUser = (jid) => {
     return new Promise((resolve, reject) => {
-        db.get('SELECT * FROM users WHERE jid = ?', [jid], (err, row) => {
+        db.run('INSERT INTO users (jid) VALUES (?) ON CONFLICT(jid) DO NOTHING', [jid], (err) => {
             if (err) return reject(err);
-            if (row) return resolve(row);
-            
-            db.run('INSERT INTO users (jid) VALUES (?)', [jid], function(err) {
+            db.get('SELECT * FROM users WHERE jid = ?', [jid], (err, row) => {
                 if (err) return reject(err);
-                resolve({ jid, xp: 0, level: 1, strikes: 0 });
+                resolve(row || { jid, xp: 0, level: 1, strikes: 0 });
             });
         });
     });

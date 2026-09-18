@@ -17,38 +17,47 @@ function cleanup(...files) {
     }
 }
 
-const userPdfs = new Map(); // from -> { id, count, lastActive }
-const userImagePdfs = new Map(); // from -> { id, files: [], lastActive }
+const userPdfs = new Map(); // sessionKey -> { id, count, lastActive }
+const userImagePdfs = new Map(); // sessionKey -> { id, files: [], lastActive }
+
+function getDocSessionKey(from, participant = null) {
+    const isGroup = typeof from === 'string' && from.endsWith('@g.us');
+    if (isGroup && participant) {
+        return `${from}_${participant}`;
+    }
+    return from;
+}
 
 // Limpiar sesiones inactivas de más de 20 minutos
 function cleanExpiredSessions() {
     const now = Date.now();
     const timeout = 20 * 60 * 1000; // 20 minutos
-    for (const [from, session] of userImagePdfs.entries()) {
+    for (const [key, session] of userImagePdfs.entries()) {
         if (now - session.lastActive > timeout) {
             for (const file of session.files) {
                 cleanup(file);
             }
-            userImagePdfs.delete(from);
-            logger.info(`Sesión de imágenes PDF expirada y limpiada para ${from}`);
+            userImagePdfs.delete(key);
+            logger.info(`Sesión de imágenes PDF expirada y limpiada para ${key}`);
         }
     }
-    for (const [from, session] of userPdfs.entries()) {
+    for (const [key, session] of userPdfs.entries()) {
         if (now - session.lastActive > timeout) {
             for (let i = 1; i <= session.count; i++) {
                 cleanup(path.join(TMP_DIR, `${session.id}-part-${String(i).padStart(3, '0')}.pdf`));
             }
-            userPdfs.delete(from);
-            logger.info(`Sesión de unión de PDFs expirada y limpiada para ${from}`);
+            userPdfs.delete(key);
+            logger.info(`Sesión de unión de PDFs expirada y limpiada para ${key}`);
         }
     }
 }
 
-function hasActiveSession(from) {
-    if (userImagePdfs.has(from)) {
+function hasActiveSession(from, participant = null) {
+    const key = getDocSessionKey(from, participant);
+    if (userImagePdfs.has(key)) {
         return 'pdf';
     }
-    if (userPdfs.has(from)) {
+    if (userPdfs.has(key)) {
         return 'unir';
     }
     return null;
@@ -56,6 +65,8 @@ function hasActiveSession(from) {
 
 async function handleDoc(parsed, from, messageData) {
     cleanExpiredSessions();
+    const participant = messageData?.key?.participant || messageData?.participant || from;
+    const sessionKey = getDocSessionKey(from, participant);
 
     const isTerminar = parsed.args[0] === 'terminar' || parsed.flags.terminar;
     const isCancelar = parsed.args[0] === 'cancelar' || parsed.flags.cancelar;
@@ -65,8 +76,8 @@ async function handleDoc(parsed, from, messageData) {
             return sendText(from, '> no hay imágenes en cola para generar un PDF');
         }
 
-        const session = userImagePdfs.get(from);
-        userImagePdfs.delete(from);
+        const session = userImagePdfs.get(sessionKey);
+        userImagePdfs.delete(sessionKey);
 
         if (session.files.length === 0) {
             return sendText(from, '> no se agregaron imágenes a la cola');
@@ -99,8 +110,8 @@ async function handleDoc(parsed, from, messageData) {
 
     if (isCancelar) {
         if (userImagePdfs.has(from)) {
-            const session = userImagePdfs.get(from);
-            userImagePdfs.delete(from);
+            const session = userImagePdfs.get(sessionKey);
+            userImagePdfs.delete(sessionKey);
             for (const file of session.files) {
                 cleanup(file);
             }
@@ -121,10 +132,10 @@ async function handleDoc(parsed, from, messageData) {
         if (format === 'pdf') {
             if (!userImagePdfs.has(from)) {
                 const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-                userImagePdfs.set(from, { id: sessionId, files: [], lastActive: Date.now() });
+                userImagePdfs.set(sessionKey, { id: sessionId, files: [], lastActive: Date.now() });
                 return sendText(from, '> 📂 Cola de PDF iniciada. Envía las imágenes que deseas agregar y escribe `/@ pdf terminar` al finalizar.');
             } else {
-                const session = userImagePdfs.get(from);
+                const session = userImagePdfs.get(sessionKey);
                 return sendText(from, `> Ya tienes una cola activa con \`${session.files.length}\` imágenes. Envía más o escribe \`/@ pdf terminar\` para finalizar.`);
             }
         }
@@ -154,9 +165,9 @@ async function handleDoc(parsed, from, messageData) {
             let session;
             if (!userImagePdfs.has(from)) {
                 session = { id: sessionId, files: [], lastActive: Date.now() };
-                userImagePdfs.set(from, session);
+                userImagePdfs.set(sessionKey, session);
             } else {
-                session = userImagePdfs.get(from);
+                session = userImagePdfs.get(sessionKey);
                 session.lastActive = Date.now();
             }
 
@@ -348,14 +359,16 @@ async function handlePdf2Img(parsed, from, messageData) {
 
 async function handleUnirPdf(parsed, from, messageData) {
     cleanExpiredSessions();
+    const participant = messageData?.key?.participant || messageData?.participant || from;
+    const sessionKey = getDocSessionKey(from, participant);
 
     const isTerminar = parsed.args[0] === 'terminar' || parsed.flags.terminar;
     const isCancelar = parsed.args[0] === 'cancelar' || parsed.flags.cancelar;
 
     if (isCancelar) {
         if (userPdfs.has(from)) {
-            const session = userPdfs.get(from);
-            userPdfs.delete(from);
+            const session = userPdfs.get(sessionKey);
+            userPdfs.delete(sessionKey);
             for (let i = 1; i <= session.count; i++) {
                 cleanup(path.join(TMP_DIR, `${session.id}-part-${String(i).padStart(3, '0')}.pdf`));
             }
@@ -367,8 +380,8 @@ async function handleUnirPdf(parsed, from, messageData) {
     if (isTerminar) {
         if (!userPdfs.has(from)) return sendText(from, '> no hay pdfs en cola');
         
-        const session = userPdfs.get(from);
-        userPdfs.delete(from); // Limpiar
+        const session = userPdfs.get(sessionKey);
+        userPdfs.delete(sessionKey); // Limpiar
 
         const outputPath = path.join(TMP_DIR, `${session.id}-merged.pdf`);
         await sendText(from, `> uniendo \`${session.count}\` pdfs`);
@@ -410,9 +423,9 @@ async function handleUnirPdf(parsed, from, messageData) {
         let session;
         if (!userPdfs.has(from)) {
             session = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, count: 0, lastActive: Date.now() };
-            userPdfs.set(from, session);
+            userPdfs.set(sessionKey, session);
         } else {
-            session = userPdfs.get(from);
+            session = userPdfs.get(sessionKey);
             session.lastActive = Date.now();
         }
 

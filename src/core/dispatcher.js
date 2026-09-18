@@ -8,7 +8,7 @@ const nlp = require('../services/nlp');
 const { detectFormatFromRegex, extractFlagsAndModifiers, adjustCommandByContext } = require('./extractors');
 
 const { handleAyuda } = require('../commands/ayuda');
-const { handleDescargar, getSearchSession, clearSearchSession, matchSelection } = require('../commands/descargar');
+const { handleDescargar, getSearchSession, clearSearchSession, matchSelection, getDownloadSessionKey } = require('../commands/descargar');
 const { handleTranscribir } = require('../commands/transcribir');
 const { handleConvertir } = require('../commands/convertir');
 const { handleSticker } = require('../commands/sticker');
@@ -74,8 +74,9 @@ async function dispatch(context) {
     chatCooldowns.set(from, now);
     */
 
-    // 🔍 Verificador de selección de lista activa (ej: "el 1", "descargame el 2", "3")
-    const activeSession = getSearchSession(from);
+    // 🔍 Verificador de selección de lista activa aislado por participante
+    const downloadSessionKey = getDownloadSessionKey(from, messageData);
+    const activeSession = getSearchSession(downloadSessionKey);
     const selFromText = matchSelection(text);
     if (selFromText) {
         if (activeSession) {
@@ -84,13 +85,13 @@ async function dispatch(context) {
                 const selected = activeSession.results[idx];
                 activeSession.timestamp = Date.now();
                 text = `descargar ${selected.url}${selFromText.format ? ' -f ' + selFromText.format : ''}`;
-                logger.info(`[DISPATCHER-SELECT] ${from} seleccionó #${selFromText.num}: "${selected.title}" (${selected.url})`);
+                logger.info(`[DISPATCHER-SELECT] ${downloadSessionKey} seleccionó #${selFromText.num}: "${selected.title}" (${selected.url})`);
             } else {
                 await sendText(from, `Ese número no está en la lista cabrón, escoge del 1 al ${activeSession.results.length}.`);
                 return;
             }
         } else if (text.trim().match(/^(?:oye\s+)?(?:descarga(?:me)?|baja(?:me)?|pasa(?:me)?|manda(?:me)?|tumba(?:te)?|dame|quiero)?\s*(?:el\s+|el\s+n[uú]mero\s+|n[uú]mero\s+|num\s+|#|el\s+video\s+|video\s+)?\s*\d{1,2}(?:\s+(?:en\s+|a\s+)?(?:mp3|mp4))?$/i)) {
-            await sendText(from, `No hay ninguna lista de videos activa compa (o ya expiró, dura 15 min). Pídeme una búsqueda primero, ej: *descarga video de [tema]*`);
+            await sendText(from, `No hay ninguna lista de videos activa para ti compa (o ya expiró, dura 15 min). Pídeme una búsqueda primero, ej: *descarga video de [tema]*`);
             return;
         }
     }
@@ -172,7 +173,7 @@ async function dispatch(context) {
                     if (aiDecision.args.url) parsed.args = [aiDecision.args.url];
                     if (aiDecision.args.query) parsed.args = [aiDecision.args.query];
                     if (aiDecision.args.selection) {
-                        const sess = getSearchSession(from);
+                        const sess = getSearchSession(downloadSessionKey);
                         if (sess) {
                             const sIdx = aiDecision.args.selection - 1;
                             if (sIdx >= 0 && sIdx < sess.results.length) {
@@ -328,7 +329,7 @@ async function dispatch(context) {
         case 'tiktok':
         case 'tt':
         case 'tk':
-            handler = () => handleDescargar(parsed, from);
+            handler = () => handleDescargar(parsed, from, messageData);
             queueTier = 'heavy';
             break;
 
