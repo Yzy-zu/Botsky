@@ -35,16 +35,38 @@ function isBotAdmin(groupData) {
  * Obtiene a quién va dirigido el comando (por quote, mención o texto manual)
  */
 function getTarget(messageData, parsed) {
-    const msg = messageData.message;
-    // 1. Si respondió a un mensaje
-    if (msg?.extendedTextMessage?.contextInfo?.participant) {
-        return msg.extendedTextMessage.contextInfo.participant;
+    // 1. Si viene participante citado resuelto por el normalizador
+    if (messageData?.quotedParticipant) {
+        return messageData.quotedParticipant;
     }
-    // 2. Si mencionó a alguien usando el arroba de WhatsApp
-    if (msg?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
-        return msg.extendedTextMessage.contextInfo.mentionedJid[0];
+
+    const msg = messageData?.message;
+
+    // 2. Buscar contextInfo en cualquier sub-objeto del mensaje (fotos, stickers, videos, docs, texto)
+    let contextInfo = null;
+    if (msg && typeof msg === 'object') {
+        for (const val of Object.values(msg)) {
+            if (val && typeof val === 'object' && val.contextInfo) {
+                contextInfo = val.contextInfo;
+                break;
+            }
+        }
     }
-    // 3. Si escribió el número a mano (ej. /@ ban 521... o /@ ban @521...)
+    if (!contextInfo && messageData?.contextInfo) {
+        contextInfo = messageData.contextInfo;
+    }
+
+    // 3. Participante citado en contextInfo
+    if (contextInfo?.participant) {
+        return contextInfo.participant;
+    }
+
+    // 4. Menciones directas con @
+    if (contextInfo?.mentionedJid && Array.isArray(contextInfo.mentionedJid) && contextInfo.mentionedJid.length > 0) {
+        return contextInfo.mentionedJid[0];
+    }
+
+    // 5. Si escribió el número a mano (ej. /@ ban 521... o /@ ban @521...)
     if (parsed && parsed.args && parsed.args.length > 0) {
         const number = parsed.args.join('').replace(/[^0-9]/g, '');
         if (number.length >= 10) {

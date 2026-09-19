@@ -12,16 +12,37 @@ function resolveTarget(messageData, parsed, groupData) {
     const msg = messageData?.message;
     let target = null;
 
-    // 1. Quoted message
-    if (msg?.extendedTextMessage?.contextInfo?.participant) {
-        target = msg.extendedTextMessage.contextInfo.participant;
+    // 1. Participante citado resuelto por el normalizador
+    if (messageData?.quotedParticipant) {
+        target = messageData.quotedParticipant;
     }
-    // 2. Menciones (@)
-    else if (msg?.extendedTextMessage?.contextInfo?.mentionedJid?.length > 0) {
-        target = msg.extendedTextMessage.contextInfo.mentionedJid[0];
+
+    // 2. Buscar contextInfo en cualquier sub-objeto del mensaje
+    let contextInfo = null;
+    if (!target && msg && typeof msg === 'object') {
+        for (const val of Object.values(msg)) {
+            if (val && typeof val === 'object' && val.contextInfo) {
+                contextInfo = val.contextInfo;
+                break;
+            }
+        }
     }
-    // 3. Buscar en argumentos
-    else if (parsed.args && parsed.args.length > 0) {
+    if (!target && !contextInfo && messageData?.contextInfo) {
+        contextInfo = messageData.contextInfo;
+    }
+
+    // 3. Participante citado en contextInfo
+    if (!target && contextInfo?.participant) {
+        target = contextInfo.participant;
+    }
+
+    // 4. Menciones (@)
+    if (!target && contextInfo?.mentionedJid && Array.isArray(contextInfo.mentionedJid) && contextInfo.mentionedJid.length > 0) {
+        target = contextInfo.mentionedJid[0];
+    }
+
+    // 5. Buscar en argumentos
+    if (!target && parsed?.args && parsed.args.length > 0) {
         for (const arg of parsed.args) {
             const clean = arg.replace(/[^0-9]/g, '');
             if (clean.length >= 10) {

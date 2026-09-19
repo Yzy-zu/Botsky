@@ -52,7 +52,13 @@ function cleanExpiredSessions() {
     }
 }
 
+// Limpiar periódicamente en segundo plano cada 5 minutos
+setInterval(() => {
+    cleanExpiredSessions();
+}, 5 * 60 * 1000).unref();
+
 function hasActiveSession(from, participant = null) {
+    cleanExpiredSessions();
     const key = getDocSessionKey(from, participant);
     if (userImagePdfs.has(key)) {
         return 'pdf';

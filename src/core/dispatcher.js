@@ -520,7 +520,9 @@ async function dispatch(context) {
     if (handler) {
         try {
             if (queueTier) {
-                await queue.add(from, handler, queueTier);
+                const participant = messageData?.key?.participant || messageData?.participant || from;
+                const queueUserId = isGroup ? `${from}_${participant}` : from;
+                await queue.add(queueUserId, handler, queueTier, command);
             } else {
                 await handler();
             }
