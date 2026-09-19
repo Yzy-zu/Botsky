@@ -304,8 +304,19 @@ async function dispatch(context) {
         const participant = messageData?.key?.participant || from;
         const isAuthorized = allAllowed.some(id => from.includes(id) || participant.includes(id)) || allAdmins.some(id => from.includes(id) || participant.includes(id));
         if (!isAuthorized) {
-            await sendText(from, `[!]acceso denegado\neste grupo o chat no tiene permisos para el servidor de minecraft`);
+            await sendText(from, `[!] acceso denegado\neste grupo o chat no tiene permisos para el servidor de minecraft`);
             return;
+        }
+
+        // Acciones administrativas de Minecraft: encender, apagar, reiniciar, matar o ejecutar comandos en consola
+        const action = parsed.args[0]?.toLowerCase();
+        const adminActions = ['on', 'encender', 'off', 'apagar', 'reiniciar', 'restart', 'kill', 'cmd', 'comando'];
+        if (adminActions.includes(action)) {
+            const isAdmin = allAdmins.some(id => from.includes(id) || participant.includes(id));
+            if (!isAdmin) {
+                await sendText(from, `[!] acceso denegado\nsolo los administradores pueden encender, apagar o ejecutar comandos en el servidor de minecraft`);
+                return;
+            }
         }
     }
 
@@ -527,8 +538,13 @@ async function dispatch(context) {
                 await handler();
             }
         } catch (err) {
-            if (err.message && err.message.includes('espera')) {
+            if (err.userMessage) {
+                await sendText(from, `> ❌ ${err.userMessage}`);
+            } else if (err.message && err.message.includes('espera')) {
                 await sendText(from, err.message);
+            } else if (err.message && !err.message.startsWith('Command failed') && !err.stack?.includes('at Object.')) {
+                logger.warn(`[COMMAND-WARN] ${command}: ${err.message}`);
+                await sendText(from, `> ⚠️ ${err.message}`);
             } else {
                 logger.error(`error al ejecutar comando ${command}:`, err);
                 await sendText(from, `[!] error al ejecutar: ${command}`);

@@ -68,38 +68,58 @@ const getOrCreateUser = (jid) => {
 };
 
 const addXp = async (jid, amount = 1) => {
-    const user = await getOrCreateUser(jid);
-    const newXp = user.xp + amount;
-    // Nivel basado en fórmula simple: XP requerida para el nivel N es 20 * N
-    const newLevel = Math.floor(newXp / 20) + 1; 
-
+    await getOrCreateUser(jid);
     return new Promise((resolve, reject) => {
-        db.run('UPDATE users SET xp = ?, level = ? WHERE jid = ?', [newXp, newLevel, jid], (err) => {
-            if (err) reject(err);
-            else resolve({ ...user, xp: newXp, level: newLevel, levelUp: newLevel > user.level });
-        });
+        db.run(
+            `UPDATE users 
+             SET xp = xp + ?, 
+                 level = CAST(((xp + ?) / 20) + 1 AS INTEGER) 
+             WHERE jid = ?`,
+            [amount, amount, jid],
+            function (err) {
+                if (err) return reject(err);
+                db.get('SELECT * FROM users WHERE jid = ?', [jid], (err, row) => {
+                    if (err) return reject(err);
+                    const user = row || { jid, xp: amount, level: 1, strikes: 0 };
+                    const prevLevel = Math.floor((user.xp - amount) / 20) + 1;
+                    resolve({ ...user, levelUp: user.level > prevLevel });
+                });
+            }
+        );
     });
 };
 
 const addStrike = async (jid) => {
-    const user = await getOrCreateUser(jid);
-    const newStrikes = user.strikes + 1;
+    await getOrCreateUser(jid);
     return new Promise((resolve, reject) => {
-        db.run('UPDATE users SET strikes = ? WHERE jid = ?', [newStrikes, jid], (err) => {
-            if (err) reject(err);
-            else resolve(newStrikes);
-        });
+        db.run(
+            'UPDATE users SET strikes = strikes + 1 WHERE jid = ?',
+            [jid],
+            function (err) {
+                if (err) return reject(err);
+                db.get('SELECT strikes FROM users WHERE jid = ?', [jid], (err, row) => {
+                    if (err) return reject(err);
+                    resolve(row?.strikes ?? 1);
+                });
+            }
+        );
     });
 };
 
 const removeStrike = async (jid) => {
-    const user = await getOrCreateUser(jid);
-    const newStrikes = Math.max(0, user.strikes - 1);
+    await getOrCreateUser(jid);
     return new Promise((resolve, reject) => {
-        db.run('UPDATE users SET strikes = ? WHERE jid = ?', [newStrikes, jid], (err) => {
-            if (err) reject(err);
-            else resolve(newStrikes);
-        });
+        db.run(
+            'UPDATE users SET strikes = MAX(0, strikes - 1) WHERE jid = ?',
+            [jid],
+            function (err) {
+                if (err) return reject(err);
+                db.get('SELECT strikes FROM users WHERE jid = ?', [jid], (err, row) => {
+                    if (err) return reject(err);
+                    resolve(row?.strikes ?? 0);
+                });
+            }
+        );
     });
 };
 
