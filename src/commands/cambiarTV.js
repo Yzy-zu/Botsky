@@ -1,6 +1,8 @@
 'use strict';
 
-const { execSync } = require('child_process');
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const execAsync = promisify(exec);
 const { sendText } = require('../services/evolution');
 const logger = require('../services/logger');
 
@@ -12,7 +14,7 @@ async function cambiarTele(from, telesita) {
     }
 
     try {
-        execSync(`cd ~/tv && bash cambiarcanal.sh ${telesita}`, { stdio: 'ignore' });
+        await execAsync(`cd ~/tv && bash cambiarcanal.sh "${telesita}"`, { timeout: 15_000, stdio: 'ignore' });
         logger.info(`[TV] Canal cambiado a: ${telesita}`);
     } catch (err) {
         logger.error('[TV] Error ejecutando cambiarcanal.sh:', err.message);

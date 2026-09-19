@@ -92,31 +92,31 @@ async function handleMaicra({ args }, from, messageData) {
             case 'on':
             case 'encender':
                 await sendText(from, '> encendiendo servidor');
-                await execAsync(`docker start ${CONTAINER_NAME}`);
+                await execAsync(`docker start ${CONTAINER_NAME}`, { timeout: 30_000 });
                 await sendText(from, '> servidor encendido');
                 break;
 
             case 'off':
             case 'apagar':
                 await sendText(from, '> apagando servidor');
-                await execAsync(`docker stop ${CONTAINER_NAME}`);
+                await execAsync(`docker stop ${CONTAINER_NAME}`, { timeout: 30_000 });
                 await sendText(from, '> servidor apagado');
                 break;
 
             case 'reiniciar':
             case 'restart':
                 await sendText(from, '> reiniciando servidor');
-                await execAsync(`docker restart ${CONTAINER_NAME}`);
+                await execAsync(`docker restart ${CONTAINER_NAME}`, { timeout: 30_000 });
                 await sendText(from, '> servidor reiniciado');
                 break;
 
             case 'estado':
             case 'stats':
                 // Obtenemos estado general y uso de recursos
-                const { stdout: status } = await execAsync(`docker inspect -f '{{.State.Status}}' ${CONTAINER_NAME}`);
+                const { stdout: status } = await execAsync(`docker inspect -f '{{.State.Status}}' ${CONTAINER_NAME}`, { timeout: 15_000 });
                 let statsStr = '';
                 if (status.trim() === 'running') {
-                    const { stdout: stats } = await execAsync(`docker stats --no-stream --format "CPU: {{.CPUPerc}}\\nRAM: {{.MemUsage}}\\nRed: {{.NetIO}}" ${CONTAINER_NAME}`);
+                    const { stdout: stats } = await execAsync(`docker stats --no-stream --format "CPU: {{.CPUPerc}}\\nRAM: {{.MemUsage}}\\nRed: {{.NetIO}}" ${CONTAINER_NAME}`, { timeout: 15_000 });
                     statsStr = `\n${stats}`;
                 }
 
@@ -152,18 +152,18 @@ async function handleMaicra({ args }, from, messageData) {
                 }
 
                 await sendText(from, `> ejecutando \`/${mcCommand}\``);
-                await execFileAsync('docker', ['exec', CONTAINER_NAME, 'send-command', mcCommand]);
+                await execFileAsync('docker', ['exec', CONTAINER_NAME, 'send-command', mcCommand], { timeout: 15_000 });
                 await sendText(from, '> comando enviado');
                 break;
 
             case 'kill':
                 await sendText(from, '> forzando apagado');
-                await execAsync(`docker kill ${CONTAINER_NAME}`);
+                await execAsync(`docker kill ${CONTAINER_NAME}`, { timeout: 15_000 });
                 await sendText(from, '> servidor apagado forzosamente');
                 break;
 
             case 'logs':
-                const { stdout: logs } = await execAsync(`docker logs --tail 10 ${CONTAINER_NAME}`);
+                const { stdout: logs } = await execAsync(`docker logs --tail 10 ${CONTAINER_NAME}`, { timeout: 15_000 });
                 await sendText(from, `> ultimos logs\n\`\`\`\n${logs}\n\`\`\``);
                 break;
 

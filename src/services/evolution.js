@@ -476,10 +476,22 @@ async function editMessage(to, newText, messageKey) {
  */
 async function sendReaction(to, reaction, messageKey) {
     const jid = normalizeJid(to);
-    // messageKey puede ser un objeto {id, remoteJid, fromMe} o un string (solo el id)
-    const key = typeof messageKey === 'object' && messageKey !== null
-        ? { remoteJid: messageKey.remoteJid || jid, fromMe: messageKey.fromMe ?? true, id: messageKey.id }
-        : { remoteJid: jid, fromMe: true, id: messageKey };
+    let key;
+
+    if (typeof messageKey === 'object' && messageKey !== null) {
+        key = {
+            remoteJid: messageKey.remoteJid || jid,
+            fromMe: messageKey.fromMe ?? false,
+            id: messageKey.id,
+            ...(messageKey.participant ? { participant: messageKey.participant } : {})
+        };
+    } else {
+        key = {
+            remoteJid: jid,
+            fromMe: false,
+            id: messageKey
+        };
+    }
 
     return withRetry(() =>
         http.post(`/message/sendReaction/${INSTANCE}`, {

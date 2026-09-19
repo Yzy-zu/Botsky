@@ -359,7 +359,17 @@ async function handlePdf2Img(parsed, from, messageData) {
         await sendText(from, `> error \`${err.message}\``);
     } finally {
         cleanup(inputPath, zipPath);
-        try { exec(`rm -f "${outputPrefix}"*.jpg`); } catch { }
+        if (outputPrefix) {
+            try {
+                const dir = path.dirname(outputPrefix);
+                const base = path.basename(outputPrefix);
+                for (const f of fs.readdirSync(dir)) {
+                    if (f.startsWith(base) && f.endsWith('.jpg')) {
+                        try { fs.unlinkSync(path.join(dir, f)); } catch {}
+                    }
+                }
+            } catch {}
+        }
     }
 }
 
