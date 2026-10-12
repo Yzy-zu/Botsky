@@ -42,6 +42,9 @@ for (const [name, fallback, description] of [
     ['BOTSKY_BASELINE_IMAGE', 'node:20-bookworm', 'Imagen para runner aislado; operador puede fijar digest.'],
     ['BOTSKY_BASELINE_OUTPUT', '/tmp/botsky-v2-baseline.tap', 'Salida runner baseline aislado.']
 ]) define(name, 'string', fallback, description);
+define('BOTSKY_LEGACY_VERIFICATION_IMAGE', 'string', 'botsky/legacy-verification:node20', 'Imagen de pruebas legacy con herramientas y fixtures aislados.', { scope: 'operator-only' });
+define('BOTSKY_LEGACY_VERIFICATION_OUTPUT', 'string', '/tmp/botsky-legacy-verification.tap', 'Salida TAP del entorno legacy reproducible.', { scope: 'operator-only' });
+define('BOTSKY_LEGACY_LIBRARY_SOURCE', 'string', '', 'Archivo productor Rikolino para preparar fixture externo; proporcionar ruta al construir la imagen.', { scope: 'operator-only' });
 define('COOKIES_FILE', 'string', '', 'Alias legacy de cookies; prevalece YOUTUBE_COOKIES_FILE.', { aliasFor: 'YOUTUBE_COOKIES_FILE' });
 define('LEGACY_COMMAND_USAGE_ENABLED', 'boolean', false, 'Telemetría v1 opcional; sin inicialización si está apagada.');
 for (const [name, fallback, description] of [

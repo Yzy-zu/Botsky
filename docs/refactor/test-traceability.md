@@ -676,15 +676,15 @@ Destino de tests propuesto: `tests/contract/legacy/evolution_native_tables.test.
 
 | ID | Línea legacy | Comportamiento protegido (título) | Etapa/feature v2 propuesta | Escenario | Estado y nota |
 |---|---:|---|---|---|---|
-| TR-0372 | 14 | native-table validation accepts bounded tables and normalizes mentions | adapters/evolution | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0373 | 21 | native-table validation rejects malformed, arbitrary and excessive payloads | adapters/evolution | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0374 | 42 | handler rejects invalid requests before accessing any service | adapters/evolution | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0375 | 49 | handler reports absent and disconnected instances without transmission | adapters/evolution | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0376 | 61 | handler resolves only Evolution routerPath instanceName parameter | adapters/evolution | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0377 | 78 | handler builds only the table message and uses existing typing and persistence service | adapters/evolution | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0378 | 94 | handler passes send failures onward without a retry marker or second send | adapters/evolution | S11 (relación de errores; no reemplaza escenario) | pending: Portar; equivalente aún no implementado. |
-| TR-0379 | 109 | bundle patch preserves authenticated guards and original endpoints and is idempotent | adapters/evolution | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0380 | 118 | bundle patch fails closed on changed or partial integration | adapters/evolution | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
+| TR-0372 | 14 | native-table validation accepts bounded tables and normalizes mentions | adapters/evolution | No aplica directamente; regresión legacy. | ported: tests/contract/evolutionNativeTables.test.js; mismo contrato, puertos aislados. |
+| TR-0373 | 21 | native-table validation rejects malformed, arbitrary and excessive payloads | adapters/evolution | No aplica directamente; regresión legacy. | ported: tests/contract/evolutionNativeTables.test.js; mismo contrato, puertos aislados. |
+| TR-0374 | 42 | handler rejects invalid requests before accessing any service | adapters/evolution | No aplica directamente; regresión legacy. | ported: tests/contract/evolutionNativeTables.test.js; mismo contrato, puertos aislados. |
+| TR-0375 | 49 | handler reports absent and disconnected instances without transmission | adapters/evolution | No aplica directamente; regresión legacy. | ported: tests/contract/evolutionNativeTables.test.js; mismo contrato, puertos aislados. |
+| TR-0376 | 61 | handler resolves only Evolution routerPath instanceName parameter | adapters/evolution | No aplica directamente; regresión legacy. | ported: tests/contract/evolutionNativeTables.test.js; mismo contrato, puertos aislados. |
+| TR-0377 | 78 | handler builds only the table message and uses existing typing and persistence service | adapters/evolution | No aplica directamente; regresión legacy. | ported: tests/contract/evolutionNativeTables.test.js; mismo contrato, puertos aislados. |
+| TR-0378 | 94 | handler passes send failures onward without a retry marker or second send | adapters/evolution | S11 (relación de errores; no reemplaza escenario) | ported: tests/contract/evolutionNativeTables.test.js; mismo contrato, puertos aislados. |
+| TR-0379 | 109 | bundle patch preserves authenticated guards and original endpoints and is idempotent | adapters/evolution | No aplica directamente; regresión legacy. | ported: tests/contract/evolutionNativeTables.test.js; mismo contrato, puertos aislados. |
+| TR-0380 | 118 | bundle patch fails closed on changed or partial integration | adapters/evolution | No aplica directamente; regresión legacy. | ported: tests/contract/evolutionNativeTables.test.js; mismo contrato, puertos aislados. |
 
 ## test/happyHour.test.js
 

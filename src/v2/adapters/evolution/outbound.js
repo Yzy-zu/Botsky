@@ -7,7 +7,7 @@ const { detectMediaType } = require('./media');
 /** @typedef {import('../../domain/ports').TextOptions & {delay?:number,raw?:boolean,maxLength?:number}} SendTextOptions */
 /** @param {{client:import('./client').HttpClient,instance:string,clock:import('../../platform/clock').Clock,echoGuard:import('./echoGuard').EchoGuard,io:{readFile:(path:string)=>Promise<Buffer>,stat:(path:string)=>Promise<{size:number}>},history?:{addMessage:(jid:string,role:string,text:string,name?:string)=>void},logger?:{info:(message:string)=>void,warn:(message:string)=>void},maxFileSizeMb?:number,maxDocumentSizeMb?:number}} dependencies */
 function createOutbound({client:http,instance:INSTANCE,clock,echoGuard,io,history={addMessage(){}},logger={info(){},warn(){}},maxFileSizeMb=64,maxDocumentSizeMb=200}) {
-    if (![maxFileSizeMb,maxDocumentSizeMb].every(value=>Number.isFinite(value)&&value>0)) throw new RangeError('Invalid media limits');
+    if (![maxFileSizeMb,maxDocumentSizeMb].every(value=>Number.isFinite(value)&&value>0&&Number.isSafeInteger(Math.ceil(value*1024*1024)))) throw new RangeError('Invalid media limits');
     const beginOutbound = echoGuard.begin.bind(echoGuard);
     const finishOutbound = echoGuard.finish.bind(echoGuard);
     const failOutbound = echoGuard.fail.bind(echoGuard);
@@ -108,7 +108,7 @@ async function sendText(to, text, options = {}) {
             const code = err.response?.data?.code;
             const rejectedBeforeSend = (status === 404 && code !== 'INSTANCE_NOT_FOUND') ||
                 (status === 400 && ['NATIVE_TABLE_INVALID', 'NATIVE_TABLE_UNSUPPORTED'].includes(code));
-            if (nativeTable && !outbound.echoed && rejectedBeforeSend) {
+            if (nativeTable && !outbound.delivered && rejectedBeforeSend) {
                 logger.warn('[EVOLUTION] Tabla nativa no disponible; enviando sus datos como texto');
                 const fallback = splitWhatsAppText(formatNativeTableFallback(chunk), { maxLength })
                     .map(text => ({ type: /** @type {'text'} */ ('text'), text }));
@@ -116,7 +116,7 @@ async function sendText(to, text, options = {}) {
                 index--;
                 continue;
             }
-            err.sentChunks = sentChunks + (outbound.echoed ? 1 : 0);
+            err.sentChunks = sentChunks + (outbound.delivered ? 1 : 0);
             err.totalChunks = chunks.length;
             err.partialDelivery = err.sentChunks > 0;
             throw err;
@@ -235,7 +235,7 @@ async function sendMedia(to, filePath, caption = '', forceDocument = false, isHd
     } catch (error) {
             const err = /** @type {any} */ (error);
         if (outbound && !mediaAccepted) failOutbound(outbound, err);
-        if (mediaAccepted || outbound?.echoed) {
+        if (mediaAccepted || outbound?.delivered) {
             err.sentMedia = true;
             err.partialDelivery = true;
         }

@@ -100,12 +100,18 @@ async function downloadMedia(messageData, { maxBytes = maxDownloadBytes } = {}) 
     if (typeof encoded !== 'string' || !encoded) throw new Error('WhatsApp no devolvió el contenido del archivo. Reenvíamelo directamente.');
     const dataUri = encoded.match(/^data:([^;,]+);base64,/i);
     const base64 = encoded.slice(dataUri?.[0]?.length || 0).replace(/\s/g, '');
-    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(base64) || base64.length % 4 === 1) {
+    if (!base64 || !/^[A-Za-z0-9+/]*={0,2}$/.test(base64) || base64.length % 4 === 1
+        || (base64.includes('=') && base64.length % 4 !== 0)) {
         throw new Error('El contenido del archivo no se pudo leer. Reenvíamelo directamente.');
     }
     if (maxBytes !== undefined && Buffer.byteLength(base64, 'base64') > maxBytes) {
         res.data = null;
         throw tooLarge();
+    }
+    const buffer = Buffer.from(base64, 'base64');
+    if (!buffer.length || buffer.toString('base64').replace(/=+$/, '') !== base64.replace(/=+$/, '')) {
+        res.data = null;
+        throw new Error('El contenido del archivo no se pudo leer. Reenvíamelo directamente.');
     }
     const documentMessage = messageData?.message?.documentMessage || messageData?.message?.documentWithCaptionMessage?.message?.documentMessage;
     const mimeType = res.data?.mimetype || res.data?.mimeType || dataUri?.[1] || documentMessage?.mimetype || messageData?.message?.imageMessage?.mimetype || null;
@@ -148,7 +154,6 @@ async function downloadMedia(messageData, { maxBytes = maxDownloadBytes } = {}) 
         }
     }
 
-    const buffer = Buffer.from(base64, 'base64');
     // Liberar referencia en memoria del payload crudo de axios
     if (res?.data) {
         res.data.base64 = null;

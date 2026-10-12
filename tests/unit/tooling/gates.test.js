@@ -9,6 +9,8 @@ const { auditArchitecture } = require('../../../scripts/v2/check-architecture.cj
 const { referencedEnv, referencedPythonEnv } = require('../../../scripts/v2/env-example.cjs');
 const { coverageProblems } = require('../../../scripts/v2/check-coverage.cjs');
 const stateRule = require('../../../scripts/v2/no-global-state.cjs');
+const { evidenceProblems } = require('../../../scripts/v2/check-phase2.cjs');
+const { compare } = require('../../../scripts/refactor/compare-legacy.cjs');
 
 function fixture(files, operation) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'botsky-architecture-'));
@@ -72,4 +74,45 @@ test('coverage fails closed for omitted or subthreshold critical modules', () =>
     assert.equal(coverageProblems(files).length, 1);
     files.pop();
     assert.equal(coverageProblems(files).length, 2);
+});
+
+test('phase 2 gate never treats the red legacy baseline as a passing suite', () => {
+    const evidence = {
+        contracts: Object.fromEntries(['evolution', 'store', 'ai'].map(name => [name, { pass: 1, fail: 0, skipped: 0 }])),
+        verify: { exitCode: 0 },
+        store: { integrity: 'ok', backupRestore: true, actualLegacyCompatibility: true, schemaTables: 24, schemaIndexes: 13 },
+        legacy: { tests: 795, pass: 608, fail: 187, skipped: 0, exitCode: 1, tapSha256: 'a'.repeat(64) }
+    };
+    assert.equal(evidenceProblems(evidence).length, 1);
+    assert.match(evidenceProblems(evidence)[0], /zero new failures/);
+    evidence.legacy = { ...evidence.legacy, pass: 795, fail: 0, exitCode: 0 };
+    assert.equal(evidenceProblems(evidence).length, 0);
+    evidence.contracts.ai.skipped = 1;
+    assert.equal(evidenceProblems(evidence).length, 1);
+});
+
+test('phase 2 legacy deferral is scoped and cannot hide a new regression', () => {
+    const evidence = {
+        contracts: Object.fromEntries(['evolution', 'store', 'ai'].map(name => [name, { pass: 1, fail: 0, skipped: 0 }])),
+        verify: { exitCode: 0 },
+        store: { integrity: 'ok', backupRestore: true, actualLegacyCompatibility: true, schemaTables: 24, schemaIndexes: 13 },
+        exceptions: [{ id: 'F2-E001', status: 'deferred', authorizedBy: 'user-delegated-decision', instruction: 'lo q tu creas mejor papu', revisit: 'Before each feature migration and final cutover.' }],
+        legacy: { tests: 795, pass: 636, fail: 159, skipped: 0, exitCode: 1, tapSha256: 'b'.repeat(64), newFailures: 0, unmatchedFailureTitles: [], comparisonBaselineSha256: '038ef53fc12e924fe0e7a0baad551fca75c1b786f1f62929f7f3315974d0da83' }
+    };
+    assert.equal(evidenceProblems(evidence).length, 0);
+    evidence.legacy.newFailures = 1;
+    assert.equal(evidenceProblems(evidence).length, 1);
+    evidence.legacy.newFailures = 0;
+    evidence.exceptions[0].instruction = 'implicit authorization';
+    assert.equal(evidenceProblems(evidence).length, 1);
+});
+
+test('legacy comparison excludes suite aggregates and counts duplicate regressions', () => {
+    const report = names => names.map(name => `not ok 1 - ${name}\n  ---\n  type: 'test'\n  ...\n`).join('')
+        + "not ok 2 - suite wrapper\n  ---\n  type: 'suite'\n  ...\n"
+        + `# tests 795\n# pass ${795 - names.length}\n# fail ${names.length}\n# skipped 0\n# cancelled 0\n# todo 0\n# duration_ms 10\n`;
+    assert.equal(compare(report(['old', 'old', 'fixed']), report(['old', 'old'])).resolvedBaselineFailures, 1);
+    assert.equal(compare(report(['old']), report(['old', 'old'])).newFailures, 1);
+    assert.equal(compare(report(['old']), report(['new'])).newFailures, 1);
+    assert.throws(() => compare('incomplete TAP', report(['old'])), /Incomplete/);
 });

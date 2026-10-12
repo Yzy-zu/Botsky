@@ -1,7 +1,7 @@
 // @ts-check
 'use strict';
 const { normalizeJid } = require('./client');
-/** @typedef {{jid:string,text:string,textKey:string,createdAt:number,ids:string[],pending:boolean,echoed:boolean,recorded:boolean}} Entry */
+/** @typedef {{jid:string,text:string,textKey:string,createdAt:number,ids:string[],pending:boolean,echoed:boolean,recorded:boolean,delivered:boolean}} Entry */
 class EchoGuard {
     /** @param {{clock:import('../../platform/clock').Clock,store:import('../../platform/ttlStore').TtlStore,record?:(jid:string,text:string)=>void,ttlMs?:number,maxEntries?:number,namespace?:string}} options */
     constructor({ clock, store, record = () => {}, ttlMs = 300000, maxEntries = 1000, namespace = 'evolution.outbound' }) {
@@ -17,7 +17,7 @@ class EchoGuard {
     /** @param {string} jid @param {string} text */
     begin(jid, text) {
         this.prune(); const chat = this.chat(jid);
-        const entry = { jid: chat, text, textKey: JSON.stringify([chat, text]), createdAt: this.clock.now(), ids: [], pending: true, echoed: false, recorded: false };
+        const entry = { jid: chat, text, textKey: JSON.stringify([chat, text]), createdAt: this.clock.now(), ids: [], pending: true, echoed: false, recorded: false, delivered: false };
         this.entries.push(entry); this.prune(); return entry;
     }
     /** @param {Entry} entry @param {unknown} id */
@@ -28,7 +28,7 @@ class EchoGuard {
         catch { /* Cache capacity cannot turn acknowledged delivery into a send failure. Bounded entries retain IDs. */ }
     }
     /** @param {Entry} entry @param {any} response */
-    finish(entry, response) { entry.pending = false; this.associate(entry, response?.data?.key?.id); }
+    finish(entry, response) { entry.pending = false; if (response) entry.delivered = true; this.associate(entry, response?.data?.key?.id); }
     /** @param {Entry} entry */
     record(entry) { if (entry.recorded) return; entry.recorded = true; try { this.recordHistory(entry.jid, entry.text); } catch { /* History failure never resends. */ } }
     /** @param {{chatId?:string,messageId?:string,text?:string}} [event] */
@@ -41,7 +41,7 @@ class EchoGuard {
         if (!entry) return false; entry.echoed = true; this.associate(entry, messageId); return true;
     }
     /** @param {Entry} entry @param {any} error */
-    fail(entry, error) { this.finish(entry, null); if (entry.echoed) this.record(entry); if ([400, 401, 403, 404, 413, 422, 429].includes(error.response?.status) && !entry.echoed) this.forget(entry); }
+    fail(entry, error) { this.finish(entry, null); entry.delivered = entry.echoed || error.deliveryAcknowledged === true || error.response?.data?.deliveryAcknowledged === true; if (entry.delivered) this.record(entry); if ([400, 401, 403, 404, 413, 422, 429].includes(error.response?.status) && !entry.delivered) this.forget(entry); }
     dispose() { for (const entry of [...this.entries]) this.forget(entry); }
 }
 module.exports = { EchoGuard };

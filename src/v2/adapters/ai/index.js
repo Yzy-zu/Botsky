@@ -2,6 +2,7 @@
 'use strict';
 const {validateSchema}=require('./schema');
 const {isLlmRequest}=require('./request');
+const {normalizeParts}=require('./response');
 const {createKeyPool,getConfiguredApiKeys,getActiveGroqKey,maskKey}=require('./keyPool');const {createCircuitBreaker}=require('./circuitBreaker');const {createGemini}=require('./gemini');const {createGroq}=require('./groq');const {AiProviderError,classifyAiError,toFailure,record}=require('./failures');
 /** @param {{config:()=>Record<string,unknown>,persona?:()=>Record<string,unknown>,clock:{now:()=>number},http:import('./protocol').HttpTransport,maxConcurrent?:number}} dependencies */
 function createAiAdapter({config,persona=()=>({}),clock,http,maxConcurrent=4}){
@@ -18,13 +19,14 @@ function createAiAdapter({config,persona=()=>({}),clock,http,maxConcurrent=4}){
             if(clock.now()>=deadline)return{ok:false,failure:{kind:'timeout',retryable:true}};
             if(provider==='gemini'&&!pool.count())continue;if(provider==='groq'&&!getActiveGroqKey(config(),persona()))continue;
             if(provider==='groq'&&visual)return{ok:false,failure:{kind:'unsupported_media',retryable:false}};
-            try{const raw=provider==='gemini'?await gemini.callGemini(options):await groq.callGroq(options);if(clock.now()>deadline)return{ok:false,failure:{kind:'timeout',retryable:true}};const generated=record(raw);const content=record(generated.content);const parts=/** @type {import('./protocol').Part[]} */(Array.isArray(content.parts)?content.parts:typeof generated.text==='string'&&generated.text?[{text:generated.text}]:[]);
-                /** @type {Array<{name:string,args:Record<string,unknown>}>} */const toolCalls=parts.flatMap(p=>p.functionCall?[p.functionCall]:[]);
-                if(provider==='groq'&&Array.isArray(generated.toolCalls)){for(const value of generated.toolCalls){const fn=record(record(value).function);let args;try{args=typeof fn.arguments==='string'?JSON.parse(fn.arguments):{};}catch{throw new AiProviderError({provider,kind:'invalid_response'});}if(typeof fn.name!=='string'||!args||typeof args!=='object'||Array.isArray(args))throw new AiProviderError({provider,kind:'invalid_response'});toolCalls.push({name:fn.name,args});parts.push({functionCall:{name:fn.name,args}});}}
+            try{const raw=provider==='gemini'?await gemini.callGemini(options):await groq.callGroq(options);if(clock.now()>=deadline)return{ok:false,failure:{kind:'timeout',retryable:true}};const generated=record(raw);const content=record(generated.content);const parts=/** @type {import('./protocol').Part[]} */(Array.isArray(content.parts)?content.parts:typeof generated.text==='string'&&generated.text?[{text:generated.text}]:[]);
+
+                if(provider==='groq'&&Array.isArray(generated.toolCalls)){for(const value of generated.toolCalls){const fn=record(record(value).function);let args;try{args=typeof fn.arguments==='string'?JSON.parse(fn.arguments):{};}catch{throw new AiProviderError({provider,kind:'invalid_response'});}if(typeof fn.name!=='string'||!args||typeof args!=='object'||Array.isArray(args))throw new AiProviderError({provider,kind:'invalid_response'});parts.push({functionCall:{name:fn.name,args}});}}
+                const publicParts=normalizeParts(parts,provider);
+                const toolCalls=publicParts.flatMap(p=>'functionCall' in p?[p.functionCall]:[]);
                 for(const call of toolCalls){const declaration=request.tools?.find(t=>t.name===call.name);if(!declaration||!call.args||typeof call.args!=='object'||Array.isArray(call.args)||(declaration.parameters&&!validateSchema(call.args,declaration.parameters)))throw new AiProviderError({provider,kind:'invalid_response'});}
-                const finish=typeof generated.finishReason==='string'?generated.finishReason:null;const text=parts.map(p=>p.text||'').join('\n').trim();
+                const finish=typeof generated.finishReason==='string'?generated.finishReason:null;const text=publicParts.map(p=>'text' in p?p.text:'').join('\n').trim();
                 if(request.schema){if(finish==='MAX_TOKENS'||finish==='length')throw new AiProviderError({provider,kind:'invalid_response',finishReason:finish});let parsed;try{parsed=JSON.parse(text);}catch{throw new AiProviderError({provider,kind:'invalid_response'});}if(!validateSchema(parsed,request.schema))throw new AiProviderError({provider,kind:'invalid_response'});}
-                const publicParts=parts.filter(p=>!p.thought).filter(p=>p.text!==undefined||p.inlineData||p.functionCall||p.functionResponse);
                 return{ok:true,data:{text,parts:/** @type {import('../../domain/ports').LLMPart[]} */(publicParts),toolCalls,finishReason:finish,provider:/** @type {'gemini'|'groq'} */(provider)}};
             }catch(error){last=new AiProviderError({...classifyAiError(error,provider)});if(last.diagnostic.kind==='blocked')break;}
         }

@@ -32,7 +32,9 @@ function classifyAiError(error,provider){if(error instanceof AiProviderError)ret
 function assertGeminiResponse(data,{needsText=true}={}){
     const d=record(data),candidate=record(Array.isArray(d.candidates)?d.candidates[0]:null),prompt=record(d.promptFeedback).blockReason,finish=candidate.finishReason;
     if((prompt&&prompt!=='BLOCK_REASON_UNSPECIFIED')||BLOCK.includes(String(finish)))throw new AiProviderError({kind:'blocked',provider:'gemini',finishReason:finish,blockReason:prompt||finish});
-    const content=/** @type {import('./protocol').Content} */(candidate.content);const parts=Array.isArray(content?.parts)?content.parts.filter(p=>!p.thought):[];const text=parts.map(p=>typeof p.text==='string'?p.text:'').join('\n').trim();
+    const content=/** @type {import('./protocol').Content} */(candidate.content);
+    if(Array.isArray(content?.parts)&&content.parts.some(p=>!p||typeof p!=='object'||Array.isArray(p)))throw new AiProviderError({provider:'gemini',kind:'invalid_response'});
+    const parts=Array.isArray(content?.parts)?content.parts.filter(p=>!p.thought):[];const text=parts.map(p=>typeof p.text==='string'?p.text:'').join('\n').trim();
     if(['MALFORMED_FUNCTION_CALL','UNEXPECTED_TOOL_CALL','OTHER'].includes(String(finish)))throw new AiProviderError({provider:'gemini',kind:'invalid_response',finishReason:finish});
     if(!(text||parts.some(p=>p.functionCall||p.inlineData||p.executableCode||p.codeExecutionResult))||(needsText&&!text))throw new AiProviderError({provider:'gemini',kind:finish==='MAX_TOKENS'?'invalid_response':'empty_response',finishReason:finish});
     return{content,text,finishReason:typeof finish==='string'?finish:null};

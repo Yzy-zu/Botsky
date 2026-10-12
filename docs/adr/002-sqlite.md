@@ -1,6 +1,6 @@
 # ADR-002 — Conservar sqlite3 detrás de repositorios
 
-Fecha: 2026-10-12. Estado: decisión reversible del maestro dentro de §7.4; pendiente de implementación en Fase 2.
+Fecha: 2026-10-12. Estado: implementado en Fase 2; decisión reversible del maestro dentro de §7.4.
 
 ## Contexto
 
@@ -28,3 +28,16 @@ El rollback habitual cambia el propietario de ejecución a v1 y reinicia únicam
 Contract, consolidación de tablas y borrado de esquema quedan para después de la ventana operacional y la autorización requerida para DROP. Conservar el driver reduce variación y deja una futura sustitución localizada detrás del puerto; no modifica las capas del plano.
 
 Evidencia: `src/services/db.js:3`, `:9`, `:20`, `:1513`; `package.json`; `plan.md` §§7, 12, 16.
+
+Implementación comprobada en bases temporales: sqlite3@6.0.1 (SQLite3.52.0),
+transacciones serializadas, migración000 completo, snapshot VACUUM INTO con
+escrituras WAL concurrentes/integrity/checksum y restore a destino nuevo.
+Se verificó lectura/escritura de API v1 real sobre el esquema migrado, sin
+importar v1 en producción ni copiar datos reales. Manifest y contratos en
+[phase2-evidence](../refactor/phase2-evidence.md).
+
+VACUUM INTO es una instantánea coherente según la
+[documentación SQLite](https://www.sqlite.org/lang_vacuum.html); se ejecuta
+fuera de transacción, se valida el resultado y se sincroniza el archivo.
+El restore probado de fixture no sustituye la coordinación de escritores
+ni el ensayo de rollback de cada feature antes de su canario.

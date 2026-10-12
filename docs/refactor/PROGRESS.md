@@ -22,8 +22,8 @@ Actualizado: 2026-10-12 UTC. Maestro: Codex. Plano: `plan.md`.
 | --- | --- | --- |
 | 0 Baseline y seguridad | Cerrada con excepción autorizada F0-E001 | Gate0 PASS; 21 fixtures reales / 14 categorías; poll diferido por cliente; baseline y trazabilidad completos |
 | 1 Cimientos | Cerrada | Gate1 PASS: verify exit0; 42 tests; 100% líneas config/TTL/queue/scheduler; 90 env documentadas |
-| 2 Adaptadores | Reanudada | Implementación y contratos preparados; Gate2 abierto, 104 pass/1 fail en último verify y deuda legacy pendiente |
-| 3 Pipeline y sombra | No iniciada | Gate 2 pendiente; 24 h reales de sombra requeridas |
+| 2 Adaptadores | Cerrada con excepción F2-E001 | verify:phase2 PASS; 123 tests verdes; legacy636/159, cero nuevos y28resueltos |
+| 3 Pipeline y sombra | Lista para iniciar | Gate2 PASS con deudaF2-E001; 24h reales de sombra requeridas |
 | 4 Migración A–D | No iniciada | Gate 3 pendiente |
 | 5 IA y duplicados | No iniciada | Gate 4 pendiente |
 | 6 Cutover y retiro | No iniciada | Soaks, rollback probado y aceptación pendientes |
@@ -60,8 +60,8 @@ Actualizado: 2026-10-12 UTC. Maestro: Codex. Plano: `plan.md`.
 
 Entregables WO001–007 revisados e integrados; se conservan en commit local.
 Gate0 y Gate1 PASS; F0-E001 difiere encuesta hasta antes de polls.
-Siguiente fase: WOs separadas Evolution, store/migraciones y AI, con contratos
-y fakes; inventariar primero firmas/esquema y definir backup consistente.
+Fase2 entregada y Gate2PASS con F2-E001. Próximo: WOs pipeline/políticas/
+featureshelp-system-info, revisión arquitectónica y sombra con cero efectos.
 No comenzar sombra/canario antes de Gates2/3. Telemetría v1 continúa.
 
 ## Checkpoint operacional histórico previo a captura
@@ -164,3 +164,31 @@ No comenzar sombra/canario antes de Gates2/3. Telemetría v1 continúa.
 - Maestro: runner migraciones rechaza aplicar versionesolder después de historynewer antesdebackup/mutación; regressiontestreal verde (storeactual8/8 incluyendo nuevo).
 - Regresiónlegacy comparable reactivada en containerread-onlysinred; recompila sólocopiatemporal, no modifica bindinghost. WO024 trabaja runner mejoradoaislado separado para resolver causasentorno, sin false-green.
 - WO025 AI encontró cinco defects de validación/salida/deadline; tests inicialmente0/5, correccionesencurso. WO026 Evolutionrevisión contratosen curso. No ejecutarverifyglobal hasta sourcesestables.
+
+## Checkpoint Fase2 — revisión final 2026-10-12 21:10 UTC
+
+- Usuario delega decisión de deuda/excepción: “lo q tu creas mejor papu”. Maestro elige F2-E001 diferir159fallos legacy previos porfunción, contractsv2 yverifyverdes, ceroNEW frentehashbaseline. Reevalúarantescadamigración/cutover; no autoriza DROP ni fingesuitelegacyverde.
+- Regresión completa comparable795/636pass/159fail/0skip, duración194727.92496ms, exit1; SHA81962656e27ed0297955cfef189c5551a5464d47e55d3fc08c7643fbbda7b12c. Comparación conbaselineSHA038ef53...:28resueltos,0nuevos. Debt159IDs BF yarchivo/clasificación enphase2-legacy-debt.json.
+- Verify actual123pass/0fail, typecheck/lint/arquitectura43modulos0violations/env93settings/gatecoveragePASS. Contratos independientes Evolution41,store8,AI29, todos0fail/skip. Evidencia JSON+MD preparada y gatePhase2 con test negativo excepcion/newfails ylistaDebt.
+- WO025 completada: nueve nuevaspruebas reproducen/evitan schemaoptional/malformed, JSONprofundo, thought/metadata leaks, parts inválidas, deadline exacto. WO026: base64canónico, deliveryACKboolean bloqueafallback/retry, sin ID/bodyprivado.
+- WO024 runner aisladomejorado opcional: buildestáencurso; dependencia externa sólo códigoRikolino y sharp/cheerio fixtures. Primer intento fallo de provenance packageexports, importsharp5x5 había pasado; corregido leer metadata víaFS. No riesgo producción; verificar --check antesentregar comooperativo.
+- Trazabilidad: nueve casos nativeTables TR0372–0380 portados atests/contract/evolutionNativeTables.test.js; otros no marcados sin correspondencia real.
+- Healthproductivo200, PM2onlinePID2606310,telemetríatrue,capturafalse. Sin reinicios/DBconfig/sourcelegacy nuevas duranteFase2.
+- Next: finalnpmrunverify:phase2, evidenciafinal/ADR/progress, commitpush; nofase3antescierre.
+
+## Cierre Fase2 — 2026-10-12T21:14:49.850Z
+
+- npm run verify:phase2 EXIT0:123pass/0fail; 43módulos sinviolaciones; 93envsettingsgeneradas; coreports estructuralmente compatibles. Gate0PASS (F0-E001); Gate1PASS; Gate2PASS con excepción autorizadaF2-E001.
+- Contratos Evolution41,store8,AI29 todosgreen; artefactos/hashes+regresión enphase2-evidence.json yreportemd. Debt159filelistBF enphase2-legacy-debt.json, clasificaciones106entorno/10harness/33candidatas/10indeterminadas. No se presume159bugsdeproducción.
+- APIv1real probada sobrebasetemporalmigrada y viceversa. BackupRestoreWALintegritySHA comprobado. La recuperación featureblackjack/cooperacha y rollbackoperacional permanecen pendientes antescanario (no fingirS18).
+- Userdelegatedscope F2-E001 difiere únicamente fallosprevios ypreserva0nuevos/contractsgreen; reevalúa cadafeatureantesmigración y todoelledgerantescutover. F0-E001 pollnativo sigue pendienteantespollsolaB.
+- Capturaoff/telemetríaon, health200/PM2onlinePID2606310. Noactivaciónv2/cambiosDB/env/sourceslegacy productivos enFase2.
+- WORKNEXT Fase3: pipeline8etapas+políticas5 conFakeClock/puertos; escenariosS01–S09,S12–S16, coberturapipeline/policies>=90%, revisiónarquitectónica, sombra24hreales sinbusinessIO. Orquestación AI pendientesseintegran segúnWO019. No sombra activa hoy.
+- Runnerdeuda mejoradoWO024 imagenaisladacompletando --check/subset; suenv distinto NO reemplazaTAP comparable delgate. Cierre se publica enGitHub trasentrega.
+
+## Runner deuda legacy WO024 entregado
+
+- Imagen aislada construida y --check REAL verde: UID/GID1002, SIGKILLgrupo, FFmpeg/gs/pdfinfo/procps/git, SQLite/sharp/cheerio. SETUID/SETGID/KILL sólo contenedor PIDaislado sinred/socket/VPSwrite. No despliegueproductivo.
+- SmokeadminXP7/7 yRikolino7/7, recortarPDF1/2: total16tests15pass1fail0skip, exit1. Toolingahorapermite reproducirfailPDFcongsreal; registrarpendiente,no cambiar aserciones para aprobar. SHA43525dccd34481a7cebecfd404ad52133cda0808f38a8e07d0ed6cafdbcef636; TAP /tmp/botsky-legacy-enhanced-smoke.tap.
+- Entornoenhanced distinto delbaseline, no prueba ausencia deregresiones porcomparaciónnumérica entreesosentornos. CierreGate2 usa sólo comparable795/636/159zeroNew+F2-E001. Enhancedfullsuite se reevalúa condeudafuncional enolas.
+- Comandos: bash scripts/refactor/legacy-verification.sh --prepare / --check / --files test/nombre.test.js; defaultcorresuitecompletasin whitelist. No requerirproducción/serviciospagados.

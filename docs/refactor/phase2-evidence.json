@@ -1,0 +1,86 @@
+{
+  "version": 1,
+  "checkedUtc": "2026-10-12T21:13:49.551Z",
+  "contracts": {
+    "evolution": {
+      "tests": 41,
+      "pass": 41,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "tapSha256": "3886547b756f57faba323abb92c106b43783d5f69a2eeb4fb1ab010270563a81"
+    },
+    "store": {
+      "tests": 8,
+      "pass": 8,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "tapSha256": "1016f0d6fa233c02c35f5d9675ee0a196e2a10f1603f4db693b8620db3e48e78"
+    },
+    "ai": {
+      "tests": 29,
+      "pass": 29,
+      "fail": 0,
+      "skipped": 0,
+      "cancelled": 0,
+      "todo": 0,
+      "tapSha256": "68f31abf2d08696051758ddfebfd71c6c0c8fc674991b5c17e0e5aedf7e25adb"
+    }
+  },
+  "verify": {
+    "exitCode": 0,
+    "pass": 123,
+    "fail": 0,
+    "logSha256": "3e61db425b404c6e01ef80282456a29e74b9f7346c2ed892d7f5db5f112bb6a3",
+    "command": "npm run verify:phase2"
+  },
+  "architecture": {
+    "modules": 43,
+    "violations": 0
+  },
+  "environmentSettings": 93,
+  "store": {
+    "integrity": "ok",
+    "backupRestore": true,
+    "actualLegacyCompatibility": true,
+    "schemaTables": 24,
+    "schemaIndexes": 13,
+    "guardedAlter": 4,
+    "driver": "sqlite3@6.0.1",
+    "sqliteVersion": "3.52.0"
+  },
+  "legacy": {
+    "tests": 795,
+    "pass": 636,
+    "fail": 159,
+    "skipped": 0,
+    "cancelled": 0,
+    "todo": 0,
+    "duration_ms": 194727.92496,
+    "newFailures": 0,
+    "resolvedBaselineFailures": 28,
+    "exitCode": 1,
+    "unmatchedFailureTitles": [],
+    "comparisonBaselineSha256": "038ef53fc12e924fe0e7a0baad551fca75c1b786f1f62929f7f3315974d0da83",
+    "tapSha256": "81962656e27ed0297955cfef189c5551a5464d47e55d3fc08c7643fbbda7b12c"
+  },
+  "exceptions": [
+    {
+      "id": "F2-E001",
+      "status": "deferred",
+      "authorizedBy": "user-delegated-decision",
+      "instruction": "lo q tu creas mejor papu",
+      "authorizedUtc": "2026-10-12T21:11:38.743Z",
+      "revisit": "Fix each prior failure before its corresponding feature migration; re-evaluate all debt before final cutover.",
+      "debtReport": "docs/refactor/phase2-legacy-debt.json"
+    }
+  ],
+  "production": {
+    "runtime": "v1",
+    "v2Enabled": false,
+    "migrationsApplied": false
+  }
+}
