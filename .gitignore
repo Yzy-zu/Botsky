@@ -1,7 +1,30 @@
+# Dependencias
 node_modules/
+
+# Bases de datos y modelos generados
 data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+data/model.nlp
+data/school_media/
+
+# Credenciales sensibles y tokens de autenticación
 data/token.json
 data/google-credentials.json
 data/oauth-credentials.json
 data/youtube_cookies.txt
-.env
+
+# Variables de entorno
+.env*
+!.env.example
+
+# Archivos de log y temporales
+*.log
+data/*.log
+logs/
+temp/
+.DS_Store
+
+# Directorios de trabajo de agentes
+.agents/

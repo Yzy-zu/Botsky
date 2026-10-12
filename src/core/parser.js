@@ -126,10 +126,24 @@ function isUrl(str) {
 }
 
 /**
- * Extrae la primera URL que aparezca en el array de args.
+ * Extrae la primera URL que aparezca en el array de args o texto, limpiando signos de puntuación finales.
  */
 function extractUrl(args) {
-    return args.find(a => isUrl(a)) ?? null;
+    if (!args) return null;
+    const urlRegex = /https?:\/\/[^\s()<>]+(?:\([\w\d]+\)|(?:[^\s`!()\[\]{};:'\".,<>?«»“”‘’]))/i;
+
+    if (typeof args === 'string') {
+        const m = args.match(urlRegex);
+        return m ? m[0] : null;
+    }
+    if (Array.isArray(args)) {
+        for (const a of args) {
+            if (typeof a !== 'string') continue;
+            const m = a.match(urlRegex);
+            if (m) return m[0];
+        }
+    }
+    return null;
 }
 
 module.exports = { parse, tokenize, isUrl, extractUrl };

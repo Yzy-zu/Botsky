@@ -3,15 +3,30 @@
 const fs = require('fs');
 const path = require('path');
 
-const { sendMedia, sendText } = require('../services/evolution');
+const evolution = require('../services/evolution');
+const sendMedia = (...args) => evolution.sendMedia(...args);
+const sendText = (...args) => evolution.sendText(...args);
 const { extractUrl } = require('../core/parser');
 const logger = require('../services/logger');
-const { Progress, spawnWithProgress } = require('../services/progress');
-const { execFile } = require('child_process');
+const progress = require('../services/progress');
+const { Progress } = progress;
+const spawnWithProgress = (...args) => progress.spawnWithProgress(...args);
+const drive = require('../services/drive');
+const mediaSearch = require('../services/mediaSearch');
+const searchMedia = (...args) => (mediaSearch.searchMedia ? mediaSearch.searchMedia(...args) : mediaSearch(...args));
+const { searchFailureMessage } = require('../services/operationFeedback');
+
+let thumbCollageModule = null;
+try {
+    thumbCollageModule = require('../utils/thumbnailCollage');
+} catch (_) {
+    thumbCollageModule = null;
+}
 
 const TMP_DIR = process.env.TMP_DIR ?? '/tmp/whatsapp-bot';
-const DEFAULT_QUALITY = process.env.YTDLP_DEFAULT_QUALITY ?? '720';
+const DEFAULT_QUALITY = process.env.YTDLP_DEFAULT_QUALITY ?? '480';
 const DEFAULT_AUDIO_QUALITY = process.env.YTDLP_DEFAULT_AUDIO_QUALITY ?? '192';
+const WHATSAPP_MAX_MB = parseFloat(process.env.WHATSAPP_MAX_MEDIA_MB || process.env.WHATSAPP_MAX_MB || '50');
 
 // Asegurar que el directorio temporal existe
 fs.mkdirSync(TMP_DIR, { recursive: true });
@@ -21,6 +36,9 @@ fs.mkdirSync(TMP_DIR, { recursive: true });
 const VALID_FORMATS = new Set(['mp4', 'mp3', 'm4a', 'webm', 'ogg']);
 const VALID_QUALITY = new Set(['144', '240', '360', '480', '720', '1080', 'best']);
 const AUDIO_FORMATS = new Set(['mp3', 'm4a', 'ogg', 'wav']);
+
+// ─── Deduplicación de descargas concurrentes ──────────────────────────────────
+const inProgressDownloads = new Map(); // key -> { promise, refCount, shouldCleanup, cleanup }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -48,8 +66,22 @@ function findGeneratedFile(dir, prefix) {
 const ADULT_KEYWORDS = [
     'nopor', 'porno', 'porn', 'xxx', 'teen', 'milf', 'hentai', 'chichis', 'tetas',
     'culonas', 'anal', 'creampie', 'blowjob', 'erotico', 'erotica', 'sensual',
-    'xvideos', 'pornhub', 'xnxx', 'redtube', 'onlyfans', 'rule34', 'pajero', 'paja'
+    'xvideos', 'pornhub', 'xnxx', 'redtube', 'onlyfans', 'rule34', 'pajero', 'paja',
+    'cochinada', 'cochinadas'
 ];
+
+const ADULT_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?(?:[a-zA-Z0-9-]+\.)?(?:xvideos\d*|pornhub\w*|xnxx\d*|redtube|youporn|spankbang|xhamster\d*|chaturbate|onlyfans|rule34|eporner|tnaflix|beeg|tube8|brazzers)\.[a-z0-9.]+/i;
+
+function extractAdultUrl(text) {
+    if (!text || typeof text !== 'string') return null;
+    const m = text.match(/(?:https?:\/\/)?(?:www\.)?(?:[a-zA-Z0-9-]+\.)?(?:xvideos\d*|pornhub\w*|xnxx\d*|redtube|youporn|spankbang|xhamster\d*|chaturbate|onlyfans|rule34|eporner|tnaflix|beeg|tube8|brazzers)\.[a-z0-9.]+(?:\/[^\s]*)?/i);
+    if (!m) return null;
+    let url = m[0].replace(/[.,;:!?)>"'«»“”‘’]+$/, '');
+    if (!/^https?:\/\//i.test(url)) {
+        url = `https://${url}`;
+    }
+    return url;
+}
 
 // ─── Sesiones interactivas de búsqueda ────────────────────────────────────────
 const searchSessions = new Map(); // sessionKey -> { results, isAdult, searchQuery, format, quality, timestamp }
@@ -85,10 +117,25 @@ function clearSearchSession(sessionKey) {
 
 function matchSelection(text) {
     if (!text || typeof text !== 'string') return null;
-    const clean = text.trim().toLowerCase();
-    const m = clean.match(/^(?:oye\s+)?(?:descarga(?:me)?|baja(?:me)?|pasa(?:me)?|manda(?:me)?|tumba(?:te)?|dame|quiero)?\s*(?:el\s+|el\s+n[uú]mero\s+|n[uú]mero\s+|num\s+|#|el\s+video\s+|video\s+)?\s*(\d{1,2})\b(?:\s+(?:de\s+la\s+lista|de\s+ahi))?(?:\s+(?:en\s+|a\s+)?(mp3|mp4))?(?:\s+porfa(?:vor)?)?$/i);
+    let clean = text.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    clean = clean.replace(/@[^\s,]+\s*/g, '');
+    clean = clean.replace(/[¿?¡!.,;:_~]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    let format = null;
+    const fmtMatch = clean.match(/(?:(?:\s+(?:en|a|como)\s+|\s+)(mp3|audio|mp4|video))\s*(?:(?:por\s*favor|por\s*fa|porfa|plis|pls|paro)\s*)*$/i);
+    if (fmtMatch) {
+        format = (fmtMatch[1] === 'audio' || fmtMatch[1] === 'mp3') ? 'mp3' : 'mp4';
+        clean = clean.slice(0, clean.lastIndexOf(fmtMatch[0])).trim();
+    }
+
+    clean = clean.replace(/\s+(?:por\s*favor|por\s*fa|porfa|plis|pls|paro|de\s+la\s+lista|de\s+ahi)$/i, '').trim();
+
+    const m = clean.match(/^(?:(?:oye\s+)?(?:compa\s+|bot\s+|botsky\s+|botsito\s+)?)?(?:descarga(?:me|te)?|baja(?:me|te)?|pasa(?:me|te)?|manda(?:me|te)?|tumba(?:te|me)?|echa(?:me|te)?|dame|quiero(?:\s+ver)?|pon(?:me|te)?|toca|escoge|elijo|selecciona)?\s*(?:(?:el|la)\s+)?(?:numero|num|opcion|video|rola|cancion|#)?\s*#?\s*(\d{1,2})$/i);
     if (m) {
-        return { num: parseInt(m[1], 10), format: m[2] || null };
+        const num = parseInt(m[1], 10);
+        if (num >= 1 && num <= 99) {
+            return { num, format };
+        }
     }
     return null;
 }
@@ -130,42 +177,19 @@ function estimateSizeStr(seconds) {
     return `💾 ~${mb}MB`;
 }
 
-/**
- * Búsqueda en YouTube usando --flat-playlist (rápido, sin bot-check).
- */
-function searchYoutubeList(query, limit = 8) {
-    return new Promise((resolve) => {
-        execFile('yt-dlp', [
-            '--flat-playlist',
-            '--print', '%(id)s\t%(title)s\t%(duration_string)s',
-            `ytsearch${limit + 5}:${query}`
-        ], { timeout: 15000 }, (err, stdout) => {
-            if (err) {
-                logger.error('[descargar] Error en searchYoutubeList:', err.message);
-                return resolve([]);
-            }
-            const lines = stdout.trim().split('\n').filter(Boolean);
-            const results = lines.map(line => {
-                const [id, title, duration] = line.split('\t');
-                const durStr = duration && duration !== 'NA' ? duration.trim() : 'N/A';
-                const secs = parseDurationToSeconds(durStr);
-                return {
-                    title: (title || 'Video de YouTube').trim(),
-                    url: `https://www.youtube.com/watch?v=${id}`,
-                    duration: durStr,
-                    estimatedSize: estimateSizeStr(secs)
-                };
-            }).filter(r => r.duration !== 'N/A' && !r.title.includes('🔴') && !r.title.toLowerCase().includes('directo') && !r.title.toLowerCase().includes('en vivo')).slice(0, limit);
-            resolve(results);
-        });
-    });
+/** Legacy array API. New callers should use mediaSearch's typed result. */
+async function searchYoutubeList(query, limit = 8) {
+    const result = await searchMedia(query, { limit });
+    return result.items;
 }
 
 /**
  * Búsqueda de videos para adultos en XVideos.
  */
 async function searchAdultList(query, limit = 8) {
-    const cleanQuery = query.replace(/noporsito|nopor|porno|video\s+de|video|descargame|baja|bajar/gi, '').trim() || query;
+    let cleanQuery = query.replace(/\b(?:noporsito|nopor|porno|xxx|videos?\s+de|videos?|clips?|pel[ií]culas?|pelis?\b|desc[aá]rga(?:me|te)?|descargar|descarga|b[aá]ja(?:me|te)?|bajar|baja|b[uú]sca(?:me)?|buscar|busca|p[aá]sa(?:me|te)?|pasar|pasa|t[uú]mba(?:te|me)?|tumbar|tumba|dame|m[aá]nda(?:me|te)?)\b/gi, '').trim();
+    cleanQuery = cleanQuery.replace(/\s+/g, ' ').trim();
+    cleanQuery = cleanQuery.replace(/^\s*(?:(?:un|una|unas|unos|el|la|los|las|de|del)\s+)+/i, '').trim() || query;
     try {
         const searchUrl = `https://www.xvideos.com/?k=${encodeURIComponent(cleanQuery)}`;
         const res = await fetch(searchUrl, {
@@ -180,12 +204,18 @@ async function searchAdultList(query, limit = 8) {
                 const block = blocks[i];
                 const hrefMatch = block.match(/href="(\/video[0-9a-zA-Z._\/-]+)"[^>]*title="([^"]*)"/);
                 const durMatch = block.match(/class="duration">([^<]+)<\/span>/);
+                const thumbMatch = block.match(/data-src="([^"]+)"/) || block.match(/src="([^"]+)"/);
+                let thumbUrl = thumbMatch ? thumbMatch[1] : null;
+                if (thumbUrl && thumbUrl.includes('THUMBNUM')) {
+                    thumbUrl = thumbUrl.replace('THUMBNUM', '1');
+                }
                 if (hrefMatch && hrefMatch[1] && !hrefMatch[1].includes('videos-i-like') && !hrefMatch[1].includes('verification')) {
                     const dur = durMatch ? durMatch[1].trim() : 'N/A';
                     const secs = parseDurationToSeconds(dur);
                     results.push({
                         title: decodeHtmlEntities(hrefMatch[2]),
                         url: `https://www.xvideos.com${hrefMatch[1]}`,
+                        thumbnailUrl: thumbUrl,
                         duration: dur,
                         estimatedSize: estimateSizeStr(secs)
                     });
@@ -200,12 +230,31 @@ async function searchAdultList(query, limit = 8) {
 }
 
 function buildArgs(url, format, quality, withSubs, outputPrefix, flags = {}) {
+    const isSpotify = Boolean(url && (/spotify\.com|spotify\.link|^spotify:/i.test(url)));
+    if (isSpotify) {
+        return [
+            'download',
+            url,
+            '--format', 'mp3',
+            '--output', `${outputPrefix}-{title}.{output-ext}`
+        ];
+    }
+
     const outputTemplate = `${outputPrefix}.%(ext)s`;
     const isAudio = AUDIO_FORMATS.has(format);
     const isYoutube = url.includes('youtu.be') || url.includes('youtube.com') || url.startsWith('ytsearch');
 
-    // Cookies de YouTube (configurar YOUTUBE_COOKIES_FILE en .env)
-    const cookiesFile = process.env.YOUTUBE_COOKIES_FILE ?? '';
+    // Cookies de YouTube (detectar variables o archivos locales)
+    const cookiesCandidate = process.env.YOUTUBE_COOKIES_FILE || process.env.COOKIES_FILE || '';
+    let cookiesFile = '';
+    if (cookiesCandidate && fs.existsSync(cookiesCandidate)) {
+        cookiesFile = cookiesCandidate;
+    } else {
+        const defaultCookie1 = path.join(__dirname, '../../data/youtube_cookies.txt');
+        const defaultCookie2 = path.join(__dirname, '../../data/cookies.txt');
+        if (fs.existsSync(defaultCookie1)) cookiesFile = defaultCookie1;
+        else if (fs.existsSync(defaultCookie2)) cookiesFile = defaultCookie2;
+    }
     const hasCookies = isYoutube && cookiesFile && fs.existsSync(cookiesFile);
 
     const ytFlags = isYoutube ? [
@@ -222,22 +271,32 @@ function buildArgs(url, format, quality, withSubs, outputPrefix, flags = {}) {
             '--audio-format', format,
             '--embed-thumbnail',
             '--add-metadata',
+            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            '--socket-timeout', '30',
+            '--retries', '3',
+            '--limit-rate', '50M',
             '-o', outputTemplate,
             url
         ];
     } else {
-        const q = quality === 'best' ? 'bestvideo+bestaudio/best' : `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]/best`;
+        const q = quality === 'best'
+            ? 'bestvideo+bestaudio/best'
+            : `bestvideo[height<=${quality}]+bestaudio/best[height<=${quality}]/best`;
         args = [
             '--no-playlist',
             ...ytFlags,
             '-f', q,
+            '--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            '--socket-timeout', '30',
+            '--retries', '3',
+            '--limit-rate', '50M',
             '--merge-output-format', 'mp4',
             '--add-metadata'
         ];
         if (withSubs) {
             args.push('--write-subs', '--write-auto-subs', '--sub-lang', 'es,en', '--embed-subs');
         }
-        
+
         // Recorte de tiempo mediante --download-sections (yt-dlp)
         if (flags && (flags.ss || flags.to)) {
             const ss = flags.ss || '0';
@@ -260,10 +319,21 @@ function buildArgs(url, format, quality, withSubs, outputPrefix, flags = {}) {
  * @param {object} parsed   - { command, flags, args }
  * @param {string} from     - JID del remitente
  */
-async function handleDescargar({ flags, args }, from, messageData) {
+async function handleDescargar(parsed = {}, from, messageData = {}) {
+    if (!from) return;
+    const safeParsed = (parsed && typeof parsed === 'object') ? parsed : {};
+    const flags = safeParsed.flags || {};
+    const args = Array.isArray(safeParsed.args) ? safeParsed.args : [];
+
     // ── Extraer parámetros ──
-    let url = extractUrl(args);
+    let url = extractUrl(args) || extractAdultUrl(Array.isArray(args) ? args.join(' ') : String(args || ''));
     const p = new Progress(from, messageData?.key);
+
+    // Validación silenciosa: fotos de TikTok no soportadas por yt-dlp
+    if (url && url.includes('tiktok.com') && url.includes('/photo/')) {
+        logger.info('[descargar] Enlace de foto de TikTok detectado, ignorando en silencio.');
+        return;
+    }
 
     let format = (flags.f ?? flags.formato ?? 'mp4').toLowerCase();
     let quality = (flags.q ?? flags.calidad ?? DEFAULT_QUALITY).toString().toLowerCase();
@@ -281,33 +351,38 @@ async function handleDescargar({ flags, args }, from, messageData) {
 
     let isSearch = false;
     let searchQuery = '';
-    let isAdult = !!(flags.adult || flags.nopor);
+    let isAdult = !!(flags.adult || flags.nopor) || Boolean(url && ADULT_URL_REGEX.test(url));
 
     if (!url) {
-        searchQuery = args.filter(a => a && !a.startsWith('-')).join(' ').trim();
+        searchQuery = args.filter(a => typeof a === 'string' && a).join(' ').trim();
         if (!searchQuery) {
-            return p.fail('falta la url o el nombre de lo que quieres buscar, cabrón · usa `/@descargar [url o búsqueda]`');
+            return p.fail('¿Qué video o canción buscas? También puedes mandarme el enlace.');
         }
 
         // 1. ¿Es selección de una lista previa activa?
-        const session = getSearchSession(from);
+        const downloadSessionKey = getDownloadSessionKey(from, messageData);
+        const session = getSearchSession(downloadSessionKey);
         const sel = matchSelection(searchQuery);
-        if (session && sel) {
-            const idx = sel.num - 1;
-            if (idx >= 0 && idx < session.results.length) {
-                const item = session.results[idx];
-                url = item.url;
-                isAdult = session.isAdult;
-                if (sel.format) format = sel.format;
-                session.timestamp = Date.now();
-                logger.info(`[descargar] Seleccionó opción #${sel.num}: "${item.title}" (${url})`);
+        if (sel) {
+            if (session) {
+                const idx = sel.num - 1;
+                if (idx >= 0 && idx < session.results.length) {
+                    const item = session.results[idx];
+                    url = item.url;
+                    isAdult = session.isAdult || Boolean(url && ADULT_URL_REGEX.test(url));
+                    if (sel.format) format = sel.format;
+                    session.timestamp = Date.now();
+                    logger.info(`[descargar] Seleccionó opción #${sel.num}: "${item.title}" (${url})`);
+                } else {
+                    return p.fail(`Esa opción no está en la lista. Escoge del 1 al ${session.results.length}.`);
+                }
             } else {
-                return p.fail(`ese número no está en la lista cabrón, escoge del 1 al ${session.results.length}`);
+                return p.fail('No hay ninguna lista de videos activa compa (o ya expiró). Pídeme una búsqueda primero, ej: *descarga video de [tema]*');
             }
         } else {
             // 2. Es una búsqueda nueva -> mostrar lista de opciones con duración y peso
             isSearch = true;
-            const qLower = searchQuery.toLowerCase();
+            const qLower = searchQuery.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
             if (!isAdult && ADULT_KEYWORDS.some(kw => qLower.includes(kw))) {
                 isAdult = true;
             }
@@ -315,33 +390,62 @@ async function handleDescargar({ flags, args }, from, messageData) {
             const searchType = isAdult ? 'cochinadas' : `"${searchQuery}"`;
             await p.start('buscando', `${searchType}`);
 
-            let results = [];
+            // A new search replaces the old choices, including when it fails.
+            clearSearchSession(downloadSessionKey);
+            let results;
             if (isAdult) {
-                results = await searchAdultList(searchQuery, 8);
+                // Legacy provider is intentionally kept separate from YouTube.
+                results = await (module.exports.searchAdultList || searchAdultList)(searchQuery, 8);
+                if (!results || results.length === 0) {
+                    return p.fail(searchFailureMessage({ status: 'empty' }));
+                }
             } else {
-                results = await searchYoutubeList(searchQuery, 8);
-            }
-
-            if (!results || results.length === 0) {
-                return p.fail(`no encontré ni madres de "${searchQuery}", escribe bien cabrón`);
+                const result = await searchMedia(searchQuery, { limit: 8 });
+                logger.info('[MEDIA-SEARCH]', JSON.stringify({
+                    status: result.status, provider: result.provider, ...result.diagnostic
+                }));
+                if (result.status !== 'success') return p.fail(searchFailureMessage(result));
+                results = result.items;
             }
 
             // Guardar la sesión interactiva
-            setSearchSession(getDownloadSessionKey(from, messageData), { results, isAdult, searchQuery, format, quality });
+            setSearchSession(downloadSessionKey, { results, isAdult, searchQuery, format, quality });
 
             // Formatear mensaje estilo WhatsApp
             const header = isAdult
                 ? `🔞 *Videos encontrados para:* "${searchQuery}"\n_Checa la duración y peso antes de pedir, no mames que te bajes una de 2 horas:_\n`
-                : `🎬 *Videos encontrados para:* "${searchQuery}"\n_Checa la duración y peso antes de pedir, cabrón:_\n`;
+                : `🎬 *Encontré estas opciones para:* "${searchQuery}"\n`;
 
             const itemsText = results.map((r, i) => {
                 const sizePart = r.estimatedSize ? ` · ${r.estimatedSize}` : '';
-                return `*${i + 1}.* ${r.title}\n   ⏱️ \`${r.duration}\`${sizePart}`;
+                return `*${i + 1}.* ${r.title}\n   ⏱️ ${r.duration || 'duración no disponible'}${sizePart}`;
             }).join('\n\n');
 
             const footer = `\n\n👉 _Responde con_ *el 1*, *el 2* _o_ *descárgame el 3* _(agrega mp3 si solo quieres audio)_`;
+            const fullMessage = `${header}\n${itemsText}${footer}`;
 
-            await sendText(from, `${header}\n${itemsText}${footer}`);
+            // Generar y enviar collage con las miniaturas numeradas
+            let collageFile = null;
+            if (thumbCollageModule && typeof thumbCollageModule.generateThumbnailCollage === 'function') {
+                try {
+                    collageFile = await thumbCollageModule.generateThumbnailCollage(results);
+                } catch (cErr) {
+                    logger.warn(`[descargar] Error generando collage de miniaturas: ${cErr.message}`);
+                }
+            }
+
+            if (collageFile && fs.existsSync(collageFile)) {
+                try {
+                    await sendMedia(from, collageFile, fullMessage);
+                } catch (mediaErr) {
+                    logger.warn(`[descargar] Falló envío de collage como media, enviando texto: ${mediaErr.message}`);
+                    await sendText(from, fullMessage);
+                } finally {
+                    try { if (fs.existsSync(collageFile)) fs.unlinkSync(collageFile); } catch (_) {}
+                }
+            } else {
+                await sendText(from, fullMessage);
+            }
             await p.done('opciones enviadas');
             return;
         }
@@ -357,16 +461,71 @@ async function handleDescargar({ flags, args }, from, messageData) {
         await p.start('descargando', `${format} ${qualityTxt}`);
     }
 
+    // ── Deduplicación de descargas idénticas concurrentes ──
+    const dedupKey = `${url}|${format}|${quality}`;
+    if (inProgressDownloads.has(dedupKey)) {
+        logger.info(`[descargar] Descarga concurrente detectada para ${dedupKey}, uniéndose.`);
+        const entry = inProgressDownloads.get(dedupKey);
+        entry.refCount++;
+        try {
+            const shared = await entry.promise;
+            if (shared && typeof shared === 'object' && shared.drive && shared.webViewLink) {
+                const driveMessage = `> ☁️ *Archivo listo en Google Drive*\n> El archivo pesa *${shared.size.toFixed(2)} MB* (supera el límite de ${WHATSAPP_MAX_MB} MB de WhatsApp).\n\n🔗 *Enlace de descarga:* ${shared.webViewLink}`;
+                await sendText(from, driveMessage);
+                await p.done('subido a drive');
+                return;
+            }
+            if (shared && shared.finalFile && fs.existsSync(shared.finalFile)) {
+                await p.phase('enviando', `${shared.sizeMBFloat.toFixed(1)}mb`);
+                const customFileName = (flags.name || flags.n) ? `${(flags.name || flags.n).replace(/\.[a-zA-Z0-9]+$/, '')}.${format}` : null;
+                const caption = isAdult
+                    ? `> ahí está tu cochinada cerdo, lávate las manos \`${shared.sizeMBFloat.toFixed(2)}mb\`${shared.asDocument ? ' (documento)' : ''}`
+                    : `> ahí quedó tu chingadera \`${shared.sizeMBFloat.toFixed(2)}mb\`${shared.asDocument ? ' (documento)' : ''}`;
+                await sendMedia(from, shared.finalFile, caption, shared.asDocument, false, null, customFileName);
+                await p.done(`${shared.sizeMBFloat.toFixed(1)}mb`);
+                return;
+            }
+        } catch (e) {
+            logger.warn(`[descargar] Falló descarga compartida para ${dedupKey}:`, e.message);
+        } finally {
+            entry.refCount--;
+            if (entry.refCount <= 0 && entry.shouldCleanup) {
+                entry.cleanup();
+            }
+        }
+    }
+
+    let resolveDedup = () => {};
+    let rejectDedup = () => {};
+    const dedupPromise = new Promise((resolve, reject) => {
+        resolveDedup = resolve;
+        rejectDedup = reject;
+    });
+
     // ── Generar nombre único para la sesión ──
     const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const outputPrefix = path.join(TMP_DIR, sessionId);
 
-    try {
-        // ── Ejecutar yt-dlp con progreso en tiempo real ──
-        const argsArray = buildArgs(url, format, quality, withSubs, outputPrefix, flags);
-        logger.cmd(`yt-dlp ${argsArray.join(' ')}`);
+    const dedupEntry = {
+        promise: dedupPromise,
+        refCount: 1,
+        shouldCleanup: false,
+        cleanup: () => {
+            cleanup(...fs.readdirSync(TMP_DIR)
+                .filter(f => f.startsWith(sessionId))
+                .map(f => path.join(TMP_DIR, f))
+            );
+        }
+    };
+    inProgressDownloads.set(dedupKey, dedupEntry);
 
-        await spawnWithProgress('yt-dlp', argsArray, {
+    try {
+        const isSpotify = Boolean(url && (/spotify\.com|spotify\.link|^spotify:/i.test(url)));
+        const cmd = isSpotify ? 'spotdl' : 'yt-dlp';
+        const argsArray = buildArgs(url, format, quality, withSubs, outputPrefix, flags);
+        logger.cmd(`${cmd} ${argsArray.join(' ')}`);
+
+        await spawnWithProgress(cmd, argsArray, {
             timeout: 10 * 60 * 1000,
         });
 
@@ -381,8 +540,8 @@ async function handleDescargar({ flags, args }, from, messageData) {
         let sizeMBFloat = fs.statSync(finalFile).size / (1024 * 1024);
         const maxMB = parseFloat(process.env.MAX_FILE_SIZE_MB ?? '64');
 
-        // ── Comprimir si excede el límite ──
-        if (sizeMBFloat > maxMB && !isAudio) {
+        // ── Comprimir si excede el límite (solo videos) ──
+        if (sizeMBFloat > WHATSAPP_MAX_MB && !isAudio) {
             await p.phase('comprimiendo', `${sizeMBFloat.toFixed(1)}mb`);
 
             const compressedFile = outputFile.replace(/\.[^/.]+$/, '-comprimido.mp4');
@@ -408,6 +567,31 @@ async function handleDescargar({ flags, args }, from, messageData) {
         }
 
         logger.success(`Archivo final listo: ${finalFile} (${sizeMBFloat.toFixed(2)} MB)`);
+
+        // ── Auto-subida a Google Drive si excede el límite de WhatsApp ──
+        if (sizeMBFloat > WHATSAPP_MAX_MB) {
+            await p.phase('subiendo', 'google drive');
+            const mimeType = isAudio ? (format === 'mp3' ? 'audio/mpeg' : `audio/${format}`) : 'video/mp4';
+            const uploadName = (flags.name || flags.n)
+                ? `${(flags.name || flags.n).replace(/\.[a-zA-Z0-9]+$/, '')}.${format}`
+                : path.basename(finalFile);
+
+            try {
+                const driveRes = await drive.uploadFile(finalFile, mimeType, uploadName);
+                if (driveRes?.webViewLink) {
+                    const driveMsg = `> ☁️ *Archivo listo en Google Drive*\n> El archivo pesa *${sizeMBFloat.toFixed(2)} MB* (supera el límite de ${WHATSAPP_MAX_MB} MB de WhatsApp).\n\n🔗 *Enlace de descarga:* ${driveRes.webViewLink}`;
+                    await sendText(from, driveMsg);
+                    resolveDedup({ drive: true, webViewLink: driveRes.webViewLink, size: sizeMBFloat });
+                    await p.done('subido a drive');
+                    return;
+                }
+            } catch (driveErr) {
+                logger.error('[descargar] Error en subida a Google Drive:', driveErr.message);
+                if (sizeMBFloat > 100) {
+                    throw new Error(`El archivo pesa ${sizeMBFloat.toFixed(1)} MB y falló la subida a Drive: ${driveErr.message}`);
+                }
+            }
+        }
 
         let asDocument = false;
         if (sizeMBFloat > maxMB) {
@@ -435,15 +619,17 @@ async function handleDescargar({ flags, args }, from, messageData) {
             customFileName
         );
 
+        resolveDedup({ finalFile, sizeMBFloat, asDocument });
         await p.done(`${sizeMBFloat.toFixed(1)}mb`);
 
     } catch (err) {
+        rejectDedup(err);
         logger.error('descargar:', err.message);
 
         // Mensajes de error amigables
         let msg = err.message;
         if (err.message.includes('el script no generó ningún archivo')) {
-            msg = isSearch ? `no encontré ni madres de "${searchQuery}", escribe bien cabrón` : 'no se pudo descargar esa porquería (puede ser privado o requerir login)';
+            msg = isSearch ? searchFailureMessage({ status: 'unavailable' }) : 'no se pudo descargar esa porquería (puede ser privado o requerir login)';
         } else if (err.message.includes('Private video')) msg = 'video privado';
         else if (err.message.includes('not available')) msg = 'video no disponible en la región';
         else if (err.message.includes('Sign in') || err.message.includes('not a bot') || err.message.includes('LOGIN_REQUIRED')) {
@@ -455,11 +641,12 @@ async function handleDescargar({ flags, args }, from, messageData) {
         await p.fail(msg);
 
     } finally {
-        // ── Limpieza ──
-        cleanup(...fs.readdirSync(TMP_DIR)
-            .filter(f => f.startsWith(sessionId))
-            .map(f => path.join(TMP_DIR, f))
-        );
+        inProgressDownloads.delete(dedupKey);
+        dedupEntry.shouldCleanup = true;
+        dedupEntry.refCount--;
+        if (dedupEntry.refCount <= 0) {
+            dedupEntry.cleanup();
+        }
     }
 }
 
@@ -470,5 +657,10 @@ module.exports = {
     clearSearchSession,
     matchSelection,
     searchAdultList,
-    searchYoutubeList
+    searchYoutubeList,
+    getDownloadSessionKey,
+    inProgressDownloads,
+    buildArgs,
+    extractAdultUrl,
+    ADULT_URL_REGEX
 };

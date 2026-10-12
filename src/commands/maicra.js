@@ -1,180 +1,207 @@
 'use strict';
 
-const { exec, execFile } = require('child_process');
-const { promisify } = require('util');
-const util = require('minecraft-server-util');
-const { sendText } = require('../services/evolution');
+const evolution = require('../services/evolution');
+const sendText = (to, text, opts) => evolution.sendText(to, text, opts);
+const minecraftRemote = require('../services/minecraftRemote');
 const logger = require('../services/logger');
+const { isAuthorizedAdmin } = require('../core/auth');
 
-const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
-const CONTAINER_NAME = 'mc-bedrock';
+// Alias técnicos de subcomandos explícitos; las frases las interpreta el router.
+const ACTION_ALIASES = new Map([
+    ['menu', 'menu'], ['panel', 'menu'], ['info', 'menu'],
+    ['mod', 'mods'], ['mods', 'mods'], ['addon', 'mods'], ['addons', 'mods'], ['pack', 'mods'], ['packs', 'mods'],
+    ['jugador', 'jugadores'], ['jugadores', 'jugadores'], ['player', 'jugadores'], ['players', 'jugadores'], ['online', 'jugadores'], ['conectados', 'jugadores'],
+    ['estado', 'estado'], ['status', 'estado'], ['stats', 'estado'], ['recursos', 'estado'], ['ping', 'estado'],
+    ['mundo', 'mundos'], ['mundos', 'mundos'], ['world', 'mundos'], ['worlds', 'mundos'], ['mapa', 'mundos'], ['mapas', 'mundos'],
+    ['modo', 'config'], ['gamemode', 'config'], ['trucos', 'config'], ['cheats', 'config'], ['dificultad', 'config'], ['config', 'config'], ['propiedades', 'config'],
+    ['on', 'on'], ['encender', 'on'], ['prender', 'on'], ['start', 'on'],
+    ['off', 'off'], ['apagar', 'off'], ['detener', 'off'], ['stop', 'off'],
+    ['reiniciar', 'restart'], ['restart', 'restart'], ['reboot', 'restart'], ['kill', 'kill'],
+    ['cmd', 'cmd'], ['comando', 'cmd'], ['log', 'logs'], ['logs', 'logs'], ['registro', 'logs'], ['registros', 'logs'],
+    ['backup', 'backup'], ['respaldo', 'backup'],
+    ['desactivarmod', 'desactivarmod'], ['quitarmod', 'desactivarmod'], ['removermod', 'desactivarmod'],
+    ['activarmod', 'activarmod'], ['ponermod', 'activarmod'], ['instalarmod', 'activarmod']
+]);
+const ADMIN_ACTIONS = new Set(['desactivarmod', 'activarmod', 'on', 'off', 'restart', 'kill', 'cmd', 'backup']);
 
-async function handleMaicra({ args }, from, messageData) {
-    // La validacion de admin ya se hace en dispatcher.js
-
-    if (args.length === 0) {
-        return require('../services/evolution').sendPoll(from, '[+]maicra', [
-            '⚙️ Gestión del Servidor',
-            '🌍 Mundo y Clima',
-            '🎮 Modos y Dificultad',
-            '📜 Reglas del Juego'
-        ]);
-    }
-
-    const action = args[0].toLowerCase();
+/**
+ * Handler principal para Minecraft Bedrock en el VPS remoto (redspi vía Tailscale).
+ * Totalmente conversacional y libre de encuestas/polls.
+ */
+async function handleMaicra(parsed = {}, from, messageData) {
+    const params = parsed.aiArgs || parsed || {};
+    const args = parsed.args || (Array.isArray(params) ? params : []);
+    const requestedAction = String(params.subcomando || params.accion || params.action || (!parsed.semanticDecision && args[0]) || '').toLowerCase().trim();
+    const action = requestedAction ? ACTION_ALIASES.get(requestedAction) : (parsed.semanticDecision ? null : 'menu');
 
     try {
-        switch (action) {
-            case 'menu':
-            case 'server':
-            case 'mundo':
-            case 'modos':
-            case 'reglas':
-                const menuType = action === 'menu' ? args[1]?.toLowerCase() : action;
-                
-                if (menuType === 'server') {
-                    return require('../services/evolution').sendPoll(from, '[+] gestion del servidor', [
-                        '🟢 Encender Servidor',
-                        '🔴 Apagar Servidor',
-                        '🔄 Reiniciar Servidor',
-                        '📊 Estado y Recursos',
-                        '📡 Ping y Jugadores',
-                        '💾 Forzar Guardado',
-                        '🗑️ Limpiar Basura (Items)',
-                        '📜 Ver Logs (Últimos 10)',
-                        '⛔ Apagar de Emergencia',
-                        '🔙 Volver al Menú Principal'
-                    ]);
-                } else if (menuType === 'mundo') {
-                    return require('../services/evolution').sendPoll(from, '[+] mundo y clima', [
-                        '☀️ Hacer de Día (6am)',
-                        '🌆 Atardecer (6pm)',
-                        '🌙 Hacer de Noche',
-                        '🌌 Medianoche (12am)',
-                        '🌧️ Activar Lluvia',
-                        '☀️ Quitar Lluvia',
-                        '🌩️ Activar Tormenta',
-                        '⏸️ Pausar Ciclo de Día',
-                        '▶️ Reanudar Ciclo de Día',
-                        '🔙 Volver al Menú Principal'
-                    ]);
-                } else if (menuType === 'jugadores' || menuType === 'modos') {
-                    return require('../services/evolution').sendPoll(from, '[+] modos y dificultad', [
-                        '🧑‍💻 Todos a Creativo',
-                        '🗡️ Todos a Supervivencia',
-                        '🗺️ Todos a Aventura',
-                        '🕊️ Dificultad: Pacífica',
-                        '🟢 Dificultad: Fácil',
-                        '🟡 Dificultad: Normal',
-                        '🔴 Dificultad: Difícil',
-                        '🔙 Volver al Menú Principal'
-                    ]);
-                } else if (menuType === 'reglas') {
-                    return require('../services/evolution').sendPoll(from, '[+] reglas del juego', [
-                        '🛡️ Quitar Fuego Amigo (PvP Off)',
-                        '⚔️ Activar Fuego Amigo (PvP On)',
-                        '🎒 Conservar Inventario',
-                        '💥 Perder Inventario',
-                        '🚫 Quitar Daño por Caída',
-                        '☠️ Activar Daño por Caída',
-                        '🔙 Volver al Menú Principal'
-                    ]);
-                }
-                // Si no hay subtipo o es 'menu' a secas, mostrar el principal
-                return require('../services/evolution').sendPoll(from, '[+] panel principal de maicra', [
-                    '⚙️ Gestión del Servidor',
-                    '🌍 Mundo y Clima',
-                    '🎮 Modos y Dificultad',
-                    '📜 Reglas del Juego'
-                ]);
-
-            case 'on':
-            case 'encender':
-                await sendText(from, '> encendiendo servidor');
-                await execAsync(`docker start ${CONTAINER_NAME}`, { timeout: 30_000 });
-                await sendText(from, '> servidor encendido');
-                break;
-
-            case 'off':
-            case 'apagar':
-                await sendText(from, '> apagando servidor');
-                await execAsync(`docker stop ${CONTAINER_NAME}`, { timeout: 30_000 });
-                await sendText(from, '> servidor apagado');
-                break;
-
-            case 'reiniciar':
-            case 'restart':
-                await sendText(from, '> reiniciando servidor');
-                await execAsync(`docker restart ${CONTAINER_NAME}`, { timeout: 30_000 });
-                await sendText(from, '> servidor reiniciado');
-                break;
-
-            case 'estado':
-            case 'stats':
-                // Obtenemos estado general y uso de recursos
-                const { stdout: status } = await execAsync(`docker inspect -f '{{.State.Status}}' ${CONTAINER_NAME}`, { timeout: 15_000 });
-                let statsStr = '';
-                if (status.trim() === 'running') {
-                    const { stdout: stats } = await execAsync(`docker stats --no-stream --format "CPU: {{.CPUPerc}}\\nRAM: {{.MemUsage}}\\nRed: {{.NetIO}}" ${CONTAINER_NAME}`, { timeout: 15_000 });
-                    statsStr = `\n${stats}`;
-                }
-
-                await sendText(from,
-                    `> estado \`${CONTAINER_NAME}\`\n\nstatus: \`${status.trim().toLowerCase()}\`` +
-                    statsStr
-                );
-                break;
-
-            case 'ping':
-            case 'jugadores':
-                try {
-                    // Bedrock usa el puerto 19132 UDP por defecto
-                    const startPing = Date.now();
-                    const result = await util.statusBedrock(process.env.MINECRAFT_HOST || '100.104.54.2', parseInt(process.env.MINECRAFT_PORT || '29132', 10), { timeout: 3000 });
-                    const latency = result.roundTripLatency ?? (Date.now() - startPing);
-                    await sendText(from,
-                        `> maicra online\n` +
-                        `jugadores: \`${result.players.online}/${result.players.max}\`\n` +
-                        `version: \`${result.version.name}\`\n` +
-                        `latencia: \`${latency}ms\``
-                    );
-                } catch (e) {
-                    await sendText(from, '> servidor apagado o iniciando');
-                }
-                break;
-
-            case 'cmd':
-            case 'comando':
-                const mcCommand = args.slice(1).join(' ');
-                if (!mcCommand) {
-                    return sendText(from, '> especifica un comando\nusa `/@ maicra cmd [comando]`');
-                }
-
-                await sendText(from, `> ejecutando \`/${mcCommand}\``);
-                await execFileAsync('docker', ['exec', CONTAINER_NAME, 'send-command', mcCommand], { timeout: 15_000 });
-                await sendText(from, '> comando enviado');
-                break;
-
-            case 'kill':
-                await sendText(from, '> forzando apagado');
-                await execAsync(`docker kill ${CONTAINER_NAME}`, { timeout: 15_000 });
-                await sendText(from, '> servidor apagado forzosamente');
-                break;
-
-            case 'logs':
-                const { stdout: logs } = await execAsync(`docker logs --tail 10 ${CONTAINER_NAME}`, { timeout: 15_000 });
-                await sendText(from, `> ultimos logs\n\`\`\`\n${logs}\n\`\`\``);
-                break;
-
-            default:
-                await sendText(from, `> accion desconocida \`${action}\``);
+        // Si no hay argumentos específicos o pide menú/panel, entregar reporte en vivo unificado sin encuestas
+        if (action === 'menu') {
+            const [status, players, modsData] = await Promise.all([
+                minecraftRemote.getRemoteServerStatus(true),
+                minecraftRemote.getOnlinePlayers(),
+                minecraftRemote.getActiveModsAndPacks()
+            ]);
+            const text = `${minecraftRemote.formatStatusSummary(status, players)}\n\n${minecraftRemote.formatModsSummary(modsData)}`;
+            return await sendText(from, text);
         }
+
+        const isModDeactivation = action === 'desactivarmod';
+        const isModActivation = action === 'activarmod';
+
+        // 1. Consulta de Mods y Addons
+        if (action === 'mods') {
+            await sendText(from, '> 🔍 *Consultando mods y addons en redspi...*');
+            const modsData = await minecraftRemote.getActiveModsAndPacks();
+            const text = minecraftRemote.formatModsSummary(modsData);
+            return await sendText(from, text);
+        }
+
+        // 2. Consulta de Jugadores
+        if (action === 'jugadores') {
+            const players = await minecraftRemote.getOnlinePlayers();
+            if (!players.online) {
+                return await sendText(from, `> ⚪ *Minecraft Bedrock:* El servidor está apagado o iniciando.\n_Pídeme_ *"prende el maicra"* _para encenderlo._`);
+            }
+            const names = (players.players && players.players.length > 0)
+                ? players.players.join(', ')
+                : 'Nadie conectado ahorita, está solo el changarro';
+            return await sendText(from, 
+                `> 🟢 *Minecraft Bedrock* (\`${minecraftRemote.REMOTE_HOST}\`)\n\n` +
+                `👥 *Jugadores en línea (${players.count}/${players.max}):*\n` +
+                `\`${names}\``
+            );
+        }
+
+        // 3. Estado, Recursos y Métricas
+        if (action === 'estado') {
+            const [status, players] = await Promise.all([
+                minecraftRemote.getRemoteServerStatus(true),
+                minecraftRemote.getOnlinePlayers()
+            ]);
+            const text = minecraftRemote.formatStatusSummary(status, players);
+            return await sendText(from, text);
+        }
+
+        // 4. Mundos creados
+        if (action === 'mundos') {
+            const data = await minecraftRemote.getWorldsList();
+            const lines = [`> 🌍 *Mundos en Minecraft Bedrock* (\`${minecraftRemote.REMOTE_HOST}\`):\n`];
+            for (const w of data.worlds) {
+                if (w.isActive) {
+                    lines.push(`• ⭐ *${w.name}* _(MUNDO ACTIVO)_`);
+                } else {
+                    lines.push(`• 📁 \`${w.name}\``);
+                }
+            }
+            return await sendText(from, lines.join('\n'));
+        }
+
+        // 5. Configuración, Modo de juego, Dificultad y Trucos
+        if (action === 'config') {
+            const status = await minecraftRemote.getRemoteServerStatus(false);
+            const modeName = status.gamemode === 'survival' ? 'Supervivencia' : (status.gamemode === 'creative' ? 'Creativo' : (status.gamemode || 'Normal'));
+            const cheatsStr = status.allowCheats ? 'Activados ⚠️' : 'Desactivados (Todo legal)';
+            return await sendText(from,
+                `> 🎮 *Configuración del Servidor Bedrock* (\`${minecraftRemote.REMOTE_HOST}\`):\n\n` +
+                `• *Mundo activo:* \`${status.activeWorld}\`\n` +
+                `• *Modo de juego:* \`${modeName}\` (\`${status.gamemode}\`)\n` +
+                `• *Dificultad:* \`${status.difficulty}\`\n` +
+                `• *Trucos (Cheats):* \`${cheatsStr}\`\n` +
+                `• *Puerto IPv4:* \`${status.serverPort}\`\n` +
+                `• *Xbox Live / Online Mode:* \`${status.onlineMode ? 'Requerido' : 'No'}\``
+            );
+        }
+
+        // Comprobación de autorización administrativa centralizada para todas las acciones administrativas/destructivas
+        const isAdminAction = ADMIN_ACTIONS.has(action);
+
+        if (isAdminAction && !isAuthorizedAdmin(from, messageData)) {
+            return await sendText(from, '> ❌ *Acceso denegado:* Solo los administradores pueden realizar esta acción en el servidor de Minecraft.');
+        }
+
+        // 6. Desactivar un Mod / Addon del mundo
+        if (isModDeactivation) {
+            const modTarget = params.mod || params.addon || params.pack || (!parsed.semanticDecision ? args.slice(1).join(' ').trim() : '');
+            if (!modTarget) {
+                return await sendText(from, '> ⚠️ Indica el nombre o UUID del mod o addon que deseas desactivar.');
+            }
+            await sendText(from, `> ⏳ *Desactivando mod "${modTarget}" en redspi...*`);
+            const res = await minecraftRemote.deactivateWorldPack(modTarget, true);
+            return await sendText(from, res.message);
+        }
+
+        // 7. Activar un Mod / Addon en el mundo
+        if (isModActivation) {
+            const modTarget = params.mod || params.addon || params.pack || (!parsed.semanticDecision ? args.slice(1).join(' ').trim() : '');
+            if (!modTarget) {
+                return await sendText(from, '> ⚠️ Indica el nombre o UUID del mod o addon que deseas activar.');
+            }
+            await sendText(from, `> ⏳ *Activando mod "${modTarget}" en redspi...*`);
+            const res = await minecraftRemote.activateWorldPack(modTarget, true);
+            return await sendText(from, res.message);
+        }
+
+        // 8. Encender
+        if (action === 'on') {
+            await sendText(from, '> ⏳ *Encendiendo servidor de Minecraft en VPS redspi...*');
+            const res = await minecraftRemote.executeServerAction('on');
+            return await sendText(from, `> 🟢 *${res.message}*`);
+        }
+
+        // 8. Apagar
+        if (action === 'off') {
+            await sendText(from, '> ⏳ *Apagando servidor de Minecraft...*');
+            const res = await minecraftRemote.executeServerAction('off');
+            return await sendText(from, `> 🔴 *${res.message}*`);
+        }
+
+        // 9. Reiniciar
+        if (action === 'restart') {
+            await sendText(from, '> 🔄 *Reiniciando servidor de Minecraft...*');
+            const res = await minecraftRemote.executeServerAction('restart');
+            return await sendText(from, `> 🔄 *${res.message}*`);
+        }
+
+        // 10. Kill forzoso
+        if (action === 'kill') {
+            await sendText(from, '> ⛔ *Forzando apagado inmediato del contenedor...*');
+            const res = await minecraftRemote.executeServerAction('kill');
+            return await sendText(from, `> ⛔ *${res.message}*`);
+        }
+
+        // 11. Comandos de consola
+        if (action === 'cmd') {
+            const mcCommand = params.comando || params.cmd || (!parsed.semanticDecision ? args.slice(1).join(' ').trim() : '');
+            if (!mcCommand) {
+                return await sendText(from, '> ⚠️ Especifica el comando a enviar a la consola de Minecraft.');
+            }
+            const res = await minecraftRemote.executeServerAction('cmd', mcCommand);
+            const out = res.output ? `\n\`\`\`\n${res.output}\n\`\`\`` : '';
+            return await sendText(from, `> ✅ ${res.message}${out}`);
+        }
+
+        // 12. Logs
+        if (action === 'logs') {
+            const lines = Number(params.lineas ?? params.lines ?? args[1] ?? 15);
+            if (!Number.isInteger(lines) || lines < 1 || lines > 1000) {
+                return await sendText(from, 'Dime cuántas líneas de logs quieres (entre 1 y 1000).');
+            }
+            const res = await minecraftRemote.executeServerAction('logs', lines);
+            return await sendText(from, `> 📜 *Últimos ${lines} logs de Minecraft Bedrock:*\n\`\`\`\n${res.output || 'Sin logs'}\n\`\`\``);
+        }
+
+        // 13. Respaldo Drive
+        if (action === 'backup') {
+            await sendText(from, '> 💾 *Ejecutando respaldo completo de Minecraft en Google Drive...* (puede tardar ~1 min)');
+            const res = await minecraftRemote.executeServerAction('backup');
+            return await sendText(from, `> 💾 *${res.message}*\n\`\`\`\n${(res.output || '').slice(-200)}\n\`\`\``);
+        }
+
+        return await sendText(from, '¿Qué necesitas del servidor de Minecraft? Puedo consultar su estado, jugadores, mods o ejecutar una acción concreta.');
     } catch (err) {
-        logger.error('Error en maicra:', err.message);
-        const userErr = new Error(err.message);
-        userErr.userMessage = err.message;
-        throw userErr;
+        logger.error(`[MAICRA] Error procesando acción "${action}":`, err.message);
+        return await sendText(from, `> ❌ *Error en Minecraft:* ${err.message}`);
     }
 }
 

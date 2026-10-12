@@ -5,7 +5,8 @@
     "main": "src/core/server.js",
     "scripts": {
         "start": "node src/core/server.js",
-        "dev": "nodemon src/core/server.js"
+        "dev": "nodemon src/core/server.js",
+        "test": "node --test test/*.test.js"
     },
     "dependencies": {
         "axios": "^1.7.2",
@@ -14,7 +15,6 @@
         "form-data": "^4.0.0",
         "googleapis": "^176.0.0",
         "minecraft-server-util": "^5.4.4",
-        "node-nlp": "^5.0.0-alpha.5",
         "node-webpmux": "^3.2.1",
         "sqlite3": "^6.0.1"
     },

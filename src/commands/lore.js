@@ -71,11 +71,13 @@ function resolveTarget(messageData, parsed, groupData) {
     return { targetJid: finalJid, displayName: displayName || 'usuario' };
 }
 
-async function handleLore(parsed, from, messageData) {
-    const isGroup = from.endsWith('@g.us');
+async function handleLore(parsed = {}, from, messageData = {}) {
+    if (!from) return;
+    const safeParsed = parsed || {};
+    const isGroup = typeof from === 'string' && from.endsWith('@g.us');
     const authorName = messageData?.pushName || 'Alguien';
-    const command = parsed.command.toLowerCase();
-    const args = parsed.args || [];
+    const command = String(safeParsed.command || 'lore').toLowerCase();
+    const args = safeParsed.args || [];
 
     let groupData = null;
     if (isGroup) {
@@ -184,7 +186,7 @@ async function handleLore(parsed, from, messageData) {
                 return sendText(from, `> @${displayName} todavía no tiene momentos canónicos registrados en el lore.\nRegístrale uno con \`/@canon @${displayName} [lo que hizo]\`.`);
             }
 
-            await sendText(from, `> 📖 _Consultando los anales sagrados con Llama 3 para narrar la crónica de @${displayName}..._`);
+            await sendText(from, `> 📖 _Consultando los anales sagrados con IA para narrar la crónica de @${displayName}..._`);
 
             const story = await generateLoreChronicle(displayName, events, profile, authorName);
             const formatted = `📜 *━━━ CRÓNICA LEGENDARIA: @${displayName} ━━━*\n\n` +

@@ -7,7 +7,7 @@ const axios = require('axios');
 const logger = require('./logger');
 const { createRikolinoReader } = require('./rikolinoLibrary');
 
-const SUPPORTED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const SUPPORTED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.mp4', '.webm']);
 
 /**
  * Descarga una imagen desde una URL pública y la guarda en un archivo temporal.
@@ -62,14 +62,15 @@ function cleanCategory(rawCat) {
 
 /**
  * Obtiene imágenes disponibles de la carpeta local (/home/petrov/fotos o FOTOS_DIR).
- * Soporta archivos directos y subdirectorios por categoría.
+ * Soporta archivos directos y subdirectorios por categoría, con filtro anti-repetición.
  *
  * @param {string} [customDir] - Directorio alternativo opcional para pruebas
  * @param {number} [count=5] - Cantidad máxima a obtener
  * @param {string} [category=null] - Categoría opcional para priorizar nombres
- * @returns {{ path: string, source: 'local', isTemporary: false }[]}
+ * @param {string[]|Set<string>} [excludePhotoIds=[]] - IDs o nombres de archivos ya entregados
+ * @returns {{ id: string, path: string, source: 'local', isTemporary: false, deckCycled?: boolean }[]}
  */
-function getLocalPackImages(customDir = null, count = 5, category = null) {
+function getLocalPackImages(customDir = null, count = 5, category = null, excludePhotoIds = []) {
     const dir = customDir || process.env.FOTOS_DIR || '/home/petrov/fotos';
 
     try {
@@ -122,19 +123,67 @@ function getLocalPackImages(customDir = null, count = 5, category = null) {
             return [];
         }
 
-        // Desordenar aleatoriamente (Fisher-Yates shuffle)
-        const shuffled = [...images];
-        for (let i = shuffled.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        // Filtro anti-repetición (Sampling without replacement)
+        const excludeSet = new Set(
+            Array.isArray(excludePhotoIds) || excludePhotoIds instanceof Set ? excludePhotoIds : []
+        );
+
+        let selectedFiles = [];
+        let deckCycled = false;
+
+        if (excludeSet.size > 0) {
+            const unseen = images.filter(f => !excludeSet.has(f) && !excludeSet.has(path.basename(f)));
+            if (unseen.length >= count) {
+                selectedFiles = [...unseen];
+                // Desordenar unseen
+                for (let i = selectedFiles.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [selectedFiles[i], selectedFiles[j]] = [selectedFiles[j], selectedFiles[i]];
+                }
+            } else if (unseen.length > 0) {
+                const seenPool = images.filter(f => excludeSet.has(f) || excludeSet.has(path.basename(f)));
+                for (let i = unseen.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [unseen[i], unseen[j]] = [unseen[j], unseen[i]];
+                }
+                for (let i = seenPool.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [seenPool[i], seenPool[j]] = [seenPool[j], seenPool[i]];
+                }
+                selectedFiles = [...unseen, ...seenPool];
+                deckCycled = true;
+            } else {
+                // Todas vistas: reinicio de baraja
+                selectedFiles = [...images];
+                deckCycled = true;
+                for (let i = selectedFiles.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [selectedFiles[i], selectedFiles[j]] = [selectedFiles[j], selectedFiles[i]];
+                }
+            }
+        } else {
+            selectedFiles = [...images];
+            for (let i = selectedFiles.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [selectedFiles[i], selectedFiles[j]] = [selectedFiles[j], selectedFiles[i]];
+            }
         }
 
-        const selected = shuffled.slice(0, count);
-        return selected.map(file => ({
-            path: path.join(searchDir, file),
-            source: 'local',
-            isTemporary: false
-        }));
+        const selected = selectedFiles.slice(0, count);
+        return selected.map(file => {
+            const ext = path.extname(file).toLowerCase();
+            const isVideo = ext === '.mp4' || ext === '.webm';
+            const mime = ext === '.mp4' ? 'video/mp4' : ext === '.webm' ? 'video/webm' : (ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg');
+            return {
+                id: path.basename(file),
+                path: path.join(searchDir, file),
+                mime,
+                isVideo,
+                source: 'local',
+                isTemporary: false,
+                deckCycled
+            };
+        });
     } catch (err) {
         logger.warn(`[PACK-IMAGES] Error leyendo carpeta local (${dir}): ${err.message}`);
         return [];
@@ -233,13 +282,19 @@ async function getWebPackImages(category = null, count = 3) {
  */
 async function getPackImages(category = null, options = {}) {
     const targetCount = options.count ?? (Math.floor(Math.random() * 3) + 3); // 3 a 5 imágenes
+    const excludePhotoIds = options.excludePhotoIds || [];
 
-    if (!options.customDir) {
-        return createRikolinoReader().getImages(cleanCategory(category), { count: targetCount });
+    const activeCustomDir = options.customDir || process.env.FOTOS_DIR;
+    if (!activeCustomDir) {
+        return createRikolinoReader().getImages(cleanCategory(category), {
+            count: targetCount,
+            randomize: true,
+            excludePhotoIds
+        });
     }
 
-    // 1. Proveedor legado solo cuando customDir se solicita explícitamente
-    const local = getLocalPackImages(options.customDir, targetCount, category);
+    // 1. Proveedor legado solo cuando customDir o FOTOS_DIR se solicita explícitamente
+    const local = getLocalPackImages(activeCustomDir, targetCount, category, excludePhotoIds);
     if (local.length >= targetCount) {
         return local.slice(0, targetCount);
     }

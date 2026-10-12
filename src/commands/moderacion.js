@@ -2,6 +2,7 @@
 
 const { sendText, getGroupInfo, updateParticipant, updateGroupSetting, normalizeJid } = require('../services/evolution');
 const logger = require('../services/logger');
+const db = require('../services/db');
 
 const BOT_NUMBER = (process.env.BOT_NUMBER || '5214437367565').replace(/[^0-9]/g, '');
 
@@ -11,7 +12,8 @@ const BOT_NUMBER = (process.env.BOT_NUMBER || '5214437367565').replace(/[^0-9]/g
 function isUserAdmin(groupData, participantJid) {
     if (!groupData || !groupData.participants) return false;
 
-    const clean = (participantJid || '').replace(/@.*/, '');
+    // Remove device suffix (:1, :2) and domain part for clean comparison
+    const clean = (participantJid || '').replace(/[:@].*$/, '').replace(/[^0-9]/g, '');
     const member = groupData.participants.find(p =>
         (p.id && p.id.includes(clean)) ||
         (p.phoneNumber && p.phoneNumber.includes(clean))
@@ -91,11 +93,11 @@ function parseApiError(err) {
 
 async function handleModeracion(parsed, from, messageData) {
     // Solo en grupos
-    if (!from.endsWith('@g.us')) {
+    if (typeof from !== 'string' || !from.endsWith('@g.us')) {
         return sendText(from, '> solo funciona en grupos');
     }
 
-    const sender = messageData.key.participant || messageData.participant;
+    const sender = messageData?.key?.participant || messageData?.participant || from;
     const command = parsed.command;
 
     let groupData = null;
@@ -224,7 +226,6 @@ async function handleModeracion(parsed, from, messageData) {
             }
 
             case 'warn': {
-                const db = require('../services/db');
                 const strikes = await db.addStrike(strikeKey);
 
                 if (strikes >= 3) {
@@ -247,8 +248,7 @@ async function handleModeracion(parsed, from, messageData) {
             }
 
             case 'unwarn': {
-                const db2 = require('../services/db');
-                const newStrikes = await db2.removeStrike(strikeKey);
+                const newStrikes = await db.removeStrike(strikeKey);
                 await sendText(from, `> advertencia quitada a \`@${displayTarget}\` (${newStrikes}/3)`);
                 break;
             }
@@ -260,4 +260,8 @@ async function handleModeracion(parsed, from, messageData) {
     }
 }
 
-module.exports = { handleModeracion };
+module.exports = {
+    handleModeracion,
+    isUserAdmin,
+    isBotAdmin
+};

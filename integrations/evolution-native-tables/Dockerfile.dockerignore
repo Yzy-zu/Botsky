@@ -1,0 +1,12 @@
+**
+!src/
+!src/utils/
+!src/utils/whatsappText.js
+!src/integrations/
+!src/integrations/evolutionNativeTables.js
+!scripts/
+!scripts/patch-evolution-native-tables.cjs
+!integrations/
+!integrations/evolution-native-tables/
+!integrations/evolution-native-tables/Dockerfile
+!integrations/evolution-native-tables/Dockerfile.dockerignore

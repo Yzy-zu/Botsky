@@ -1,27 +1,29 @@
 'use strict';
 
+const { cleanup } = require('../utils/cleanup');
+
 const fs = require('fs');
 const path = require('path');
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { sendText, sendMedia, downloadMedia } = require('../services/evolution');
 const logger = require('../services/logger');
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const TMP_DIR = process.env.TMP_DIR ?? '/tmp/whatsapp-bot';
 
-function cleanup(...files) {
-    for (const f of files) {
-        try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch { /* ignorar */ }
-    }
-}
+
 
 async function handleQr(parsed, from, messageData) {
     const textToEncode = parsed.args.join(' ');
     const isImage = messageData?.messageType?.toLowerCase().includes('image');
 
     if (!textToEncode && !isImage) {
-        return sendText(from, '> para crear: `/@ qr [texto]`\n> para leer: responde una imagen con `/@ qr`');
+        return sendText(from, '¿Lo creamos o lo leemos?\nCrear: `qr [texto o enlace]`.\nLeer: responde a la imagen con `qr`.');
+    }
+
+    if (!fs.existsSync(TMP_DIR)) {
+        fs.mkdirSync(TMP_DIR, { recursive: true });
     }
 
     const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -34,41 +36,38 @@ async function handleQr(parsed, from, messageData) {
             inputPath = path.join(TMP_DIR, `${sessionId}-input.${extension}`);
             fs.writeFileSync(inputPath, buffer);
 
-            const cmd = `zbarimg --quiet --raw "${inputPath}"`;
-            logger.cmd(cmd);
+            logger.cmd(`zbarimg --quiet --raw "${inputPath}"`);
 
             try {
-                const { stdout } = await execAsync(cmd, { timeout: 30_000 });
+                const { stdout } = await execFileAsync('zbarimg', ['--quiet', '--raw', inputPath], { timeout: 30_000 });
                 const result = stdout.trim();
                 if (result) {
-                    await sendText(from, `> contenido\n\`\`\`\n${result}\n\`\`\``);
+                    await sendText(from, `El QR dice:\n\`\`\`\n${result}\n\`\`\``);
                 } else {
-                    await sendText(from, '> no se detecto qr en la imagen');
+                    await sendText(from, 'No encontré un QR en esa imagen. Prueba con una foto de frente y sin recortar el código.');
                 }
             } catch (err) {
-                await sendText(from, '> no se detecto qr valido');
+                await sendText(from, 'No pude leer el QR. Prueba con una foto más nítida y con el código completo.');
             }
 
         } else {
             outputPath = path.join(TMP_DIR, `${sessionId}-qr.png`);
 
-            const safeText = textToEncode.replace(/"/g, '\\"').replace(/\$/g, '\\$').replace(/`/g, '\\`');
-            const cmd = `qrencode -s 10 -m 2 -o "${outputPath}" "${safeText}"`;
-            logger.cmd(cmd);
-            await execAsync(cmd, { timeout: 30_000 });
+            logger.cmd(`qrencode -s 10 -m 2 -o "${outputPath}" "${textToEncode}"`);
+            await execFileAsync('qrencode', ['-s', '10', '-m', '2', '-o', outputPath, textToEncode], { timeout: 30_000 });
 
             if (!fs.existsSync(outputPath)) {
                 throw new Error('no se pudo generar el qr');
             }
 
-            await sendMedia(from, outputPath, '> qr generado');
+            await sendMedia(from, outputPath, 'Listo, aquí está tu QR.');
         }
 
     } catch (err) {
         logger.error('qr:', err.message);
-        let msg = `> error \`${err.message}\``;
+        let msg = 'No pude generar el QR. Prueba con un texto más corto o un enlace.';
         if (err.message.includes('command not found')) {
-            msg = '> qrencode o zbar-tools no estan instalados';
+            msg = 'Los códigos QR no están disponibles por ahora. Avísale al administrador.';
         }
         await sendText(from, msg);
     } finally {

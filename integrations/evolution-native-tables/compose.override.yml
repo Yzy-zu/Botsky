@@ -1,0 +1,8 @@
+services:
+  evolution-api:
+    image: botsky/evolution-native-tables:2.3.7-c1
+    build:
+      context: /home/petrov/botsky
+      dockerfile: integrations/evolution-native-tables/Dockerfile
+      args:
+        EVOLUTION_BASE_IMAGE: evoapicloud/evolution-api@sha256:966625532d9076a2381e973a271307d107e6f070450de3abeeea8bd18be07252

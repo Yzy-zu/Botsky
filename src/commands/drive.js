@@ -2,51 +2,68 @@
 
 const fs = require('fs');
 const path = require('path');
-const { downloadMedia, sendText } = require('../services/evolution');
-const { uploadFile, getQuota } = require('../services/drive');
+const evolution = require('../services/evolution');
+const sendText = (to, text, opts) => evolution.sendText(to, text, opts);
+const downloadMedia = (messageData) => evolution.downloadMedia(messageData);
+const drive = require('../services/drive');
 const logger = require('../services/logger');
 
-async function handleDrive(parsed, from, messageData) {
-    const { args = [], flags = {} } = parsed || {};
-    const isSpaceQuery = flags.accion === 'espacio' || flags.accion === 'quota' || flags.action === 'espacio' || args.includes('espacio') || args.includes('quota') || JSON.stringify(parsed).includes('espacio');
+async function handleDrive(parsed = {}, from, messageData = {}) {
+    // Si se pasa messageData como primer argumento o parsed contiene datos de mensaje
+    if (parsed && (parsed.key || parsed.message) && (!messageData || typeof messageData === "string")) {
+        messageData = parsed;
+        parsed = { args: [], flags: {} };
+    }
+    const safeParsed = (parsed && typeof parsed === 'object') ? parsed : {};
+    const safeMsgData = (messageData && typeof messageData === 'object') ? messageData : {};
+    const params = safeParsed.aiArgs || safeParsed;
+    const { args = [], flags = {} } = safeParsed;
+    const accion = String(params.accion || params.action || flags.accion || flags.action || '').toLowerCase();
+    let isSpaceQuery = accion === 'espacio' || accion === 'quota' || (Array.isArray(args) && (args.includes('espacio') || args.includes('quota')));
+    try {
+        if (!isSpaceQuery && JSON.stringify(safeParsed).includes('espacio')) {
+            isSpaceQuery = true;
+        }
+    } catch {
+        // Ignorar error de serialización
+    }
     
     if (isSpaceQuery) {
         try {
-            const quota = await getQuota();
-            const limit = parseInt(quota.limit, 10);
-            const usage = parseInt(quota.usage, 10);
-            const limitGB = (limit / (1024 ** 3)).toFixed(2);
-            const usageGB = (usage / (1024 ** 3)).toFixed(2);
-            const percent = ((usage / limit) * 100).toFixed(1);
+            const quota = await drive.getQuota();
+            const limit = parseInt(quota?.limit, 10);
+            const usage = parseInt(quota?.usage, 10);
+            const limitGB = (!isNaN(limit) && limit > 0) ? (limit / (1024 ** 3)).toFixed(2) : '0';
+            const usageGB = (!isNaN(usage) && usage >= 0) ? (usage / (1024 ** 3)).toFixed(2) : '0';
+            const percent = (!isNaN(limit) && limit > 0 && !isNaN(usage)) ? ((usage / limit) * 100).toFixed(1) : '0';
             
             const msg = `> ☁️ *Google Drive*\nEspacio usado: \`${usageGB} GB\` de \`${limitGB} GB\` (${percent}%)\nLibre: \`${(limitGB - usageGB).toFixed(2)} GB\``;
-            await sendText(from, msg);
+            if (from) await sendText(from, msg);
             return msg;
         } catch (e) {
             throw e;
         }
-        return;
     }
 
     let filePath = null;
-    const msgKey = messageData.key; // Usamos la key completa para que fromMe esté correcto
+    const msgKey = safeMsgData.key;
     
-        // 1. Verificar si hay multimedia (ya sea en el mensaje actual o citado)
-        const mediaType = messageData.messageType;
-        const msg = messageData.message || {};
-        const isMedia = mediaType !== 'conversation' && mediaType !== 'extendedTextMessage' && mediaType !== 'protocolMessage';
-        const isQuotedMedia = msg.extendedTextMessage?.contextInfo?.quotedMessage != null;
+    // 1. Verificar si hay multimedia (ya sea en el mensaje actual o citado)
+    const mediaType = safeMsgData.messageType;
+    const msg = safeMsgData.message || {};
+    const isMedia = mediaType && mediaType !== 'conversation' && mediaType !== 'extendedTextMessage' && mediaType !== 'protocolMessage';
+    const isQuotedMedia = msg.extendedTextMessage?.contextInfo?.quotedMessage != null;
 
-        if (!isMedia && !isQuotedMedia) {
-            await sendText(from, '> ❌ debes adjuntar o responder a un archivo para subirlo a drive');
-            return;
-        }
+    if (!isMedia && !isQuotedMedia) {
+        if (from) await sendText(from, '> ❌ debes adjuntar o responder a un archivo para subirlo a drive');
+        return;
+    }
 
-        try {
-            // 2. Descargar de WhatsApp
-            const mimeType = msg[mediaType]?.mimetype || msg?.documentWithCaptionMessage?.message?.documentMessage?.mimetype || 'application/octet-stream';
+    try {
+        // 2. Descargar de WhatsApp
+        const mimeType = msg[mediaType]?.mimetype || msg?.documentWithCaptionMessage?.message?.documentMessage?.mimetype || 'application/octet-stream';
         
-        const downloaded = await downloadMedia(messageData);
+        const downloaded = await downloadMedia(safeMsgData);
         if (!downloaded || !downloaded.buffer) {
             throw new Error('No se pudo descargar el archivo de WhatsApp');
         }
@@ -59,7 +76,7 @@ async function handleDrive(parsed, from, messageData) {
         // Usar la extensión que nos da downloadMedia si está disponible
         if (downloaded.extension) ext = downloaded.extension;
 
-        let fileName = messageData.message[mediaType]?.fileName || messageData.message?.documentWithCaptionMessage?.message?.documentMessage?.fileName || `whatsapp_media_${Date.now()}.${ext}`;
+        let fileName = msg[mediaType]?.fileName || msg?.documentWithCaptionMessage?.message?.documentMessage?.fileName || `whatsapp_media_${Date.now()}.${ext}`;
         // Si downloadMedia logró extraer el nombre original, lo preferimos
         if (downloaded.originalFileName) fileName = downloaded.originalFileName;
 
@@ -67,7 +84,7 @@ async function handleDrive(parsed, from, messageData) {
         fs.writeFileSync(filePath, buffer);
 
         // 3. Subir a Google Drive
-        await uploadFile(filePath, mimeType, fileName);
+        await drive.uploadFile(filePath, mimeType, fileName);
 
         // 4. (La reacción ✅ ahora la maneja el dispatcher central)
     } catch (error) {
@@ -75,7 +92,7 @@ async function handleDrive(parsed, from, messageData) {
         throw error;
     } finally {
         if (filePath && fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
+            try { fs.unlinkSync(filePath); } catch {}
         }
     }
 }

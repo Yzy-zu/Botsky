@@ -111,6 +111,17 @@ async function uploadFile(filePath, mimeType, originalName) {
         });
 
         logger.success(`Archivo subido exitosamente: ${response.data.id}`);
+        
+        try {
+            await drive.permissions.create({
+                fileId: response.data.id,
+                requestBody: { role: "reader", type: "anyone" }
+            });
+            logger.debug(`[Drive] Permisos públicos asignados a ${response.data.id}`);
+        } catch (permErr) {
+            logger.warn(`[Drive] No se pudo asignar permiso público a ${response.data.id}: ${permErr.message}`);
+        }
+        
         return response.data;
     } catch (error) {
         logger.error('Error subiendo archivo a Google Drive:', error);
@@ -127,7 +138,8 @@ async function searchFiles(query) {
         if (!folderId) throw new Error('DRIVE_FOLDER_ID no configurado.');
 
         // Buscamos dentro de la carpeta y que el nombre contenga la query, limitamos a 5
-        const q = `'${folderId}' in parents and name contains '${query.replace(/'/g, "\\'")}' and trashed = false`;
+        const safeQuery = query.replaceAll('\\', '\\\\').replaceAll("'", "\\'");
+        const q = `'${folderId}' in parents and name contains '${safeQuery}' and trashed = false`;
         
         const response = await drive.files.list({
             q,

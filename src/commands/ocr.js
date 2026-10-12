@@ -1,5 +1,7 @@
 'use strict';
 
+const { cleanup } = require('../utils/cleanup');
+
 const fs = require('fs');
 const path = require('path');
 const { exec } = require('child_process');
@@ -10,15 +12,11 @@ const logger = require('../services/logger');
 const execAsync = promisify(exec);
 const TMP_DIR = process.env.TMP_DIR ?? '/tmp/whatsapp-bot';
 
-function cleanup(...files) {
-    for (const f of files) {
-        try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch { /* ignorar */ }
-    }
-}
+
 
 async function handleLeer(parsed, from, messageData) {
     if (!messageData?.messageType?.includes('image') && !messageData?.messageType?.includes('document')) {
-        return sendText(from, '> adjunta una imagen\nusa `/@ leer`');
+        return sendText(from, 'Responde a la imagen con `leer` y saco el texto.');
     }
 
     const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -46,16 +44,16 @@ async function handleLeer(parsed, from, messageData) {
         const textResult = fs.readFileSync(outputPath, 'utf8').trim();
 
         if (!textResult) {
-            await sendText(from, '> no se detecto texto en la imagen');
+            await sendText(from, 'No alcancé a leer texto. Prueba con una foto más nítida, de frente y con buena luz.');
         } else {
-            await sendText(from, `> texto extraido\n\n${textResult}`);
+            await sendText(from, `Esto alcancé a leer:\n\n${textResult}`);
         }
 
     } catch (err) {
         logger.error('leer:', err.message);
-        let msg = `> error \`${err.message}\``;
+        let msg = 'No pude leer esa imagen. Intenta de nuevo con una foto más nítida.';
         if (err.message.includes('tesseract: command not found')) {
-            msg = '> tesseract no esta instalado';
+            msg = 'La lectura de imágenes no está disponible por ahora. Avísale al administrador.';
         }
         await sendText(from, msg);
     } finally {

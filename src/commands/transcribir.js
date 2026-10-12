@@ -1,6 +1,7 @@
 'use strict';
 
-const { execFile, spawn } = require('child_process');
+const { cleanup } = require('../utils/cleanup');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
 const path = require('path');
@@ -9,29 +10,29 @@ const { sendText, downloadMedia } = require('../services/evolution');
 const { extractUrl } = require('../core/parser');
 const logger = require('../services/logger');
 const { Progress } = require('../services/progress');
+const { transcribeAudio, summarizeTranscription } = require('../services/whisper');
 
 const execFileAsync = promisify(execFile);
 
 const TMP_DIR = process.env.TMP_DIR ?? '/tmp/whatsapp-bot';
-const DEFAULT_MODEL = process.env.WHISPER_MODEL ?? 'small';
+const DEFAULT_MODEL = 'whisper-large-v3-turbo';
 const DEFAULT_LANG = process.env.WHISPER_LANGUAGE ?? 'auto';
-
-// Ruta al script de Python (relativa a este archivo)
-const TRANSCRIBE_SCRIPT = path.resolve(__dirname, '../scripts/transcribe.py');
 
 fs.mkdirSync(TMP_DIR, { recursive: true });
 
-// ─── Validaciones ──────────────────────────────────────────────────────────────
+// ─── Modelos y Lenguajes ──────────────────────────────────────────────────────
 
-// faster-whisper soporta los mismos modelos que whisper original + large-v2/v3
-const VALID_MODELS = new Set([
-    'tiny', 'tiny.en',
-    'base', 'base.en',
-    'small', 'small.en',
-    'medium', 'medium.en',
-    'large-v1', 'large-v2', 'large-v3',
-    'large',   // alias de large-v3
-]);
+const MODEL_MAP = {
+    'turbo': 'whisper-large-v3-turbo',
+    'fast': 'whisper-large-v3-turbo',
+    'large': 'whisper-large-v3',
+    'large-v3': 'whisper-large-v3',
+    'whisper-large-v3-turbo': 'whisper-large-v3-turbo',
+    'whisper-large-v3': 'whisper-large-v3',
+    'small': 'whisper-large-v3-turbo',
+    'base': 'whisper-large-v3-turbo',
+    'tiny': 'whisper-large-v3-turbo'
+};
 
 const VALID_LANGS = new Set([
     'auto', 'es', 'en', 'fr', 'de', 'pt', 'it',
@@ -39,12 +40,6 @@ const VALID_LANGS = new Set([
 ]);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function cleanup(...files) {
-    for (const f of files) {
-        try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch { /* ignorar */ }
-    }
-}
 
 /**
  * Descarga el audio de una URL con yt-dlp.
@@ -82,87 +77,45 @@ function splitText(text, maxLength = 3500) {
     return parts.filter(Boolean);
 }
 
-/**
- * Llama al script Python con faster-whisper y retorna el texto transcrito.
- * stdout → texto transcrito
- * stderr → logs internos de Python (no interfieren)
- *
- * @param {string} audioPath - Ruta al archivo de audio
- * @param {string} model     - Modelo de whisper
- * @param {string} lang      - Idioma o 'auto'
- * @returns {Promise<string>}
- */
-async function runFasterWhisper(audioPath, model, lang) {
-    const args = [TRANSCRIBE_SCRIPT, audioPath, model, lang];
-    logger.cmd(`python3 ${args.join(' ')}`);
+// ─── Enviar transcripción al usuario (soporte para resumen y textos largos) ───
 
-    return new Promise((resolve, reject) => {
-        const proc = spawn('python3', args, {
-            timeout: 15 * 60 * 1000,
-            env: {
-                ...process.env,
-                WHISPER_DEVICE: process.env.WHISPER_DEVICE ?? 'cpu',
-                WHISPER_COMPUTE_TYPE: process.env.WHISPER_COMPUTE_TYPE ?? 'int8',
-                WHISPER_CACHE_DIR: process.env.WHISPER_CACHE_DIR ?? '',
-            },
-        });
-
-        let stdout = '';
-        let stderr = '';
-
-        proc.stdout.on('data', chunk => { stdout += chunk; });
-        proc.stderr.on('data', chunk => { stderr += chunk; });
-
-        // Matar el proceso y todos sus hijos si se excede el timeout
-        const timer = setTimeout(() => {
-            proc.kill('SIGKILL');
-            reject(new Error('timeout: la transcripción tardó demasiado'));
-        }, 15 * 60 * 1000);
-
-        proc.on('close', (code) => {
-            clearTimeout(timer);
-
-            if (stderr.trim()) logger.info('[faster-whisper]', stderr.trim());
-
-            // Código 3 = sin voz detectada (definido en el script Python)
-            if (code === 3) return resolve('');
-
-            if (code !== 0) {
-                const detail = stderr.trim();
-                return reject(new Error(detail || `python3 salió con código ${code}`));
-            }
-
-            resolve(stdout.trim());
-        });
-
-        proc.on('error', (err) => {
-            clearTimeout(timer);
-            reject(err);
-        });
-    });
-}
-
-// ─── Enviar transcripción al usuario (soporte para textos largos) ─────────────
-
-async function sendTranscription(from, text, model) {
-    if (!text) {
-        await sendText(from, '> no se detecto voz');
+async function sendTranscription(from, { text, duration, language, provider, elapsedMs }, shouldSummarize = false) {
+    if (!text || text.trim().length === 0) {
+        await sendText(from, 'No alcancé a distinguir lo que se dice. Prueba con un audio más claro o con menos ruido.');
         return null;
     }
 
-    const parts = splitText(text);
+    let summary = null;
+    const wordCount = text.trim().split(/\s+/).length;
+
+    // Resumir si el usuario lo pidió o si el audio es muy largo (más de 60 palabras)
+    if (shouldSummarize || wordCount >= 60) {
+        try {
+            summary = await summarizeTranscription(text);
+        } catch (err) {
+            logger.warn(`[TRANSCRIBIR] No se pudo generar resumen: ${err.message}`);
+        }
+    }
+
+    const durationStr = duration ? ` · ${duration}s` : '';
+    const header = `🎙️ *Esto dice el audio*${durationStr}`;
+
+    let fullMessage = `${header}\n\n"${text}"`;
+    if (summary) {
+        fullMessage += `\n\n*Lo principal:*\n${summary}`;
+    }
+
+    const parts = splitText(fullMessage);
 
     if (parts.length === 1) {
-        const msg = `> transcripcion \`${model}\`\n\n${parts[0]}`;
-        await sendText(from, msg);
-        return msg;
+        await sendText(from, parts[0]);
+        return fullMessage;
     } else {
-        await sendText(from, `> transcripcion \`${model}\` en ${parts.length} partes`);
+        await sendText(from, `El audio salió largo. Te lo paso en ${parts.length} partes:`);
         for (let i = 0; i < parts.length; i++) {
-            await sendText(from, `> parte ${i + 1}/${parts.length}\n${parts[i]}`);
+            await sendText(from, `*Parte ${i + 1} de ${parts.length}*\n\n${parts[i]}`);
         }
-        // Retornar el texto completo para el historial de la IA
-        return text.slice(0, 400);
+        return fullMessage.slice(0, 400);
     }
 }
 
@@ -173,37 +126,39 @@ async function sendTranscription(from, text, model) {
  * @param {string} from        - JID del remitente
  * @param {object} messageData - Datos crudos del webhook
  */
-async function handleTranscribir({ flags, args }, from, messageData) {
+async function handleTranscribir(parsed = {}, from, messageData = {}) {
+    if (!from) return;
+    const safeParsed = (parsed && typeof parsed === 'object') ? parsed : {};
+    const flags = safeParsed.flags || {};
+    const args = Array.isArray(safeParsed.args) ? safeParsed.args : [];
     const p = new Progress(from, messageData?.key);
-    // ── Parámetros ──
-    const model = (flags.m ?? flags.modelo ?? DEFAULT_MODEL).toLowerCase();
+
+    const rawModel = (flags.m ?? flags.modelo ?? 'turbo').toLowerCase();
+    const model = MODEL_MAP[rawModel] || DEFAULT_MODEL;
     const lang = (flags.l ?? flags.idioma ?? DEFAULT_LANG).toLowerCase();
+    const shouldSummarize = !!(flags.resumir || flags.resumen || flags.r || args.includes('resumen') || args.includes('resumir'));
     const url = extractUrl(args);
 
-    if (!VALID_MODELS.has(model)) {
-        return p.fail(`modelo inválido \`${model}\` · usa: tiny base small medium large`);
-    }
-
-    if (!VALID_LANGS.has(lang)) {
+    if (lang !== 'auto' && !VALID_LANGS.has(lang)) {
         return p.fail(`idioma inválido \`${lang}\` · usa: ${[...VALID_LANGS].join(' ')}`);
     }
 
     const sessionId = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const audioPath = path.join(TMP_DIR, `${sessionId}.mp3`);
+    const audioPath = path.join(TMP_DIR, `${sessionId}.ogg`);
     let filesToClean = [audioPath];
 
     try {
         // ═══════════════════════════════════════════
-        //  MODO 1: URL
+        //  MODO 1: URL (YouTube, TikTok, etc.)
         // ═══════════════════════════════════════════
         if (url) {
-            await p.start('descargando', `audio · ${model} · ${lang}`);
+            await p.start('descargando', `audio · Whisper AI`);
 
-            await downloadAudioFromUrl(url, audioPath.replace('.mp3', '.%(ext)s'));
+            const urlAudioTemplate = path.join(TMP_DIR, `${sessionId}.%(ext)s`);
+            await downloadAudioFromUrl(url, urlAudioTemplate);
 
-            // yt-dlp puede cambiar la extensión del archivo generado
             const actualFile = ['.mp3', '.m4a', '.ogg', '.wav', '.opus', '.webm']
-                .map(ext => audioPath.replace('.mp3', ext))
+                .map(ext => path.join(TMP_DIR, `${sessionId}${ext}`))
                 .find(p => fs.existsSync(p));
 
             if (!actualFile) {
@@ -211,48 +166,61 @@ async function handleTranscribir({ flags, args }, from, messageData) {
             }
 
             filesToClean = [actualFile];
-            await p.phase('transcribiendo', model);
+            await p.phase('transcribiendo', 'Groq Whisper');
 
-            const text = await runFasterWhisper(actualFile, model, lang);
-            await p.done(model);
-            return await sendTranscription(from, text, model);
-
-            // ═══════════════════════════════════════════
-            //  MODO 2: Nota de voz o archivo de audio adjunto
-            // ═══════════════════════════════════════════
-        } else if (
-            messageData?.messageType?.toLowerCase().includes('audio') ||
-            messageData?.message?.audioMessage
-        ) {
-            await p.start('transcribiendo', `${model} · ${lang}`);
-
-            const { buffer } = await downloadMedia(messageData);
-            fs.writeFileSync(audioPath, buffer);
-            filesToClean = [audioPath];
-
-            const text = await runFasterWhisper(audioPath, model, lang);
-            await p.done(model);
-            return await sendTranscription(from, text, model);
+            const result = await transcribeAudio(actualFile, { model, language: lang });
+            await p.done('listo');
+            return await sendTranscription(from, result, shouldSummarize);
 
             // ═══════════════════════════════════════════
-            //  Sin entrada válida
+            //  MODO 2: Nota de voz o audio adjunto / citado
             // ═══════════════════════════════════════════
         } else {
-            return p.fail('no se encontró audio · adjunta un audio o pasa una url');
+            const contextInfo = messageData?.message?.extendedTextMessage?.contextInfo;
+            const quotedAudio = contextInfo?.quotedMessage?.audioMessage;
+            const hasDirectAudio = messageData?.messageType?.toLowerCase().includes('audio') || !!messageData?.message?.audioMessage;
+            const isQuotedAudio = !!quotedAudio;
+
+            if (hasDirectAudio || isQuotedAudio) {
+                await p.start('transcribiendo', `Whisper AI`);
+
+                // Asegurar key del mensaje citado si aplica
+                if (isQuotedAudio && !messageData.quotedStanzaId && contextInfo?.stanzaId) {
+                    messageData.quotedStanzaId = contextInfo.stanzaId;
+                    messageData.quotedParticipant = contextInfo.participant || messageData.key?.participant;
+                }
+
+                const downloaded = await downloadMedia(messageData);
+                if (!downloaded || !downloaded.buffer) {
+                    throw new Error('No se pudo descargar el audio de WhatsApp.');
+                }
+
+                const ext = downloaded.extension || 'ogg';
+                const finalAudioPath = path.join(TMP_DIR, `${sessionId}.${ext}`);
+                fs.writeFileSync(finalAudioPath, downloaded.buffer);
+                filesToClean = [finalAudioPath];
+
+                const result = await transcribeAudio(finalAudioPath, { model, language: lang });
+                await p.done('listo');
+                return await sendTranscription(from, result, shouldSummarize);
+
+                // ═══════════════════════════════════════════
+                //  Sin entrada válida
+                // ═══════════════════════════════════════════
+            } else {
+                return p.fail('no se encontró audio · adjunta un audio, responde a uno o pasa una URL');
+            }
         }
 
     } catch (err) {
-        logger.error('transcribir:', err.message);
+        logger.error('[TRANSCRIBIR] Error:', err.message);
 
         let msg = err.message;
-        if (err.message.includes('faster-whisper') || err.message.includes('ModuleNotFoundError'))
-            msg = 'faster-whisper no está instalado';
-        else if (err.message.includes('out of memory'))
-            msg = `sin memoria para modelo ${model}. prueba con uno más pequeño`;
-        else if (err.message.includes('python3') || err.message.includes('command not found'))
-            msg = 'python3 no encontrado';
-        else if (err.message.includes('No such file') || err.message.includes('not found'))
+        if (err.message.includes('No such file') || err.message.includes('not found')) {
             msg = 'archivo de audio no encontrado';
+        } else if (err.message.includes('timeout')) {
+            msg = 'la transcripción tardó demasiado en responder';
+        }
 
         await p.fail(msg);
 

@@ -1,5 +1,7 @@
 'use strict';
 
+const { cleanup } = require('../utils/cleanup');
+
 const { exec, execFile } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs');
@@ -24,11 +26,7 @@ const VIDEO_EXTENSIONS = new Set(['.mp4', '.mov', '.avi', '.webm']);
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function cleanup(...files) {
-    for (const f of files) {
-        try { if (f && fs.existsSync(f)) fs.unlinkSync(f); } catch { /* ignorar */ }
-    }
-}
+
 
 /**
  * Añade metadatos EXIF al WebP para que WhatsApp lo reconozca como un Sticker válido.
@@ -62,14 +60,23 @@ function downloadFromUrl(url, destPath) {
         const proto = url.startsWith('https') ? https : http;
         const file = fs.createWriteStream(destPath);
 
+        file.on('error', (err) => {
+            file.destroy();
+            fs.unlink(destPath, () => {});
+            reject(err);
+        });
+
         proto.get(url, (res) => {
             if (res.statusCode !== 200) {
+                file.destroy();
+                fs.unlink(destPath, () => {});
                 reject(new Error(`HTTP ${res.statusCode} al descargar imagen.`));
                 return;
             }
             res.pipe(file);
-            file.on('finish', () => { file.close(); resolve(); });
+            file.on('finish', () => { file.close(() => resolve()); });
         }).on('error', (err) => {
+            file.destroy();
             fs.unlink(destPath, () => { });
             reject(err);
         });
@@ -173,7 +180,11 @@ async function convertToAnimatedSticker(inputPath, outputPath, cropMode) {
  * @param {string} from        - JID del remitente
  * @param {object} messageData - Datos crudos del webhook
  */
-async function handleSticker({ flags, args }, from, messageData) {
+async function handleSticker(parsed = {}, from, messageData = {}) {
+    if (!from) return;
+    const safeParsed = parsed || {};
+    const flags = safeParsed.flags || {};
+    const args = Array.isArray(safeParsed.args) ? safeParsed.args : [];
     const cropMode = !!(flags.r ?? flags.recortar);
     const forceAnimated = !!(flags.a ?? flags.animado);
     const url = extractUrl(args);

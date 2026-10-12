@@ -74,6 +74,35 @@ test('lector integra factory real Petrovsky: publicación, nombres, papelera, as
     assert.equal((await reader.getImages()).length, 1); // Segundo conserva foto
 });
 
+test('selección aleatoria para juegos ignora orden del álbum y respeta fotos pendientes', async t => {
+    const { library, rootDir } = await fixture(t);
+    const photos = await Promise.all(['red', 'green', 'blue'].map(color => photo(library, color)));
+    await publishedAlbum(library, 'Ordenado', photos, { selectionMode: 'ordered' });
+    const reader = createRikolinoReader({ rootDir, random: () => 0 });
+    const ids = items => items.map(item => item.id);
+    assert.deepEqual(ids(await reader.getImages('Ordenado', { count: 3 })), photos.map(p => p.id));
+    assert.deepEqual(ids(await reader.getImages('Ordenado', { count: 3, randomize: true })),
+        [photos[1].id, photos[2].id, photos[0].id]);
+    const unseen = await reader.getImages('Ordenado', { count: 1, randomize: true, excludePhotoIds: [photos[0].id] });
+    assert.equal(unseen[0].id, photos[2].id);
+    assert.equal(unseen[0].deckCycled, false);
+    const cycled = await reader.getImages('Ordenado', { count: 1, randomize: true, excludePhotoIds: photos.map(p => p.id) });
+    assert.equal(cycled[0].deckCycled, true);
+    assert.equal(cycled[0].id, photos[1].id);
+
+    for (const filename of ['packImages.js', 'cooperachaImages.js']) {
+        const provider = await isolatedModule(path.join(__dirname, '../src/services', filename), {
+            axios: { get: async () => { throw Error('Red prohibida'); } }, './logger': logger,
+            './packImages': { cleanCategory: value => value },
+            './rikolinoLibrary': { createRikolinoReader: () => reader }
+        });
+        const items = filename === 'packImages.js'
+            ? await provider.getPackImages('Ordenado', { count: 1 })
+            : [await provider.getCooperachaImage('Ordenado')];
+        assert.equal(items[0].id, photos[1].id, filename + ' debe pedir selección aleatoria');
+    }
+});
+
 test('apertura solo lectura no crea DB, no cambia bytes y libera conexiones corruptas', async t => {
     const { library, rootDir, reader } = await fixture(t);
     await publishedAlbum(library, 'Fotos', [await photo(library, 'red')]);
@@ -150,4 +179,48 @@ test('handler pack sin modificar conserva 150XP, cantidad caller, privado viewOn
     const unavailable = await pack.handlePack({ args: ['desconocido'] }, buyer, {}, { count: 3, throttleMs: 0 });
     assert.equal(unavailable.reason, 'CONTENT_UNAVAILABLE'); assert.equal(unavailable.refunded, true); assert.equal(xp, 350);
     assert.equal(media.length, 3);
+});
+
+test('reader entrega vídeos MP4 y WebM con isVideo: true, mime correcto y soporte mixto', async t => {
+    const { library, rootDir, reader } = await fixture(t);
+    const p1 = await photo(library, 'red');
+    const album = await publishedAlbum(library, 'Mix Multimedia', [p1], { slug: 'mix', selectionMode: 'ordered' });
+
+    // Crear entradas para MP4 y WebM válidas
+    const mp4Id = crypto.randomUUID();
+    const mp4Path = `originals/${mp4Id}.mp4`;
+    await fs.writeFile(path.join(rootDir, mp4Path), Buffer.from('synthetic-mp4-data'));
+    await editDb(rootDir, 'INSERT INTO photos (id, name, mime, size, width, height, uploadedAt, hash, deletedAt, originalPath, thumbnailPath) VALUES (?,?,?,?,?,?,?,?,?,?,?)', [
+        mp4Id, 'Video1', 'video/mp4', 18, 320, 240, new Date().toISOString(), 'hash-mp4-1', null, mp4Path, `thumbnails/${mp4Id}.jpg`
+    ]);
+    await editDb(rootDir, 'INSERT INTO album_photos (albumId, photoId, position) VALUES (?, ?, ?)', [album.id, mp4Id, 1]);
+
+    const webmId = crypto.randomUUID();
+    const webmPath = `originals/${webmId}.webm`;
+    await fs.writeFile(path.join(rootDir, webmPath), Buffer.from('synthetic-webm-data'));
+    await editDb(rootDir, 'INSERT INTO photos (id, name, mime, size, width, height, uploadedAt, hash, deletedAt, originalPath, thumbnailPath) VALUES (?,?,?,?,?,?,?,?,?,?,?)', [
+        webmId, 'Video2', 'video/webm', 19, 640, 480, new Date().toISOString(), 'hash-webm-1', null, webmPath, `thumbnails/${webmId}.jpg`
+    ]);
+    await editDb(rootDir, 'INSERT INTO album_photos (albumId, photoId, position) VALUES (?, ?, ?)', [album.id, webmId, 2]);
+
+    const items = await reader.getImages('mix', { count: 3 });
+    assert.equal(items.length, 3, 'Debe devolver 3 elementos');
+
+    const photoItem = items.find(it => it.id === p1.id);
+    assert.ok(photoItem);
+    assert.equal(photoItem.mime, 'image/png');
+    assert.equal(photoItem.isVideo, false);
+    assert.equal(photoItem.source, 'rikolino');
+
+    const mp4Item = items.find(it => it.id === mp4Id);
+    assert.ok(mp4Item);
+    assert.equal(mp4Item.mime, 'video/mp4');
+    assert.equal(mp4Item.isVideo, true);
+    assert.equal(mp4Item.path, path.join(rootDir, mp4Path));
+
+    const webmItem = items.find(it => it.id === webmId);
+    assert.ok(webmItem);
+    assert.equal(webmItem.mime, 'video/webm');
+    assert.equal(webmItem.isVideo, true);
+    assert.equal(webmItem.path, path.join(rootDir, webmPath));
 });

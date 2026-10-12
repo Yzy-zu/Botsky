@@ -3,6 +3,12 @@
 const logger = require('../services/logger');
 const { hasActiveSession } = require('../commands/documentos');
 const { hasActiveSearchSession, getSessionKey } = require('../commands/buscar');
+const { hasPendingContactChoice } = require('../commands/mensaje');
+const { hasActiveRouletteLobby } = require('../commands/ruleta');
+const { hasActiveBlackjackGame, hasActiveBlackjackTableLobby, hasActiveBlackjackTablePlaying } = require('../commands/blackjack');
+const { hasActiveCooperacha } = require('../commands/cooperacha');
+const { registerTask } = require('../services/scheduler');
+const attachmentContext = require('../services/attachmentContext');
 
 // ─── Tipos Multimedia y Comandos ──────────────────────────────────────────────
 const MEDIA_TYPES = [
@@ -13,13 +19,6 @@ const MEDIA_TYPES = [
     'documentWithCaptionMessage',
     'stickerMessage',
 ];
-
-const COMMANDS_REQUIRING_MEDIA = [
-    'efecto', 'leer', 'ocr', 'comprimir', 'sticker', 's',
-    'pdf2img', 'extraer', 'transcribir', 'tr', 'convertir', 'cv'
-];
-
-const MEDIA_INTENT_REGEX = /\b(sticker|calca|pegatina|transcribe|escucha|leer|ocr|comprime|pdf|convierte)\b/i;
 
 // ─── Mapeo de Votos de Encuestas ──────────────────────────────────────────────
 const POLL_MAPPINGS = {
@@ -49,8 +48,8 @@ const POLL_MAPPINGS = {
     '🌧️ Activar Lluvia': 'maicra cmd weather rain',
     '☀️ Quitar Lluvia': 'maicra cmd weather clear',
     '🌩️ Activar Tormenta': 'maicra cmd weather thunder',
-    '⏸️ Pausar Ciclo de Día': 'maicra cmd gamerule dodaylightcycle false',
-    '▶️ Reanudar Ciclo de Día': 'maicra cmd gamerule dodaylightcycle true',
+    '⏸️ Pausar Ciclo de Día': 'maicra cmd gamerule doDayLightCycle false',
+    '▶️ Reanudar Ciclo de Día': 'maicra cmd gamerule doDayLightCycle true',
 
     // Opciones de Modos y Dificultad (Max 10)
     '🧑‍💻 Todos a Creativo': 'maicra cmd gamemode creative @a',
@@ -75,27 +74,37 @@ const lastMediaByUser = new Map();
 const mediaCacheById = new Map();
 const processedPolls = new Map();
 
-// Purgar encuestas procesadas (> 1 hora) cada 10 min
-setInterval(() => {
+// Purgar periódicamente encuestas y cachés multimedia de forma coordinada (PERF-2)
+registerTask('media-caches-cleanup', 10, () => {
     const now = Date.now();
+
+    // 1. Purgar encuestas procesadas (> 1 hora)
     for (const [id, ts] of processedPolls) {
         if (now - ts > 3600000) processedPolls.delete(id);
     }
-}, 600000).unref();
 
-// Purgar mediaCacheById (> 1 hora o > 500 items) cada 15 min
-setInterval(() => {
-    const now = Date.now();
+    // 2. Purgar mediaCacheById (> 1 hora o > 500 items)
     const MAX_ENTRIES = 500;
     for (const [key, value] of mediaCacheById) {
-        if (now - value.timestamp > 3600000) mediaCacheById.delete(key);
+        if (now - value.timestamp > attachmentContext.TTL_MS) mediaCacheById.delete(key);
     }
     if (mediaCacheById.size > MAX_ENTRIES) {
         const sorted = [...mediaCacheById.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
         const toDelete = sorted.slice(0, mediaCacheById.size - MAX_ENTRIES);
         for (const [key] of toDelete) mediaCacheById.delete(key);
     }
-}, 900000).unref();
+
+    // 3. Purgar lastMediaByUser (> 30 min o > 200 entradas)
+    const MAX_MEDIA_USERS = 200;
+    for (const [key, value] of lastMediaByUser) {
+        if (now - (value.timestamp || 0) > attachmentContext.TTL_MS) lastMediaByUser.delete(key);
+    }
+    if (lastMediaByUser.size > MAX_MEDIA_USERS) {
+        const sorted = [...lastMediaByUser.entries()].sort((a, b) => (a[1].timestamp || 0) - (b[1].timestamp || 0));
+        const toDelete = sorted.slice(0, lastMediaByUser.size - MAX_MEDIA_USERS);
+        for (const [key] of toDelete) lastMediaByUser.delete(key);
+    }
+});
 
 // ─── Funciones Auxiliares de Extracción ────────────────────────────────────────
 
@@ -139,7 +148,12 @@ function detectMessageType(message) {
 }
 
 function getCachedMediaById(messageId) {
-    return mediaCacheById.get(messageId);
+    const cached = mediaCacheById.get(messageId);
+    if (cached && Date.now() - cached.timestamp > attachmentContext.TTL_MS) {
+        mediaCacheById.delete(messageId);
+        return undefined;
+    }
+    return cached;
 }
 
 function getLastMediaByUser(userKey) {
@@ -153,26 +167,35 @@ function getLastMediaByUser(userKey) {
  * @param {object} data - data de Evolution API (messages.upsert)
  * @returns {object|null} Objeto normalizado con metadatos y estado de despacho
  */
+/**
+ * Extrae una estructura mínima y limpia para caché multimedia (MEM-1 & MEM-2),
+ * evitando retener en memoria el payload completo del webhook ni thumbnails pesados.
+ */
+function extractMinimalMediaData(data, messageType) {
+    return attachmentContext.minimalMessageData(data, messageType);
+}
+
 function normalizeIncomingMessage(data) {
     if (!data) return null;
 
     const from = data.key?.remoteJid;
-    if (!from) return null;
+    if (!from || typeof from !== 'string') return null;
 
     const message = data.message;
     const messageType = data.messageType ?? detectMessageType(message);
     let text = extractText(message).trim();
     const pushName = data.pushName ?? 'Usuario';
     const isGroup = from.endsWith('@g.us');
-    const participant = data.key?.participant || from;
-    const cacheKey = isGroup ? participant : from;
+    const participant = data.key?.participant || data.participant || from;
+    const cacheKey = attachmentContext.getAttachmentContextKey(from, participant);
 
-    // ── 1. Guardar multimedia entrante en caché ──
+    // ── 1. Guardar multimedia entrante en caché (MEM-1 & MEM-2) ──
     if (MEDIA_TYPES.includes(messageType)) {
-        lastMediaByUser.set(cacheKey, { data, messageType });
+        const cleanData = extractMinimalMediaData(data, messageType);
+        lastMediaByUser.set(cacheKey, { data: cleanData, messageType, timestamp: Date.now() });
         const messageId = data.key?.id;
         if (messageId) {
-            mediaCacheById.set(messageId, { data, messageType, timestamp: Date.now() });
+            mediaCacheById.set(messageId, { data: cleanData, messageType, timestamp: Date.now() });
         }
     }
 
@@ -191,14 +214,34 @@ function normalizeIncomingMessage(data) {
         };
     }
 
-    // ── 3. Manejo del Prefijo /@ ──
-    const PREFIX = '/@';
+    // ── 3. Manejo de Prefijos de Comandos (/@, /!, !, /, #, .) ──
     let hasPrefix = false;
     let isPollCommand = false;
+    let isTaskDirectCommand = false;
 
-    if (text.startsWith(PREFIX)) {
-        text = text.slice(PREFIX.length).trim();
+    if (text.startsWith('/!')) {
+        text = text.slice(2).trim();
         hasPrefix = true;
+        isTaskDirectCommand = true;
+    } else if (text.startsWith('/@')) {
+        text = text.slice(2).trim();
+        hasPrefix = true;
+    } else {
+        // Soporta prefijos estándar (!, /, #, .) consistentes con dispatcher
+        const prefixMatch = text.match(/^([!/#.])([a-zA-Z0-9áéíóúÁÉÍÓÚñÑ_].*)$/s);
+        if (prefixMatch) {
+            text = prefixMatch[2].trim();
+            hasPrefix = true;
+        }
+    }
+
+    // A preceding request can arrive in a separate webhook before its file.
+    if (MEDIA_TYPES.includes(messageType)) {
+        const instruction = attachmentContext.consumeInstruction({ from, participant });
+        if (!text && instruction) {
+            text = instruction.text;
+            hasPrefix = hasPrefix || instruction.hasPrefix;
+        }
     }
 
     // ── 4. Manejo de Votos en Encuestas ──
@@ -226,41 +269,17 @@ function normalizeIncomingMessage(data) {
         }
     }
 
-    // ── 5. Resolución de Intención Implícita (sin prefijo) ──
-    let shouldDispatch = true;
-
-    if (!hasPrefix) {
-        const sessionType = hasActiveSession(from, participant);
-        const isImage = messageType?.toLowerCase().includes('image') ||
-            (messageType?.toLowerCase().includes('document') &&
-                (data.message?.documentMessage?.mimetype?.startsWith('image/') ||
-                    data.message?.documentMessage?.fileName?.toLowerCase().match(/\.(jpe?g|png|webp|gif)$/i) ||
-                    data.message?.documentWithCaptionMessage?.message?.documentMessage?.mimetype?.startsWith('image/') ||
-                    data.message?.documentWithCaptionMessage?.message?.documentMessage?.fileName?.toLowerCase().match(/\.(jpe?g|png|webp|gif)$/i)));
-
-        const isPdf = messageType?.toLowerCase().includes('document') &&
-            (text.toLowerCase().endsWith('.pdf') ||
-                (data.message?.documentMessage?.mimetype === 'application/pdf') ||
-                (data.message?.documentWithCaptionMessage?.message?.documentMessage?.mimetype === 'application/pdf'));
-
-        const driveSessionKey = getSessionKey(from, data);
-
-        if (hasActiveSearchSession(driveSessionKey) && /^[1-5]$/.test(text.trim())) {
-            text = `descargardrive ${text.trim()}`;
-            hasPrefix = true;
-        } else if (sessionType === 'pdf' && isImage) {
-            text = 'pdf';
-            hasPrefix = true;
-        } else if (sessionType === 'unir' && isPdf) {
-            text = 'unir';
-            hasPrefix = true;
-        } else if (!isGroup && text && text.trim()) {
-            // En chat privado se permite plática directa sin prefijo
-            hasPrefix = true;
-        } else {
-            shouldDispatch = false;
-        }
-    }
+    // Sessions describe context to Gemini; they never rewrite natural language.
+    const sessions = {
+        pdf: hasActiveSession(from, participant) || null,
+        drive: hasActiveSearchSession(getSessionKey(from, data)),
+        contact: hasPendingContactChoice(from, data),
+        rouletteLobby: hasActiveRouletteLobby(from),
+        blackjackLobby: hasActiveBlackjackTableLobby(from),
+        blackjackHand: hasActiveBlackjackGame(from, participant) || hasActiveBlackjackTablePlaying(from),
+        cooperacha: hasActiveCooperacha(from)
+    };
+    const shouldDispatch = Boolean(text.trim() || (!isGroup && MEDIA_TYPES.includes(messageType)));
 
     // ── 6. Desempaquetado de Multimedia y Quotes ──
     let actualMessageData = data;
@@ -289,7 +308,7 @@ function normalizeIncomingMessage(data) {
         contextInfo = data.contextInfo;
     }
 
-    if (contextInfo?.quotedMessage) {
+    if (contextInfo?.quotedMessage && !MEDIA_TYPES.includes(messageType)) {
         const quoted = contextInfo.quotedMessage;
         const quotedType = detectMessageType(quoted);
 
@@ -309,41 +328,36 @@ function normalizeIncomingMessage(data) {
             actualMessageData = {
                 ...data,
                 message: finalQuoted,
+                contextInfo,
                 messageType: finalType,
                 quotedStanzaId: contextInfo.stanzaId,
                 quotedParticipant: contextInfo.participant ?? data.key?.remoteJid,
+                quotedFromMe: Boolean(contextInfo.participant && process.env.BOT_NUMBER &&
+                    contextInfo.participant.split('@')[0].replace(/[^0-9]/g, '').replace(/^521/, '52') ===
+                    process.env.BOT_NUMBER.replace(/[^0-9]/g, '').replace(/^521/, '52')),
             };
             logger.info(`[QUOTE] multimedia extraído: tipo=${finalType}, stanzaId=${contextInfo.stanzaId}`);
         }
     }
 
-    // Fallback al último multimedia enviado por este usuario si el comando requiere media
-    if (actualMessageType === messageType && !MEDIA_TYPES.includes(messageType) && lastMediaByUser.has(cacheKey)) {
-        const parts = text.split(' ');
-        const parsedCommand = parts[0].toLowerCase();
-        const isMediaIntent = COMMANDS_REQUIRING_MEDIA.includes(parsedCommand) ||
-            (parsedCommand === 'qr' && parts.length === 1) ||
-            MEDIA_INTENT_REGEX.test(text);
-
-        if (isMediaIntent) {
-            const last = lastMediaByUser.get(cacheKey);
-            let lastType = last.messageType;
-            let lastData = last.data;
-            let lastMsg = lastData.message;
-
-            if (lastType === 'documentWithCaptionMessage' && lastMsg.documentWithCaptionMessage?.message?.documentMessage) {
-                lastData = { ...lastData, message: { documentMessage: lastMsg.documentWithCaptionMessage.message.documentMessage } };
-                lastType = 'documentMessage';
-            }
-
-            actualMessageType = lastType;
-            actualMessageData = lastData;
-            logger.info(`[MEDIA-FALLBACK] Usando último multimedia de ${participant} (${lastType}) para "${parsedCommand}"`);
-        }
+    // Resolve current, quoted and recent attachments through one bounded context.
+    let attachment = null;
+    let attachmentAmbiguity = null;
+    if (MEDIA_TYPES.includes(actualMessageType)) {
+        const source = MEDIA_TYPES.includes(messageType) ? 'current' : 'quoted';
+        attachment = attachmentContext.rememberAttachment({
+            from, participant, messageData: actualMessageData,
+            messageType: actualMessageType, source
+        });
+    }
+    if (attachment) {
+        actualMessageType = attachment.messageType;
+        actualMessageData = attachmentContext.attachToMessage(attachment, actualMessageData);
     }
 
     return {
         from,
+        remoteJid: from,
         participant,
         isGroup,
         pushName,
@@ -351,8 +365,12 @@ function normalizeIncomingMessage(data) {
         messageType,
         actualMessageType,
         actualMessageData,
+        attachment,
+        attachmentAmbiguity,
+        sessions,
         hasPrefix,
         isPollCommand,
+        isTaskDirectCommand,
         shouldDispatch,
         isReaction: false
     };

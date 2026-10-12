@@ -1,12 +1,11 @@
 'use strict';
 
-const { exec, execFile } = require('child_process');
+const { execFile } = require('child_process');
 const { promisify } = require('util');
 const { sendText } = require('../services/evolution');
 const { extractUrl } = require('../core/parser');
 const logger = require('../services/logger');
 
-const execAsync = promisify(exec);
 const execFileAsync = promisify(execFile);
 
 /**
@@ -35,12 +34,15 @@ function formatSize(bytes) {
  * @param {object} parsed - { command, flags, args }
  * @param {string} from   - JID del remitente
  */
-async function handleInfo({ args }, from) {
+async function handleInfo(parsed = {}, from) {
+    if (!from) return;
+    const safeParsed = parsed || {};
+    const args = Array.isArray(safeParsed.args) ? safeParsed.args : [];
     const url = extractUrl(args);
 
     if (!url) {
         return sendText(from,
-            '[!] falta la url\nuso: info [url]'
+            'Pásame el enlace del video.\nUsa `info [enlace]`.'
         );
     }
 
@@ -70,24 +72,24 @@ async function handleInfo({ args }, from) {
 
         // ── Construir respuesta ──
         const lines = [
-            `[+] ${info.title ?? 'sin titulo'}`,
+            `*${info.title ?? 'Sin título'}*`,
             ``,
-            `uploader:  ${info.uploader ?? info.channel ?? 'desconocido'}`,
-            `duracion:  ${formatDuration(info.duration)}`,
-            `fecha:     ${info.upload_date
+            `Autor: ${info.uploader ?? info.channel ?? 'desconocido'}`,
+            `Duración: ${formatDuration(info.duration)}`,
+            `Fecha: ${info.upload_date
                 ? `${info.upload_date.slice(0, 4)}-${info.upload_date.slice(4, 6)}-${info.upload_date.slice(6)}`
                 : 'desconocida'}`,
-            `vistas:    ${info.view_count?.toLocaleString('es-MX') ?? 'n/a'}`,
-            `likes:     ${info.like_count?.toLocaleString('es-MX') ?? 'n/a'}`,
+            `Vistas: ${info.view_count?.toLocaleString('es-MX') ?? 'n/a'}`,
+            `Me gusta: ${info.like_count?.toLocaleString('es-MX') ?? 'n/a'}`,
             ``,
-            `calidades: ${videoFormats.length > 0 ? videoFormats.join(', ') : 'n/a'}`,
-            `audio:     ${hasAudio ? 'disponible' : 'no disponible'}`,
-            `sitio:     ${info.extractor_key ?? info.extractor ?? 'desconocido'}`,
+            `Calidades: ${videoFormats.length > 0 ? videoFormats.join(', ') : 'n/a'}`,
+            `Audio: ${hasAudio ? 'disponible' : 'no disponible'}`,
+            `Sitio: ${info.extractor_key ?? info.extractor ?? 'desconocido'}`,
         ];
 
         if (info.description) {
             const desc = info.description.slice(0, 200).replace(/\n+/g, ' ');
-            lines.push(``, `descripcion:`, desc + (info.description.length > 200 ? '...' : ''));
+            lines.push(``, `Descripción:`, desc + (info.description.length > 200 ? '...' : ''));
         }
 
         await sendText(from, lines.join('\n'));
@@ -95,12 +97,24 @@ async function handleInfo({ args }, from) {
     } catch (err) {
         logger.error('info:', err.message);
 
-        let msg = `[!] error: ${err.message}`;
-        if (err.message.includes('Private video')) msg = '[!] video privado';
-        if (err.message.includes('not available')) msg = '[!] video no disponible';
+        let msg = 'No pude consultar ese video. Revisa que el enlace abra y prueba de nuevo.';
+        if (err.message.includes('Private video')) msg = 'Ese video es privado. Pásame un enlace público.';
+        if (err.message.includes('not available')) msg = 'Ese video ya no está disponible. Prueba con otro enlace.';
 
         await sendText(from, msg);
     }
 }
 
-module.exports = { handleInfo };
+/** Estado local del proceso; no consulta APIs ni pretende comprobarlas. */
+async function handleBotStatus(parsed = {}, from) {
+    if (!from) return;
+    const uptimeSeconds = Math.floor(process.uptime());
+    const queueStats = require('../core/queue').stats;
+    const active = Object.values(queueStats).reduce((total, tier) => total + tier.running, 0);
+    const pending = Object.values(queueStats).reduce((total, tier) => total + tier.pending, 0);
+    const message = `Aquí ando 🐾\nLlevo activo ${uptimeSeconds === 0 ? '0s' : formatDuration(uptimeSeconds)}.\nTrabajos: ${active} en curso y ${pending} en espera.`;
+    await sendText(from, message);
+    return { success: true, estado: 'activo', uptime_segundos: uptimeSeconds, trabajos_activos: active, trabajos_en_espera: pending, enviado_al_chat: true };
+}
+
+module.exports = { handleInfo, handleBotStatus };
