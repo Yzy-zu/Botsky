@@ -1,0 +1,35 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { FakeClock, SystemClock } = require('../../../src/v2/platform/clock');
+test('FakeClock executes chronological timers, cancellation and asynchronous continuations', async () => {
+    const clock = new FakeClock(100);
+    const values = [];
+    clock.setTimeout(() => { values.push(2); clock.setTimeout(() => values.push(3), 1); }, 20);
+    clock.setTimeout(() => values.push(1), 10);
+    clock.clearTimeout(clock.setTimeout(() => values.push(99), 5));
+    await clock.advance(21);
+    assert.deepEqual(values, [1, 2, 3]);
+    assert.equal(clock.now(), 121);
+    assert.equal(clock.pendingTimers, 0);
+    assert.throws(() => clock.setTimeout(() => {}, -1));
+    await assert.rejects(clock.advance(-1));
+    clock.setTimeout(() => {}, 1);
+    clock.dispose();
+    assert.equal(clock.pendingTimers, 0);
+});
+test('SystemClock lifecycle has explicit disposable timer handles', t => {
+    const timers = [];
+    t.mock.method(global, 'setTimeout', callback => { const handle = { callback, unref() {} }; timers.push(handle); return handle; });
+    t.mock.method(global, 'clearTimeout', () => {});
+    const clock = new SystemClock();
+    assert.ok(clock.now() > 0);
+    const id = clock.setTimeout(() => assert.fail('Cancelled timer fired'), 100000);
+    clock.clearTimeout(id);
+    clock.setTimeout(() => assert.fail('Disposed timer fired'), 100000);
+    clock.dispose();
+    assert.equal(Object.keys(clock.timers).length, 0);
+    let fired = false; clock.setTimeout(() => { fired = true; }, 1);
+    timers.at(-1).callback(); assert.equal(fired, true);
+    assert.equal(Object.keys(clock.timers).length, 0);
+});

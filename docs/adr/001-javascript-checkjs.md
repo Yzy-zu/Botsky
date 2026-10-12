@@ -1,6 +1,6 @@
 # ADR-001 — JavaScript, JSDoc y comprobación estática
 
-Fecha: 2026-10-12. Estado: aceptado por el plano (§3), pendiente de implementación en Fase 1.
+Fecha: 2026-10-12. Estado: implementado en Fase 1; Gate1 PASS (2026-10-12).
 
 ## Contexto
 
@@ -20,3 +20,8 @@ CommonJS evita mezclar dos sistemas de módulos mientras conviven v1/v2. Los tip
 No se cambia `package.json` en este ADR. La selección de dependencias de tooling pequeñas corresponde al maestro (§15); una dependencia pesada o un cambio de capas requiere ADR y aprobación del cliente.
 
 Evidencia: `package.json`; `src/core/server.js`; `plan.md` §§3, 12, 15.
+
+Implementación: CommonJS/JSDoc/checkJs estricto ES2022; tsconfig.v2.json,
+npm run verify y CI scoped v2. engines>=20.19 por compatibilidad del tooling;
+host20.20.2. Las fuentes legacy quedan fuera de typecheck. Ver
+[phase1-evidence](../refactor/phase1-evidence.md) para gate y límites.

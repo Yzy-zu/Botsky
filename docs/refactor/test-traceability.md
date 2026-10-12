@@ -1308,8 +1308,8 @@ Destino de tests propuesto: `tests/scenario/legacy/utils.test.js`. Cada ID repre
 |---|---:|---|---|---|---|
 | TR-0736 | 13 | Utils: cleanup elimina archivos y carpetas sin crashear | platform | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
 | TR-0737 | 25 | Utils: getSessionKey genera claves consistentes | platform | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0738 | 37 | Utils: crypto encripta y desencripta con random salt | platform | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0739 | 49 | Utils: crypto soporta formato legado con salt fijo | platform | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
+| TR-0738 | 37 | Utils: crypto encripta y desencripta con random salt | platform/crypto | No aplica directamente; regresión legacy. | ported: tests/unit/v2/crypto.test.js; formato y lectura legacy comprobados. |
+| TR-0739 | 49 | Utils: crypto soporta formato legado con salt fijo | platform/crypto | No aplica directamente; regresión legacy. | ported: tests/unit/v2/crypto.test.js; formato y lectura legacy comprobados. |
 | TR-0740 | 66 | Utils & Descargar: exportan getDownloadSessionKey correctamente | features/media-download | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
 
 ## test/voiceUx.test.js

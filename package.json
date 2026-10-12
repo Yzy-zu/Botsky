@@ -6,7 +6,15 @@
     "scripts": {
         "start": "node src/core/server.js",
         "dev": "nodemon src/core/server.js",
-        "test": "node --test test/*.test.js"
+        "test": "node --test test/*.test.js",
+        "typecheck": "tsc --noEmit -p tsconfig.v2.json",
+        "lint": "eslint src/v2 scripts/v2 tests/unit/v2 tests/unit/tooling",
+        "architecture": "node scripts/v2/check-architecture.cjs",
+        "env:generate": "node scripts/v2/env-example.cjs --write",
+        "env:check": "node scripts/v2/env-example.cjs",
+        "test:v2": "node --test tests/unit/v2/*.test.js tests/unit/tooling/*.test.js",
+        "coverage:v2": "node scripts/v2/check-coverage.cjs",
+        "verify": "npm run typecheck && npm run lint && npm run architecture && npm run env:check && npm run coverage:v2"
     },
     "dependencies": {
         "axios": "^1.7.2",
@@ -19,9 +27,12 @@
         "sqlite3": "^6.0.1"
     },
     "devDependencies": {
-        "nodemon": "^3.1.4"
+        "@types/node": "20.19.43",
+        "eslint": "10.12.0",
+        "nodemon": "^3.1.4",
+        "typescript": "5.9.3"
     },
     "engines": {
-        "node": ">=18.0.0"
+        "node": ">=20.19.0"
     }
 }

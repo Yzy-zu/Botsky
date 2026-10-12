@@ -21,8 +21,8 @@ Actualizado: 2026-10-12 UTC. Maestro: Codex. Plano: `plan.md`.
 | Fase | Estado | Gate / evidencia |
 | --- | --- | --- |
 | 0 Baseline y seguridad | Cerrada con excepción autorizada F0-E001 | Gate0 PASS; 21 fixtures reales / 14 categorías; poll diferido por cliente; baseline y trazabilidad completos |
-| 1 Cimientos | En curso | Gate0 PASS; WO013 config, WO014 plataforma, WO015 observabilidad/domain, WO016 tooling |
-| 2 Adaptadores | No iniciada | Gate 1 pendiente |
+| 1 Cimientos | Cerrada | Gate1 PASS: verify exit0; 42 tests; 100% líneas config/TTL/queue/scheduler; 90 env documentadas |
+| 2 Adaptadores | Lista para iniciar | Gate1 PASS; Evolution/store/AI con contratos y fakes |
 | 3 Pipeline y sombra | No iniciada | Gate 2 pendiente; 24 h reales de sombra requeridas |
 | 4 Migración A–D | No iniciada | Gate 3 pendiente |
 | 5 IA y duplicados | No iniciada | Gate 4 pendiente |
@@ -59,11 +59,12 @@ Actualizado: 2026-10-12 UTC. Maestro: Codex. Plano: `plan.md`.
 ## Próximo paso concreto
 
 Entregables WO001–007 revisados e integrados; se conservan en commit local.
-Completar capturas reales y su manifest, documentar evidencia de telemetría activa,
-desactivar preload temporal y ejecutar verify-phase0. No avanzar Fase1 hasta
-Gate0 PASS. La telemetría queda activa para observar uso, sin decidir DROP aún.
+Gate0 y Gate1 PASS; F0-E001 difiere encuesta hasta antes de polls.
+Siguiente fase: WOs separadas Evolution, store/migraciones y AI, con contratos
+y fakes; inventariar primero firmas/esquema y definir backup consistente.
+No comenzar sombra/canario antes de Gates2/3. Telemetría v1 continúa.
 
-## Último checkpoint operacional
+## Checkpoint operacional histórico previo a captura
 
 - PM2 `wasa` confirmado `online` por consulta de solo lectura el 2026-10-12. No reinicios ni cambios de configuración operacional.
 - Baseline final corregido incluye `scripts/`; tests de tablas nativas verdes. Primer snapshot (787 tests / 599 pass / 188 fail) conservado temporalmente solo como historia.
@@ -105,3 +106,16 @@ Gate0 PASS. La telemetría queda activa para observar uso, sin decidir DROP aún
 - Fase0 entregables en commit6c2440d; cierre/excepción en siguiente commit. No hay cambios de negocio ni migración de DB.
 - Fase1 autorizada: WO013 contracts_review config/env; WO014 fixtures clock/TtlStore/queue/scheduler; WO015 traceability logger/metrics/crypto/maintenance/domain; WO016 maestro tooling, arquitectura, integración y gate. Trabajo SOLO worktree v2; no activar v2 en producción durante Fase1.
 - Gate1 requiere verify verde, >=90% líneas config/TtlStore/queue/scheduler y .env.example generado con cobertura de env usadas. No avanzar Fase2 sin Gate1 completo.
+
+## Cierre Fase1 — 2026-10-12 UTC
+
+- Gate1 PASS después de npm ci --ignore-scripts limpio: npm run verify exit0, 42 tests pass/0 fail/0 skip. Typecheck strict/checkJs ES2022, ESLint, auditor AST y .env.example generado pasan.
+- WO013 integrada: 90 env, aliases/patrón Gemini/infra explícitos, validación sin filtrar valores privados. Defaults v2 no cambian producción.
+- WO014 integrada: Clock/FakeClock, TtlStore stats por namespace, cola light/heavy con backpressure y timeout conservando slots, scheduler explícito y sin solapamiento.
+- WO015 integrada: logger JSON redacción/vocabularios cerrados, métricas bounded, crypto compatible3/4 segmentos, mantenimiento por puertos con ejecución compartida manual/ticker y dominio/error feedback natural.
+- WO016 integrada: tsc/lint/auditor/CI/env-generador/cobertura. Node engine>=20.19 (host20.20.2); devdeps fijadas. Dependencias productivas no cambiaron en versión/integridad; audit10 riesgos legacy conservados.
+- Cobertura crítica por archivo: config/schema100%, config/index100%, TTL100%, queue100%, scheduler100% líneas. Medidas de ramas en phase1-evidence.md.
+- Trazabilidad: TR0738/0739 portados y comprobados en tests/unit/v2/crypto.test.js; resto conservado pendiente, no marcar por analogía.
+- Última regresión legacy sigue795/608/187, cero nuevos; no fue repetida en Fase1 porque legacy/dependencias runtime no cambiaron. verify es gate v2 y no finge suite legacy verde.
+- Producción continúa v1: contador activo, captura apagada, sin nuevos despliegues ni DB/config productivas modificadas en Fase1. CI preparada sin push/ejecución remota.
+- Siguiente: Fase2 Evolution/store/AI; plan §12. F0-E001 vigente. No iniciada Fase2 ni activada v2 en producción.
