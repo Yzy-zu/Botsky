@@ -31,6 +31,7 @@ function harness({ pdfSession = false } = {}) {
         '../commands/buscar': { hasActiveSearchSession: () => false, getSessionKey: () => '' },
         '../commands/mensaje': { hasPendingContactChoice: () => false },
         '../commands/ruleta': { hasActiveRouletteLobby: () => false },
+        '../commands/cooperacha': { hasActiveCooperacha: () => false },
         '../commands/blackjack': { hasActiveBlackjackGame: () => false, hasActiveBlackjackTableLobby: () => false, hasActiveBlackjackTablePlaying: () => false },
         '../services/scheduler': { registerTask() {} },
         '../services/attachmentContext': context,

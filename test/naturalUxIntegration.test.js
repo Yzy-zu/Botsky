@@ -87,6 +87,7 @@ function normalizerHarness({ drive = false, contact = false } = {}) {
         '../commands/buscar': { hasActiveSearchSession: () => drive, getSessionKey: from => from },
         '../commands/mensaje': { hasPendingContactChoice: () => contact },
         '../commands/ruleta': { hasActiveRouletteLobby: () => false },
+        '../commands/cooperacha': { hasActiveCooperacha: () => false },
         '../commands/blackjack': { hasActiveBlackjackGame: () => false, hasActiveBlackjackTableLobby: () => false, hasActiveBlackjackTablePlaying: () => false },
         '../services/scheduler': { registerTask() {} },
         '../services/attachmentContext': attachmentContext,

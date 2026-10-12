@@ -75,6 +75,7 @@ function harness({ bytes = PDF, router = { action: 'chat', args: {}, content_int
         '../commands/buscar': { hasActiveSearchSession: () => false, getSessionKey: from => from },
         '../commands/mensaje': { hasPendingContactChoice: () => false },
         '../commands/ruleta': { hasActiveRouletteLobby: () => false },
+        '../commands/cooperacha': { hasActiveCooperacha: () => false },
         '../commands/blackjack': { hasActiveBlackjackGame: () => false, hasActiveBlackjackTableLobby: () => false, hasActiveBlackjackTablePlaying: () => false }
     });
     const reader = createContentReader({ downloadMedia: evolution.downloadMedia, execFile: async () => ({ stdout: 'Pages: 3\nEncrypted: no\n' }) });

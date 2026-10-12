@@ -11,5 +11,5 @@
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true
     },
-    "include": ["src/v2/**/*.js"]
+    "include": ["src/v2/**/*.js", "tests/contract/ports-typecheck.js"]
 }

@@ -8,13 +8,14 @@
         "dev": "nodemon src/core/server.js",
         "test": "node --test test/*.test.js",
         "typecheck": "tsc --noEmit -p tsconfig.v2.json",
-        "lint": "eslint src/v2 scripts/v2 tests/unit/v2 tests/unit/tooling",
+        "lint": "eslint src/v2 scripts/v2 tests/unit/v2 tests/unit/tooling tests/contract",
         "architecture": "node scripts/v2/check-architecture.cjs",
         "env:generate": "node scripts/v2/env-example.cjs --write",
         "env:check": "node scripts/v2/env-example.cjs",
-        "test:v2": "node --test tests/unit/v2/*.test.js tests/unit/tooling/*.test.js",
+        "test:v2": "node --test tests/unit/v2/*.test.js tests/unit/tooling/*.test.js tests/contract/*.test.js",
         "coverage:v2": "node scripts/v2/check-coverage.cjs",
-        "verify": "npm run typecheck && npm run lint && npm run architecture && npm run env:check && npm run coverage:v2"
+        "verify": "npm run typecheck && npm run lint && npm run architecture && npm run env:check && npm run coverage:v2",
+        "test:contract": "node --test tests/contract/*.test.js"
     },
     "dependencies": {
         "axios": "^1.7.2",

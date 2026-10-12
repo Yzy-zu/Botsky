@@ -3,7 +3,7 @@ const noGlobalState = require('./scripts/v2/no-global-state.cjs');
 module.exports = [
     { ignores: ['node_modules/**'] },
     {
-        files: ['src/v2/**/*.js', 'scripts/v2/**/*.cjs', 'tests/unit/v2/**/*.js', 'tests/unit/tooling/**/*.js'],
+        files: ['src/v2/**/*.js', 'scripts/v2/**/*.cjs', 'tests/unit/v2/**/*.js', 'tests/unit/tooling/**/*.js', 'tests/contract/**/*.js'],
         languageOptions: {
             ecmaVersion: 2022, sourceType: 'commonjs',
             globals: Object.fromEntries(['process', 'Buffer', 'console', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'URL', 'AbortController', 'structuredClone', '__dirname', '__filename', 'global', 'globalThis'].map(name => [name, 'readonly']))

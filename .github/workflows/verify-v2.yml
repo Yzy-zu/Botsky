@@ -12,4 +12,5 @@ jobs:
           node-version: 20.20.2
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm rebuild sqlite3
       - run: npm run verify

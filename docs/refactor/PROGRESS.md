@@ -22,7 +22,7 @@ Actualizado: 2026-10-12 UTC. Maestro: Codex. Plano: `plan.md`.
 | --- | --- | --- |
 | 0 Baseline y seguridad | Cerrada con excepción autorizada F0-E001 | Gate0 PASS; 21 fixtures reales / 14 categorías; poll diferido por cliente; baseline y trazabilidad completos |
 | 1 Cimientos | Cerrada | Gate1 PASS: verify exit0; 42 tests; 100% líneas config/TTL/queue/scheduler; 90 env documentadas |
-| 2 Adaptadores | Lista para iniciar | Gate1 PASS; Evolution/store/AI con contratos y fakes |
+| 2 Adaptadores | Pausada por cliente | Implementación y contratos preparados; Gate2 abierto, 104 pass/1 fail en último verify y deuda legacy pendiente |
 | 3 Pipeline y sombra | No iniciada | Gate 2 pendiente; 24 h reales de sombra requeridas |
 | 4 Migración A–D | No iniciada | Gate 3 pendiente |
 | 5 IA y duplicados | No iniciada | Gate 4 pendiente |
@@ -125,3 +125,29 @@ No comenzar sombra/canario antes de Gates2/3. Telemetría v1 continúa.
 - Instrucción persistente del cliente: subir los commits a GitHub; hacer push de los cierres de fase en la rama refactor/v2. No implica merge automático a main ni desplegar v2 antes de sus gates.
 - Push atómico completado a origin (Yzy-zu/Botsky): rama refactor/v2 hasta f35dc40 y tag v1-legacy sobre eb993ef. Upstream origin/refactor/v2 configurado.
 - Fases0/1, fixtures anónimos, PROGRESS y tooling publicados. Este checkpoint se publica en commit posterior; main no se modificó en remoto.
+
+## Inicio Fase2 — 2026-10-12 UTC
+
+- Cliente: “ok, prosigue a la fase 2.” Autorización continúa; push de entregas en refactor/v2. No se activa v2 ni se migra producción en esta fase.
+- WO017 contracts_review: SQLite promise/transacciones, migración000 esquema completo, migraciones/backup/restore y reposusers/conversation.
+- WO018 fixtures: Evolutionclient/outbound/media/groups/echoGuard/nativeTables, compat de firmas, fakeHTTP.
+- WO019 traceability: IA providers/keyPool/circuitBreaker/config/failures/styles, fakeHTTP y FakeClock; sin llamadas pagadas.
+- WO020 maestro: puertos core únicos, tooling contracttests/CI, revisión de APIs/schema, regresiónlegacy y Gate2. Driver SQLite se recompila SOLO worktree para contratos reales temporales.
+- Gate2 literal exige contracttests3adapters, cero imports cruzados y suitelegacy verde. Baseline existente187fail no equivale a verde: se revisará la deuda/regresión y no se marcará cierre sin evidencia requerida.
+
+## PAUSA solicitada por cliente — 2026-10-12 UTC
+
+- Cliente agota tokens: pidió registrar avances y dejar pendientes hasta reinicio de su cuota. No avanzar Fase3 ni declarar Gate2 completo.
+- WO017 store: 6 contratos reales verdes, SQLite3.52.0 en host, migración000 completa24tablas13indexes4ALTER, WALsnapshot/restore comprobados; driver recompilado solo worktree.
+- WO018 Evolution:35 contratos verdes; todas18firmas+puertoMessenger, payload/media/echo/nativeTables y formatter. Nuevo CLI parcheo v2 preparado y probado en fixture temporal. Ningún parche/despliegue productivo ejecutado.
+- WO019 AI:20 contratos verdes, Gemini/Groq/keyPool/breaker/failures/config/style; nestedrequestvalidation/deadlinecompartido/slotcleanup. Orquestación features/chat/router/lore/proactivo inventariada pendiente F3–5, no DROP.
+- WO020 maestro: coreports únicos y structural typecheck, contratos en verify/CI, driver nativo en CI, CLI v2; falta cierre/audit Gate2. No existe aún check-phase2.cjs: se retiró el script package prematuro verify:phase2 que lo referenciaba.
+- WO021 auditoría debtlegacy lista: E1/E2/E4 requieren env/harness externos; registra bugs/expectativas obsoletas sin cambiarlos.
+- WO022:3 fakes explícitos añadidos, 28H1 arreglados sin alterar aserciones ni src; focalizados39/39 verdes.
+- WO023: contrato v1API real/tempDB pasa individualmente, PERO falla bajo verify con cobertura conjunta; investigar subprocess antes de cerrar gate. No ocultarlo ni inferir regresión de negocio.
+- Último npm run verify: typecheck/lint/architecture42módulos0violations/env90PASS; runner104pass/1fail, exit noverde. Log /tmp/botsky-phase2-verify.txt. Último fallo: storeCompatibility.test.js childexecFile en modo conjunto/cobertura.
+- Regresión completa antes de arreglar H1:795tests/608pass/187fail, 108395.438258ms, mismo baseline rojo. Segunda corrida tras H1 fue detenida por pausa solicitada; /tmp/botsky-v2-phase2-legacy.tap está INCOMPLETO y NO acredita resultadosfinales. Reejecutar bash scripts/refactor/legacy-regression.sh (compila dentrocontainer y no toca bindinghost), no sustituir baseline original.
+- Deuda legacy y decisión de excepción quedan pendientes para retomar; no declarar suiteverde ni Gate2PASS. Usuario pidió dejarlos pendientes más tarde.
+- Formatting TSprinter se abortó ante comparación diferente ANTES de escribir archivo alguno; sources intactos. No hay formateo pendiente necesario para ejecutar.
+- Producción permanece v1, contador activo/captura apagada, sin cambios/DBmigradas durante Fase2. Guardar checkpoint commit/push en refactor/v2, sin merge main.
+- RETOMAR: leer PROGRESS/WO017–023, gitstatus/log; resolver fallo conjunto storeCompatibility; npm run verify; completar regresiónlegacy, auditar debt/decisiónGate2; actualizar trazabilidad/evidencia y cerrarfase solo con condiciones satisfechas.

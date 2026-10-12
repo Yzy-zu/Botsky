@@ -13,7 +13,7 @@ function coverageProblems(files) {
     return problems;
 }
 function main() {
-    const tests = ['tests/unit/v2', 'tests/unit/tooling'].flatMap(directory => javascriptFiles(path.join(root, directory)))
+    const tests = ['tests/unit/v2', 'tests/unit/tooling', 'tests/contract'].flatMap(directory => javascriptFiles(path.join(root, directory)))
         .filter(file => file.endsWith('.test.js'));
     if (!tests.length) throw new Error('No v2 tests found');
     const environment = { ...process.env };
