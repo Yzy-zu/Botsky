@@ -127,7 +127,7 @@ async function downloadMedia(messageData, { maxBytes = maxDownloadBytes } = {}) 
 
     let extension = extMap[mediaType] ?? 'bin';
     let originalFileName = null;
-    
+
     // Mejorar la detección de extensión para documentos
     if (extension === 'bin' || mediaType.includes('document')) {
         const docMsg = messageData?.message?.documentMessage || messageData?.message?.documentWithCaptionMessage?.message?.documentMessage;

@@ -245,3 +245,16 @@ test('users and conversation repos preserve normalization, atomic creation and b
     assert.equal((await users.get(first.jid)).xp, 22);
     await assert.rejects(users.addXp(first.jid, NaN), /Invalid/);
 });
+
+test('migration runner rejects retroactive history before backup or schema mutation', async t => {
+    const fixture = await temporary(t);
+    const db = fixture.db(); await db.open();
+    const newer = { version: '002', checksum: '2'.repeat(64), async up(tx) { await tx.exec('CREATE TABLE newest (value TEXT)'); } };
+    await migrate(db, { backupPath: fixture.backup('first.db'), migrations: [newer] });
+    const older = { version: '001', checksum: '1'.repeat(64), async up(tx) { await tx.exec('CREATE TABLE older (value TEXT)'); } };
+    const destination = fixture.backup('must-not-exist.db');
+    await assert.rejects(migrate(db, { backupPath: destination, migrations: [older, newer] }), /older migration/);
+    await assert.rejects(fs.access(destination), { code: 'ENOENT' });
+    assert.equal(await db.get("SELECT name FROM sqlite_master WHERE name='older'"), undefined);
+    assert.deepEqual(await db.all('SELECT version FROM schema_migrations'), [{ version: '002' }]);
+});

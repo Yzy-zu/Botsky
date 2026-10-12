@@ -20,6 +20,10 @@ async function migrate(db, { backupPath, migrations, clock = { now: Date.now } }
     }
     const pending = list.filter(migration => !existing.some(applied => applied.version === migration.version))
         .sort((a, b) => a.version.localeCompare(b.version));
+    const latest = existing.at(-1)?.version;
+    if (latest && pending.some(migration => migration.version.localeCompare(latest) < 0)) {
+        throw new Error('Cannot apply an older migration after newer history');
+    }
     if (!pending.length) return { applied: [], backup: null };
     if (!backupPath) throw new Error('Backup path required before migrations');
     const backup = await db.backupTo(backupPath);

@@ -17,6 +17,11 @@ test('Actual v1 DB API reads v2 migrated users, history and reminders; v2 reads 
     await assert.rejects(fs.access(path.join(root, '.env')), { code: 'ENOENT' }, 'Checkout must not contain production env');
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'botsky-legacy-compat-'));
     await fs.chmod(directory, 0o700);
+    // Node's coverage runner injects NODE_V8_COVERAGE into subprocess env.
+    // Give instrumentation its own known temporary destination, never inherit
+    // an arbitrary directory or weaken the application's exact env allowlist.
+    const coverageDirectory = process.env.NODE_V8_COVERAGE === undefined ? undefined : path.join(directory, 'coverage');
+    if (coverageDirectory) await fs.mkdir(coverageDirectory, { mode: 0o700 });
     const filename = path.join(directory, 'bot.db');
     const db = createDb({ filename });
     t.after(async () => { await db.close(); await fs.rm(directory, { recursive: true, force: true }); });
@@ -43,7 +48,11 @@ test('Actual v1 DB API reads v2 migrated users, history and reminders; v2 reads 
         const assert = require('node:assert/strict');
         const fs = require('node:fs');
         const path = require('node:path');
-        assert.deepEqual(Object.keys(process.env).sort(), ['DATA_DIR','NODE_ENV','TZ']);
+        assert.deepEqual(Object.keys(process.env).sort(), ${JSON.stringify(coverageDirectory ? ['DATA_DIR','NODE_ENV','NODE_V8_COVERAGE','TZ'] : ['DATA_DIR','NODE_ENV','TZ'])});
+        ${coverageDirectory ? `assert.equal(process.env.NODE_V8_COVERAGE, ${JSON.stringify(coverageDirectory)});
+        assert.equal(path.dirname(process.env.NODE_V8_COVERAGE), process.env.DATA_DIR);
+        assert.equal(fs.lstatSync(process.env.NODE_V8_COVERAGE).isDirectory(), true);
+        assert.equal(fs.lstatSync(process.env.NODE_V8_COVERAGE).isSymbolicLink(), false);` : ''}
         assert.equal(process.cwd(), process.env.DATA_DIR);
         assert.equal(fs.existsSync(path.join(process.cwd(), '.env')), false);
         assert.equal(fs.existsSync(${JSON.stringify(path.join(root, '.env'))}), false);
@@ -84,7 +93,8 @@ test('Actual v1 DB API reads v2 migrated users, history and reminders; v2 reads 
     `;
     const subprocess = await execute(process.execPath, ['-e', child], {
         cwd: directory,
-        env: { DATA_DIR: directory, NODE_ENV: 'test', TZ: 'UTC' },
+        env: { DATA_DIR: directory, NODE_ENV: 'test', TZ: 'UTC',
+            ...(coverageDirectory ? { NODE_V8_COVERAGE: coverageDirectory } : {}) },
         timeout: 15000,
         maxBuffer: 64 * 1024
     });

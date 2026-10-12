@@ -22,7 +22,7 @@ Actualizado: 2026-10-12 UTC. Maestro: Codex. Plano: `plan.md`.
 | --- | --- | --- |
 | 0 Baseline y seguridad | Cerrada con excepción autorizada F0-E001 | Gate0 PASS; 21 fixtures reales / 14 categorías; poll diferido por cliente; baseline y trazabilidad completos |
 | 1 Cimientos | Cerrada | Gate1 PASS: verify exit0; 42 tests; 100% líneas config/TTL/queue/scheduler; 90 env documentadas |
-| 2 Adaptadores | Pausada por cliente | Implementación y contratos preparados; Gate2 abierto, 104 pass/1 fail en último verify y deuda legacy pendiente |
+| 2 Adaptadores | Reanudada | Implementación y contratos preparados; Gate2 abierto, 104 pass/1 fail en último verify y deuda legacy pendiente |
 | 3 Pipeline y sombra | No iniciada | Gate 2 pendiente; 24 h reales de sombra requeridas |
 | 4 Migración A–D | No iniciada | Gate 3 pendiente |
 | 5 IA y duplicados | No iniciada | Gate 4 pendiente |
@@ -151,3 +151,16 @@ No comenzar sombra/canario antes de Gates2/3. Telemetría v1 continúa.
 - Formatting TSprinter se abortó ante comparación diferente ANTES de escribir archivo alguno; sources intactos. No hay formateo pendiente necesario para ejecutar.
 - Producción permanece v1, contador activo/captura apagada, sin cambios/DBmigradas durante Fase2. Guardar checkpoint commit/push en refactor/v2, sin merge main.
 - RETOMAR: leer PROGRESS/WO017–023, gitstatus/log; resolver fallo conjunto storeCompatibility; npm run verify; completar regresiónlegacy, auditar debt/decisiónGate2; actualizar trazabilidad/evidencia y cerrarfase solo con condiciones satisfechas.
+
+## Reanudación Fase2 — 2026-10-12 UTC
+
+- Cliente confirma reinicio de tokens y solicita proseguir; recuerda uso de subagentes. Mantener gate2 abierto hasta evidencia/excepción válida; la pausa previa NO aprobó la excepción de deuda legacy.
+- WO023 agentefixtures investiga envsubprocess bajo cobertura; WO024 contracts_review prepara entorno reproducible legacy segúnWO021; WO025 traceability audita AIrequests/schema/fallback. Maestro revisa Evolution/tooling, integra y publica commits.
+- Último checkpoint remoto a8db566. Limpieza whitespace Evolutionmedia y formatter sin cambio lógico; SQL000 conserva bytes originales por checksum de migración y evidencia esquema.
+
+## Checkpoint reanudado — compatibilidad corregida
+
+- WO023: fallo causado por NODE_V8_COVERAGE inyectado por Node; ruta temporal explícita/validada para instrumentation, envbusiness sigueallowlist3keys sincredentials. Contratos store con cobertura7/7 y verifyglobal105/0 pasan.
+- Maestro: runner migraciones rechaza aplicar versionesolder después de historynewer antesdebackup/mutación; regressiontestreal verde (storeactual8/8 incluyendo nuevo).
+- Regresiónlegacy comparable reactivada en containerread-onlysinred; recompila sólocopiatemporal, no modifica bindinghost. WO024 trabaja runner mejoradoaislado separado para resolver causasentorno, sin false-green.
+- WO025 AI encontró cinco defects de validación/salida/deadline; tests inicialmente0/5, correccionesencurso. WO026 Evolutionrevisión contratosen curso. No ejecutarverifyglobal hasta sourcesestables.

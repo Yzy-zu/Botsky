@@ -72,4 +72,3 @@ test('small chunks do not create empty code messages and preserve nested formatt
     const nested = split(`*_texto ${'contenido '.repeat(20)}_*`, { maxLength: 64 });
     assert.ok(nested.every(chunk => chunk.startsWith('*_') && chunk.endsWith('_*') && chunk.length <= 64));
 });
-
