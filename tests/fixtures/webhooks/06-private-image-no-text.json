@@ -1,0 +1,22 @@
+{
+    "event": "messages.upsert",
+    "instance": "fixture-instance",
+    "data": {
+        "key": {
+            "remoteJid": "19995550101@s.whatsapp.net",
+            "fromMe": false,
+            "id": "SYNTH-06-PRIVATE-IMAGE-NO-TEXT"
+        },
+        "pushName": "Persona Sintética A",
+        "message": {
+            "imageMessage": {
+                "url": "https://media.example.invalid/synthetic-image.enc",
+                "mimetype": "image/jpeg",
+                "fileLength": 12000,
+                "width": 640,
+                "height": 480
+            }
+        },
+        "messageTimestamp": 1791763200
+    }
+}

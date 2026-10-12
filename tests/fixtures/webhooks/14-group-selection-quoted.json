@@ -1,0 +1,27 @@
+{
+    "event": "messages.upsert",
+    "instance": "fixture-instance",
+    "data": {
+        "key": {
+            "remoteJid": "120363000000000001@g.us",
+            "fromMe": false,
+            "id": "SYNTH-14-GROUP-SELECTION-QUOTED",
+            "participant": "19995550101@s.whatsapp.net"
+        },
+        "pushName": "Persona Sintética A",
+        "message": {
+            "extendedTextMessage": {
+                "text": "2",
+                "contextInfo": {
+                    "stanzaId": "SYNTH-BOT-RESULTS",
+                    "participant": "19995550100@s.whatsapp.net",
+                    "remoteJid": "120363000000000001@g.us",
+                    "quotedMessage": {
+                        "conversation": "Aquí tienes los resultados de la búsqueda."
+                    }
+                }
+            }
+        },
+        "messageTimestamp": 1791763200
+    }
+}

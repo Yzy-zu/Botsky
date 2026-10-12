@@ -1,0 +1,22 @@
+{
+    "event": "messages.upsert",
+    "instance": "fixture-instance",
+    "data": {
+        "key": {
+            "remoteJid": "19995550101@s.whatsapp.net",
+            "fromMe": false,
+            "id": "SYNTH-08-PRIVATE-AUDIO"
+        },
+        "pushName": "Persona Sintética A",
+        "message": {
+            "audioMessage": {
+                "url": "https://media.example.invalid/synthetic-audio.enc",
+                "mimetype": "audio/ogg; codecs=opus",
+                "seconds": 9,
+                "ptt": true,
+                "fileLength": 4096
+            }
+        },
+        "messageTimestamp": 1791763200
+    }
+}

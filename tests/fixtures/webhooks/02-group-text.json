@@ -1,0 +1,17 @@
+{
+    "event": "messages.upsert",
+    "instance": "fixture-instance",
+    "data": {
+        "key": {
+            "remoteJid": "120363000000000001@g.us",
+            "fromMe": false,
+            "id": "SYNTH-02-GROUP-TEXT",
+            "participant": "19995550101@s.whatsapp.net"
+        },
+        "pushName": "Persona Sintética A",
+        "message": {
+            "conversation": "Mañana estudiamos a las seis."
+        },
+        "messageTimestamp": 1791763200
+    }
+}

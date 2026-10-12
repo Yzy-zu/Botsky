@@ -1,0 +1,26 @@
+{
+    "event": "messages.upsert",
+    "instance": "fixture-instance",
+    "data": {
+        "key": {
+            "remoteJid": "120363000000000001@g.us",
+            "fromMe": false,
+            "id": "SYNTH-10-GROUP-REACTION-THUMBSUP",
+            "participant": "19995550101@s.whatsapp.net"
+        },
+        "pushName": "Persona Sintética A",
+        "message": {
+            "reactionMessage": {
+                "key": {
+                    "remoteJid": "120363000000000001@g.us",
+                    "fromMe": false,
+                    "id": "SYNTH-07-GROUP-IMAGE-NO-TEXT",
+                    "participant": "19995550101@s.whatsapp.net"
+                },
+                "text": "👍",
+                "senderTimestampMs": 1791763200000
+            }
+        },
+        "messageTimestamp": 1791763200
+    }
+}

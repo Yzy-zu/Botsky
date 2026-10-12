@@ -1,0 +1,194 @@
+{
+    "version": 1,
+    "provenance": "synthetic; not captured from production",
+    "botJid": "19995550100@s.whatsapp.net",
+    "userJid": "19995550101@s.whatsapp.net",
+    "humanJid": "19995550102@s.whatsapp.net",
+    "groupJid": "120363000000000001@g.us",
+    "botOutboundIds": [
+        "SYNTH-BOT-RESULTS",
+        "SYNTH-BOT-POLL"
+    ],
+    "fixtures": [
+        {
+            "id": "01-private-text",
+            "file": "01-private-text.json",
+            "source": "synthetic",
+            "scenarios": [],
+            "expectedExtraction": {
+                "messageType": "conversation",
+                "text": "Hola, Botsky. ¿Qué puedes hacer?"
+            }
+        },
+        {
+            "id": "02-group-text",
+            "file": "02-group-text.json",
+            "source": "synthetic",
+            "scenarios": [
+                "S01"
+            ],
+            "expectedExtraction": {
+                "messageType": "conversation",
+                "text": "Mañana estudiamos a las seis."
+            }
+        },
+        {
+            "id": "03-group-mention-bot",
+            "file": "03-group-mention-bot.json",
+            "source": "synthetic",
+            "scenarios": [
+                "S03"
+            ],
+            "expectedExtraction": {
+                "messageType": "extendedTextMessage",
+                "text": "@19995550100 dime la hora"
+            }
+        },
+        {
+            "id": "04-group-quote-bot",
+            "file": "04-group-quote-bot.json",
+            "source": "synthetic",
+            "scenarios": [
+                "S04a"
+            ],
+            "expectedExtraction": {
+                "messageType": "extendedTextMessage",
+                "text": "Explícame la primera opción."
+            }
+        },
+        {
+            "id": "05-group-quote-human-same-text",
+            "file": "05-group-quote-human-same-text.json",
+            "source": "synthetic",
+            "scenarios": [
+                "S04b"
+            ],
+            "expectedExtraction": {
+                "messageType": "extendedTextMessage",
+                "text": "Explícame la primera opción."
+            }
+        },
+        {
+            "id": "06-private-image-no-text",
+            "file": "06-private-image-no-text.json",
+            "source": "synthetic",
+            "scenarios": [
+                "S08"
+            ],
+            "expectedExtraction": {
+                "messageType": "imageMessage",
+                "text": ""
+            }
+        },
+        {
+            "id": "07-group-image-no-text",
+            "file": "07-group-image-no-text.json",
+            "source": "synthetic",
+            "scenarios": [
+                "S09"
+            ],
+            "expectedExtraction": {
+                "messageType": "imageMessage",
+                "text": ""
+            }
+        },
+        {
+            "id": "08-private-audio",
+            "file": "08-private-audio.json",
+            "source": "synthetic",
+            "scenarios": [],
+            "expectedExtraction": {
+                "messageType": "audioMessage",
+                "text": ""
+            }
+        },
+        {
+            "id": "09-private-pdf",
+            "file": "09-private-pdf.json",
+            "source": "synthetic",
+            "scenarios": [],
+            "expectedExtraction": {
+                "messageType": "documentMessage",
+                "text": ""
+            }
+        },
+        {
+            "id": "10-group-reaction-thumbsup",
+            "file": "10-group-reaction-thumbsup.json",
+            "source": "synthetic",
+            "scenarios": [],
+            "expectedExtraction": {
+                "messageType": "reactionMessage",
+                "text": ""
+            }
+        },
+        {
+            "id": "11-group-poll-vote",
+            "file": "11-group-poll-vote.json",
+            "source": "synthetic",
+            "scenarios": [],
+            "expectedExtraction": {
+                "messageType": "pollUpdateMessage",
+                "text": ""
+            }
+        },
+        {
+            "id": "12-group-from-me-echo",
+            "file": "12-group-from-me-echo.json",
+            "source": "synthetic",
+            "scenarios": [
+                "S13"
+            ],
+            "expectedExtraction": {
+                "messageType": "conversation",
+                "text": "Aquí tienes los resultados de la búsqueda."
+            }
+        },
+        {
+            "id": "13-group-lid-participant-alt",
+            "file": "13-group-lid-participant-alt.json",
+            "source": "synthetic",
+            "scenarios": [],
+            "expectedExtraction": {
+                "messageType": "conversation",
+                "text": "/estado"
+            }
+        },
+        {
+            "id": "14-group-selection-quoted",
+            "file": "14-group-selection-quoted.json",
+            "source": "synthetic",
+            "scenarios": [
+                "S07b"
+            ],
+            "expectedExtraction": {
+                "messageType": "extendedTextMessage",
+                "text": "2"
+            }
+        },
+        {
+            "id": "15-group-selection-unquoted",
+            "file": "15-group-selection-unquoted.json",
+            "source": "synthetic",
+            "scenarios": [
+                "S07a"
+            ],
+            "expectedExtraction": {
+                "messageType": "conversation",
+                "text": "2"
+            }
+        },
+        {
+            "id": "16-group-image-quoted",
+            "file": "16-group-image-quoted.json",
+            "source": "synthetic",
+            "scenarios": [
+                "S09"
+            ],
+            "expectedExtraction": {
+                "messageType": "extendedTextMessage",
+                "text": "/sticker"
+            }
+        }
+    ]
+}

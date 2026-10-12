@@ -1,0 +1,30 @@
+{
+    "event": "messages.upsert",
+    "instance": "fixture-instance",
+    "data": {
+        "key": {
+            "remoteJid": "120363000000000001@g.us",
+            "fromMe": false,
+            "id": "SYNTH-11-GROUP-POLL-VOTE",
+            "participant": "19995550101@s.whatsapp.net"
+        },
+        "pushName": "Persona Sintética A",
+        "message": {
+            "pollUpdateMessage": {
+                "pollCreationMessageKey": {
+                    "remoteJid": "120363000000000001@g.us",
+                    "fromMe": true,
+                    "id": "SYNTH-BOT-POLL"
+                },
+                "vote": {
+                    "selectedOptions": [
+                        {
+                            "name": "📊 Estado y Recursos"
+                        }
+                    ]
+                }
+            }
+        },
+        "messageTimestamp": 1791763200
+    }
+}

@@ -1,0 +1,19 @@
+{
+    "event": "messages.upsert",
+    "instance": "fixture-instance",
+    "data": {
+        "key": {
+            "remoteJid": "120363000000000001@g.us",
+            "fromMe": false,
+            "id": "SYNTH-13-GROUP-LID-PARTICIPANT-ALT",
+            "participant": "990000000001:2@lid",
+            "participantAlt": "19995550101@s.whatsapp.net",
+            "addressingMode": "lid"
+        },
+        "pushName": "Persona Sintética A",
+        "message": {
+            "conversation": "/estado"
+        },
+        "messageTimestamp": 1791763200
+    }
+}

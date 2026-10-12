@@ -1,0 +1,16 @@
+{
+    "event": "messages.upsert",
+    "instance": "fixture-instance",
+    "data": {
+        "key": {
+            "remoteJid": "19995550101@s.whatsapp.net",
+            "fromMe": false,
+            "id": "SYNTH-01-PRIVATE-TEXT"
+        },
+        "pushName": "Persona Sintética A",
+        "message": {
+            "conversation": "Hola, Botsky. ¿Qué puedes hacer?"
+        },
+        "messageTimestamp": 1791763200
+    }
+}

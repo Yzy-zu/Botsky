@@ -1,0 +1,22 @@
+{
+    "event": "messages.upsert",
+    "instance": "fixture-instance",
+    "data": {
+        "key": {
+            "remoteJid": "19995550101@s.whatsapp.net",
+            "fromMe": false,
+            "id": "SYNTH-09-PRIVATE-PDF"
+        },
+        "pushName": "Persona Sintética A",
+        "message": {
+            "documentMessage": {
+                "url": "https://media.example.invalid/synthetic-document.enc",
+                "mimetype": "application/pdf",
+                "fileName": "ejercicio-sintetico.pdf",
+                "pageCount": 2,
+                "fileLength": 8192
+            }
+        },
+        "messageTimestamp": 1791763200
+    }
+}

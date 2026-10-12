@@ -1,0 +1,24 @@
+{
+    "event": "messages.upsert",
+    "instance": "fixture-instance",
+    "data": {
+        "key": {
+            "remoteJid": "120363000000000001@g.us",
+            "fromMe": false,
+            "id": "SYNTH-03-GROUP-MENTION-BOT",
+            "participant": "19995550101@s.whatsapp.net"
+        },
+        "pushName": "Persona Sintética A",
+        "message": {
+            "extendedTextMessage": {
+                "text": "@19995550100 dime la hora",
+                "contextInfo": {
+                    "mentionedJid": [
+                        "19995550100@s.whatsapp.net"
+                    ]
+                }
+            }
+        },
+        "messageTimestamp": 1791763200
+    }
+}
