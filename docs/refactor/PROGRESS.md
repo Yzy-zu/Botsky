@@ -119,3 +119,9 @@ No comenzar sombra/canario antes de Gates2/3. Telemetría v1 continúa.
 - Última regresión legacy sigue795/608/187, cero nuevos; no fue repetida en Fase1 porque legacy/dependencias runtime no cambiaron. verify es gate v2 y no finge suite legacy verde.
 - Producción continúa v1: contador activo, captura apagada, sin nuevos despliegues ni DB/config productivas modificadas en Fase1. CI preparada sin push/ejecución remota.
 - Siguiente: Fase2 Evolution/store/AI; plan §12. F0-E001 vigente. No iniciada Fase2 ni activada v2 en producción.
+
+## Publicación GitHub — 2026-10-12 UTC
+
+- Instrucción persistente del cliente: subir los commits a GitHub; hacer push de los cierres de fase en la rama refactor/v2. No implica merge automático a main ni desplegar v2 antes de sus gates.
+- Push atómico completado a origin (Yzy-zu/Botsky): rama refactor/v2 hasta f35dc40 y tag v1-legacy sobre eb993ef. Upstream origin/refactor/v2 configurado.
+- Fases0/1, fixtures anónimos, PROGRESS y tooling publicados. Este checkpoint se publica en commit posterior; main no se modificó en remoto.
