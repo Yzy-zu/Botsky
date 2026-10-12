@@ -80,7 +80,7 @@ restaura flags/args, pero se niega a sobrescribir cambios posteriores ajenos.
 No borra sidecar ni capturas y no restaura bot.db. No se afirma que el rollback
 de fases futuras haya sido ensayado por esta preparación.
 
-## Gate pendiente
+## Cierre con excepción autorizada
 
 Telemetría activada y evidencia documentada. Se importaron 21 fixtures reales
 con 14 categorías; falta una encuesta/voto nativo. Los sintéticos no cuentan
@@ -89,3 +89,8 @@ no afirma addressing al bot. El cliente pide interacción natural sin @ ni
 prefijos. fromMe conserva el evento real send.message, no acredita S13.
 No se generarán mensajes hacia terceros ni se publicará evidencia ficticia.
 Fase1 permanece sin iniciar hasta `verify-phase0` PASS.
+
+El cliente autorizó diferir la encuesta: F0-E001, sin fingir captura. Gate0
+pasa conservando el resto de los requisitos. Se apagó el preload, retiraron
+aliases privados y comprobó health200/PM2 online. La telemetría continúa.
+Fase1 iniciada en worktree aislado; v2 no está activo en producción.

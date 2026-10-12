@@ -265,7 +265,24 @@ function fixtures() {
             for (const category of fixture.categories) coverage.add(category);
         } catch (error) { fail('real fixture', error.code ? 'missing/unreadable fixture path' : error.message); }
     }
-    for (const required of requiredCategories) if (!coverage.has(required)) fail('real fixture coverage', `missing ${required}`);
+    let deferredPoll = false;
+    const exceptionPath = path.join(root, 'docs/refactor/phase0-exceptions.json');
+    if (fs.existsSync(exceptionPath)) {
+        const exception = json('docs/refactor/phase0-exceptions.json');
+        if (exception?.version === 1 && exception.exceptions?.length === 1) {
+            const entry = exception.exceptions[0];
+            deferredPoll = entry.id === 'F0-E001' && entry.category === 'poll'
+                && entry.status === 'deferred' && entry.authorizedBy === 'user'
+                && entry.instruction === 'omite la encuesta por ahora. avancemos, que sigue?'
+                && utc(entry.authorizedUtc) && meaningful(entry.revisit);
+        }
+        if (!deferredPoll) fail('phase0 exception', 'invalid or unsupported exception; only authorized poll deferral is allowed');
+    }
+    for (const required of requiredCategories) {
+        if (coverage.has(required)) continue;
+        if (required === 'poll' && deferredPoll) checks.push('F0-E001: poll capture deferred by explicit user instruction; no real poll coverage claimed.');
+        else fail('real fixture coverage', `missing ${required}`);
+    }
     if (coverage.size < 12) fail('real fixture coverage', 'fewer than 12 distinct observed/documented categories');
     checks.push(`Real fixture categories observed: ${coverage.size}; synthetic manifest is excluded.`);
 }

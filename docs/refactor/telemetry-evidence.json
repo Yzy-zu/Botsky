@@ -1,6 +1,6 @@
 {
   "active": true,
-  "startUtc": "2026-10-12T18:41:33.819Z",
+  "startUtc": "2026-10-12T19:30:01.683Z",
   "source": "production PM2 process and read-only SQLite sidecar verification",
   "scope": "Registered handlers after queue admission, natural commands sharing that path, and universal tool invocations; ok is legacy-reported result, NULL is unknown, never inferred business success",
   "coverage": {
@@ -24,25 +24,29 @@
     "latency_ms"
   ],
   "observed": {
-    "checkedUtc": "2026-10-12T19:22:48.222Z",
+    "checkedUtc": "2026-10-12T19:30:37.205Z",
     "invocations": 11,
     "unknown": 11,
     "commands": [
       {
         "command": "ayuda",
-        "invocations": 5
+        "invocations": 5,
+        "unknown": 5
       },
       {
         "command": "encuesta",
-        "invocations": 4
+        "invocations": 4,
+        "unknown": 4
       },
       {
         "command": "sticker",
-        "invocations": 1
+        "invocations": 1,
+        "unknown": 1
       },
       {
         "command": "transcribir",
-        "invocations": 1
+        "invocations": 1,
+        "unknown": 1
       }
     ]
   }

@@ -19,4 +19,6 @@ ni completar S13. Los escenarios se validarán en sus fases correspondientes.
 
 Reimportar: `node scripts/refactor/import-phase0-captures.cjs`.
 Validar Gate 0: `node scripts/refactor/verify-phase0.cjs`.
-Falta encuesta nativa; los fixtures sintéticos no sustituyen esta evidencia.
+Encuesta nativa diferida por instrucción explícita del cliente: F0-E001 en
+`docs/refactor/phase0-exceptions.json`. Revisitaremos antes de migrar polls;
+los fixtures sintéticos no sustituyen esa evidencia.

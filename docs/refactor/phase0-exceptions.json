@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "exceptions": [
+    {
+      "id": "F0-E001",
+      "category": "poll",
+      "status": "deferred",
+      "authorizedBy": "user",
+      "instruction": "omite la encuesta por ahora. avancemos, que sigue?",
+      "authorizedUtc": "2026-10-12T19:30:02.178Z",
+      "revisit": "Recapturar encuesta/voto nativo antes de migrar polls en Fase4 olaB; no declarar cobertura real de poll mientras falte."
+    }
+  ]
+}

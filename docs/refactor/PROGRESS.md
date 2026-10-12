@@ -20,8 +20,8 @@ Actualizado: 2026-10-12 UTC. Maestro: Codex. Plano: `plan.md`.
 
 | Fase | Estado | Gate / evidencia |
 | --- | --- | --- |
-| 0 Baseline y seguridad | Gate abierto | Baseline documentado: 608 pass / 187 fail / 0 skip; trazabilidad completa; telemetría activa; capturas reales en curso |
-| 1 Cimientos | No iniciada | Gate 0 pendiente |
+| 0 Baseline y seguridad | Cerrada con excepción autorizada F0-E001 | Gate0 PASS; 21 fixtures reales / 14 categorías; poll diferido por cliente; baseline y trazabilidad completos |
+| 1 Cimientos | En curso | Gate0 PASS; WO013 config, WO014 plataforma, WO015 observabilidad/domain, WO016 tooling |
 | 2 Adaptadores | No iniciada | Gate 1 pendiente |
 | 3 Pipeline y sombra | No iniciada | Gate 2 pendiente; 24 h reales de sombra requeridas |
 | 4 Migración A–D | No iniciada | Gate 3 pendiente |
@@ -97,3 +97,11 @@ Gate0 PASS. La telemetría queda activa para observar uso, sin decidir DROP aún
 - Sidecar SQL real a las 19:22: ayuda5, encuesta4, sticker1, transcribir1; total11, todos ok=NULL (resultado desconocido). No interpretar resolución HTTP como éxito de negocio.
 - WO012: revisión de privacidad/provenance del agente traceability; distinción de mention estructural vs addressing en revisión.
 - Próximo paso: importar encuesta nativa cuando llegue, Gate0, disable-capture, health, refrescar telemetry-evidence, documentación/commit. Fase1 sigue sin iniciar.
+
+## Checkpoint 2026-10-12 19:31 UTC — cierre Fase0 y arranque Fase1
+
+- Usuario: “omite la encuesta por ahora. avancemos, que sigue?”. Excepción F0-E001 en phase0-exceptions.json; pendiente capturar encuesta/voto real antes de migrar polls en Fase4 olaB. No se afirma cobertura poll. Gate0 PASS conserva todos los otros requisitos y mínimo12 muestras/tipos reales.
+- Captura desactivada vía operador; preload retirado, aliases privados borrados del cache/env, Node args originales. PM2 online PID2606310, health200, colas vacías. Telemetría continúa, evidence.startUtc actualizado al reinicio real 19:30:01.683Z. 11 invocaciones, 11 resultados desconocidos.
+- Fase0 entregables en commit6c2440d; cierre/excepción en siguiente commit. No hay cambios de negocio ni migración de DB.
+- Fase1 autorizada: WO013 contracts_review config/env; WO014 fixtures clock/TtlStore/queue/scheduler; WO015 traceability logger/metrics/crypto/maintenance/domain; WO016 maestro tooling, arquitectura, integración y gate. Trabajo SOLO worktree v2; no activar v2 en producción durante Fase1.
+- Gate1 requiere verify verde, >=90% líneas config/TtlStore/queue/scheduler y .env.example generado con cobertura de env usadas. No avanzar Fase2 sin Gate1 completo.
