@@ -916,5 +916,8 @@ async function executeTool(name, args = {}, context = {}) {
 module.exports = {
     BOTSKY_TOOL_DECLARATIONS,
     getToolDeclarations,
-    executeTool
+    executeTool: (name, args, context) => {
+        if (typeof process === 'undefined' || process.env.LEGACY_COMMAND_USAGE_ENABLED !== 'true') return executeTool(name, args, context);
+        return require('./commandUsageRuntime').trackTool(name, args, context, () => executeTool(name, args, context));
+    }
 };

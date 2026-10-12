@@ -1,0 +1,28 @@
+{
+    "event": "messages.upsert",
+    "instance": "synthetic-instance",
+    "data": {
+        "key": {
+            "remoteJid": "19995550001@s.whatsapp.net",
+            "participant": "",
+            "remoteJidAlt": "19995550001@s.whatsapp.net",
+            "id": "SYNTH-MESSAGE-1",
+            "fromMe": false,
+            "addressingMode": "lid"
+        },
+        "message": {
+            "stickerMessage": {
+                "url": "https://media.example.invalid/synthetic-1",
+                "mimetype": "image/webp",
+                "contextInfo": {
+                    "mentionedJid": []
+                }
+            }
+        },
+        "pushName": "Persona Sintética",
+        "messageType": "stickerMessage",
+        "contextInfo": {
+            "mentionedJid": []
+        }
+    }
+}

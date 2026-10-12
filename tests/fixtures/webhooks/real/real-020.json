@@ -1,0 +1,19 @@
+{
+    "event": "send.message",
+    "instance": "synthetic-instance",
+    "data": {
+        "key": {
+            "remoteJid": "19995550001@s.whatsapp.net",
+            "id": "SYNTH-MESSAGE-1",
+            "fromMe": true
+        },
+        "message": {
+            "conversation": "Texto sintético 1"
+        },
+        "pushName": "Persona Sintética",
+        "messageType": "conversation",
+        "contextInfo": {
+            "mentionedJid": []
+        }
+    }
+}

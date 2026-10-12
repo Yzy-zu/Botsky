@@ -118,3 +118,16 @@ test('CLI emits JSON only on success and never echoes malformed input in diagnos
     assert.equal(bad.stdout, '');
     assert.equal(bad.stderr.includes('PRIVATE_SECRET'), false);
 });
+
+test('Outgoing send.message retains its real event name and rejects unproven fromMe', () => {
+    const outgoing = envelope({ conversation: 'PRIVATE_SENT_TEXT' }, { fromMe: true });
+    outgoing.event = 'send.message';
+    const result = anonymizeWebhook(outgoing);
+    assert.equal(result.event, 'send.message');
+    assert.equal(result.data.key.fromMe, true);
+    assert.equal(JSON.stringify(result).includes('PRIVATE_'), false);
+    outgoing.data.key.fromMe = false;
+    assert.throws(() => anonymizeWebhook(outgoing), /outgoing send.message/);
+    delete outgoing.data.key.fromMe;
+    assert.throws(() => anonymizeWebhook(outgoing), /outgoing send.message/);
+});

@@ -1,0 +1,394 @@
+{
+    "version": 1,
+    "provenance": {
+        "source": "production-webhook",
+        "capturedUtc": "2026-10-12T19:16:55.831Z",
+        "captureMethod": "live-http-preload on production wasa; allowlist sanitization before disk writes",
+        "evolutionVersion": "botsky/evolution-native-tables:2.3.7-c1 (image sha256:76a792fc0ca7c3c7e02e3a81aa06094b3b29e1c7824215a6ddaf969cdff42808)",
+        "anonymizer": "scripts/refactor/anonymize-webhook.cjs"
+    },
+    "fixtures": [
+        {
+            "id": "real-001",
+            "file": "real-001.json",
+            "categories": [
+                "group",
+                "lid",
+                "reaction"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T18:55:36.569Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0001"
+            },
+            "botJid": "19995550005@s.whatsapp.net",
+            "botJids": [
+                "19995550005@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-002",
+            "file": "real-002.json",
+            "categories": [
+                "group",
+                "lid",
+                "text"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T18:56:42.140Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0002"
+            },
+            "botJid": "19995550005@s.whatsapp.net",
+            "botJids": [
+                "19995550005@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-003",
+            "file": "real-003.json",
+            "categories": [
+                "private",
+                "text"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T18:56:58.528Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0003"
+            },
+            "botJid": "19995550002@s.whatsapp.net",
+            "botJids": [
+                "19995550002@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-004",
+            "file": "real-004.json",
+            "categories": [
+                "group",
+                "lid",
+                "sticker"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T18:57:43.749Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0004"
+            },
+            "botJid": "19995550004@s.whatsapp.net",
+            "botJids": [
+                "19995550004@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-005",
+            "file": "real-005.json",
+            "categories": [
+                "image",
+                "private"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T18:57:58.598Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0005"
+            },
+            "botJid": "19995550002@s.whatsapp.net",
+            "botJids": [
+                "19995550002@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-006",
+            "file": "real-006.json",
+            "categories": [
+                "private",
+                "sticker"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T18:58:30.376Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0006"
+            },
+            "botJid": "19995550002@s.whatsapp.net",
+            "botJids": [
+                "19995550002@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-007",
+            "file": "real-007.json",
+            "categories": [
+                "mention",
+                "private",
+                "text"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T18:58:42.520Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0007"
+            },
+            "botJid": "19995550003@s.whatsapp.net",
+            "botJids": [
+                "19995550003@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-008",
+            "file": "real-008.json",
+            "categories": [
+                "document",
+                "private"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T18:58:55.407Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0008"
+            },
+            "botJid": "19995550002@s.whatsapp.net",
+            "botJids": [
+                "19995550002@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-009",
+            "file": "real-009.json",
+            "categories": [
+                "private",
+                "reaction"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T18:59:17.265Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0009"
+            },
+            "botJid": "19995550003@s.whatsapp.net",
+            "botJids": [
+                "19995550003@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-010",
+            "file": "real-010.json",
+            "categories": [
+                "audio",
+                "private"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T18:59:57.264Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0010"
+            },
+            "botJid": "19995550002@s.whatsapp.net",
+            "botJids": [
+                "19995550002@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-011",
+            "file": "real-011.json",
+            "categories": [
+                "private",
+                "video"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:00:36.813Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0011"
+            },
+            "botJid": "19995550002@s.whatsapp.net",
+            "botJids": [
+                "19995550002@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-012",
+            "file": "real-012.json",
+            "categories": [
+                "private",
+                "text"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:00:45.980Z",
+                "captureId": "capture-99eb1fd7-bd13-4e46-8a8c-bbb776abe2ef-0012"
+            },
+            "botJid": "19995550003@s.whatsapp.net",
+            "botJids": [
+                "19995550003@s.whatsapp.net"
+            ]
+        },
+        {
+            "id": "real-013",
+            "file": "real-013.json",
+            "categories": [
+                "group",
+                "lid",
+                "quote-human",
+                "text"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:09:16.249Z",
+                "captureId": "capture-a1ce697d-a34a-41e3-bf70-0067f493ed59-0001",
+                "quoteHumanEvidence": "known-bot-different-participant"
+            },
+            "botJid": "19995550005@s.whatsapp.net",
+            "botJids": [
+                "19995550005@s.whatsapp.net",
+                "990000000000006@lid"
+            ]
+        },
+        {
+            "id": "real-014",
+            "file": "real-014.json",
+            "categories": [
+                "group",
+                "lid",
+                "text"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:09:26.449Z",
+                "captureId": "capture-a1ce697d-a34a-41e3-bf70-0067f493ed59-0002"
+            },
+            "botJid": "19995550004@s.whatsapp.net",
+            "botJids": [
+                "19995550004@s.whatsapp.net",
+                "990000000000005@lid"
+            ]
+        },
+        {
+            "id": "real-015",
+            "file": "real-015.json",
+            "categories": [
+                "group",
+                "image",
+                "lid"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:09:29.845Z",
+                "captureId": "capture-a1ce697d-a34a-41e3-bf70-0067f493ed59-0003"
+            },
+            "botJid": "19995550004@s.whatsapp.net",
+            "botJids": [
+                "19995550004@s.whatsapp.net",
+                "990000000000005@lid"
+            ]
+        },
+        {
+            "id": "real-016",
+            "file": "real-016.json",
+            "categories": [
+                "fromMe",
+                "group",
+                "text"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:09:31.719Z",
+                "captureId": "capture-a1ce697d-a34a-41e3-bf70-0067f493ed59-0004"
+            },
+            "botJid": "19995550002@s.whatsapp.net",
+            "botJids": [
+                "19995550002@s.whatsapp.net",
+                "990000000000003@lid"
+            ]
+        },
+        {
+            "id": "real-017",
+            "file": "real-017.json",
+            "categories": [
+                "group",
+                "lid",
+                "reaction"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:12:41.750Z",
+                "captureId": "capture-a1ce697d-a34a-41e3-bf70-0067f493ed59-0005"
+            },
+            "botJid": "19995550005@s.whatsapp.net",
+            "botJids": [
+                "19995550005@s.whatsapp.net",
+                "990000000000006@lid"
+            ]
+        },
+        {
+            "id": "real-018",
+            "file": "real-018.json",
+            "categories": [
+                "group",
+                "lid",
+                "sticker"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:14:21.628Z",
+                "captureId": "capture-a1ce697d-a34a-41e3-bf70-0067f493ed59-0006"
+            },
+            "botJid": "19995550004@s.whatsapp.net",
+            "botJids": [
+                "19995550004@s.whatsapp.net",
+                "990000000000005@lid"
+            ]
+        },
+        {
+            "id": "real-019",
+            "file": "real-019.json",
+            "categories": [
+                "private",
+                "text"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:16:22.766Z",
+                "captureId": "capture-a1ce697d-a34a-41e3-bf70-0067f493ed59-0007"
+            },
+            "botJid": "19995550002@s.whatsapp.net",
+            "botJids": [
+                "19995550002@s.whatsapp.net",
+                "990000000000003@lid"
+            ]
+        },
+        {
+            "id": "real-020",
+            "file": "real-020.json",
+            "categories": [
+                "fromMe",
+                "private",
+                "text"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:16:26.664Z",
+                "captureId": "capture-a1ce697d-a34a-41e3-bf70-0067f493ed59-0008"
+            },
+            "botJid": "19995550002@s.whatsapp.net",
+            "botJids": [
+                "19995550002@s.whatsapp.net",
+                "990000000000003@lid"
+            ]
+        },
+        {
+            "id": "real-021",
+            "file": "real-021.json",
+            "categories": [
+                "group",
+                "lid",
+                "quote-bot",
+                "text"
+            ],
+            "provenance": {
+                "source": "production-webhook",
+                "capturedUtc": "2026-10-12T19:16:55.831Z",
+                "captureId": "capture-a1ce697d-a34a-41e3-bf70-0067f493ed59-0009",
+                "quoteEvidence": "exact-bot-identity"
+            },
+            "botJid": "990000000000004@lid",
+            "botJids": [
+                "990000000000004@lid",
+                "19995550005@s.whatsapp.net"
+            ]
+        }
+    ]
+}

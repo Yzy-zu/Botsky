@@ -174,6 +174,9 @@ app.get('/status', (req, res) => {
 
 // ─── Iniciar servidor ─────────────────────────────────────────────────────────
 async function startServer() {
+    if (process.env.LEGACY_COMMAND_USAGE_ENABLED === 'true') {
+        await require('../services/commandUsageRuntime').start();
+    }
     try {
         await happyHour.initHappyHourRecovery();
     } catch (recErr) {

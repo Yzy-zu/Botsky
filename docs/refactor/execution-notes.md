@@ -34,6 +34,14 @@ La etapa ④ necesita metadatos de sesión/adjunto aunque ⑤ construye el conte
 
 Las sesiones deben conservar el ID real de resultados; los adjuntos el ID/origen/propietario y TTL de 10 minutos de v2. Una selección numérica grupal sin cita/mención permanece ignorada (S07a), y cita/mención habilita la continuación vigente (S07b). `src/services/attachmentContext.js` usa chat+usuario pero TTL legacy de 15 minutos; ese valor no se porta como default v2. `src/utils/session.js` evidencia el aislamiento actual por chat+participante.
 
+### Interacción natural y evidencia de mención en Fase 0
+
+Clarificación del cliente del 2026-10-12: la interacción habitual debe ser natural, sin exigir `@` ni prefijos. Los handlers deben aceptar los argumentos estructurados del router para peticiones conversacionales. En privado §6.1 ya permite texto natural; en grupo permite dirigirse al bot por su nombre (`botsky`/`botsito`), una cita u otra señal prevista. Los comandos explícitos permanecen como capacidad compatible, no como requisito del flujo natural. Esta preferencia no acredita por sí sola que toda charla grupal deba activar al bot: S01/S02/S05/S06 mantienen la protección frente a intervenciones no dirigidas. Implementar una activación grupal más amplia requiere especificar esa política, en lugar de inferirla de la ausencia de prefijo.
+
+Para el inventario de formatos de Fase 0, `mention` significa **mención estructural real**: un array `mentionedJid` no vacío en un contexto del envelope capturado. §11/§12 pide fixtures de mención como formato de webhook; no exige que cada formato de esa fase ya pruebe su escenario de producto. Una mención dirigida a una persona puede contar esa categoría de normalización y debe documentarse como genérica. No se rotula `mention-bot`, no demuestra que `mentions` incluya la identidad del bot (§6.1), y no acredita S03 ni un test de addressing portado. Un array vacío o un `@` dentro de texto sin metadata no cuentan como evidencia estructural.
+
+Esta precisión separa el gate de formatos de Fase 0 de los escenarios de pipeline de Fase 3; no cambia el contrato de permisos, addressing ni los resultados de S01–S18. Las citas bot/humano siguen requiriendo prueba de identidad o ID saliente confiable, y `send.message` conserva su tipo de notificación saliente sin acreditar el eco entrante S13. Según el checkpoint informado por el maestro, la categoría nativa de encuesta (`poll`) aún carece de captura real: registrar esa brecha hasta recibirla, sin sustituirla por texto que diga “encuesta” ni por un fixture sintético.
+
 ### Rutas y alcance CI
 
 - Trazabilidad canónica: `docs/refactor/test-traceability.md`, por test legacy; `tests/traceability.md` y referencias abreviadas del plano enlazan a esa fuente, sin tablas divergentes. Cada fila tiene destino o justificación explícita y estado de portado; `pendiente` no equivale a cobertura completada.

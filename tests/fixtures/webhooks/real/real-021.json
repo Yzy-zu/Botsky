@@ -1,0 +1,27 @@
+{
+    "event": "messages.upsert",
+    "instance": "synthetic-instance",
+    "data": {
+        "key": {
+            "remoteJid": "120363000000000001@g.us",
+            "participant": "990000000000002@lid",
+            "participantAlt": "19995550003@s.whatsapp.net",
+            "id": "SYNTH-MESSAGE-1",
+            "fromMe": false,
+            "addressingMode": "lid"
+        },
+        "message": {
+            "conversation": "Texto sintético 1"
+        },
+        "pushName": "Persona Sintética",
+        "messageType": "conversation",
+        "contextInfo": {
+            "participant": "990000000000004@lid",
+            "stanzaId": "SYNTH-MESSAGE-2",
+            "mentionedJid": [],
+            "quotedMessage": {
+                "conversation": "Texto sintético 2"
+            }
+        }
+    }
+}

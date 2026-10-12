@@ -66,6 +66,12 @@ function getAllAllowed() {
     return [...groupsNormal, ...numbersNormal, ...groupsAdmin, ...numbersAdmin, ...numbersTasks];
 }
 
+// Disabled by default: keep imports/mocks and behavior identical to baseline.
+function observeCommandUsage(command, from, operation, options) {
+    if (process.env.LEGACY_COMMAND_USAGE_ENABLED !== 'true') return operation();
+    return require('../services/commandUsageRuntime').track(command, from, operation, options);
+}
+
 function getAllAdmins() {
     const groupsAdmin = process.env.ALLOWED_GROUPS_ADMIN ? process.env.ALLOWED_GROUPS_ADMIN.split(',').map(n => n.trim().replace(/@.*$/, '')).filter(Boolean) : [];
     const numbersAdmin = process.env.ALLOWED_NUMBERS_ADMIN ? process.env.ALLOWED_NUMBERS_ADMIN.split(',').map(n => n.trim().replace(/@.*$/, '')).filter(Boolean) : [];
@@ -1046,6 +1052,9 @@ async function dispatch(context) {
     }
 
     if (handler) {
+        const originalHandler = handler;
+        handler = () => observeCommandUsage(isRegisteredCommand(cmdToSwitch) ? cmdToSwitch : 'chat', from,
+            originalHandler, { item: parsed.args?.[0], adult: parsed.aiArgs?.isAdult === true || parsed.flags?.adult === true });
         try {
             if (queueTier) {
                 const queueUserId = isGroup ? `${from}_${participant}` : from;

@@ -115,8 +115,9 @@ function anonymizeWebhook(input) {
         return result;
     }
     function envelope(value) {
-        if (!object(value) || value.event !== 'messages.upsert' || !object(value.data)) {
-            throw new TypeError('Expected messages.upsert envelope with object data');
+        if (!object(value) || !['messages.upsert', 'send.message'].includes(value.event) || !object(value.data)
+            || (value.event === 'send.message' && value.data.key?.fromMe !== true)) {
+            throw new TypeError('Expected messages.upsert or outgoing send.message envelope with object data');
         }
         const original = value.data;
         const data = { key: key(original.key), message: message(original.message) };
@@ -129,7 +130,7 @@ function anonymizeWebhook(input) {
         if (object(original.reactionMessage)) data.reactionMessage = reaction(original.reactionMessage);
         if (object(original.pollUpdateMessage)) data.pollUpdateMessage = pollUpdate(original.pollUpdateMessage);
         if (object(original.vote)) data.vote = vote(original.vote);
-        return { event: 'messages.upsert', instance: 'synthetic-instance', data };
+        return { event: value.event, instance: 'synthetic-instance', data };
     }
     return Array.isArray(input) ? input.map(envelope) : envelope(input);
 }
@@ -142,7 +143,7 @@ if (require.main === module) {
         const input = JSON.parse(fs.readFileSync(0, 'utf8'));
         process.stdout.write(`${JSON.stringify(anonymizeWebhook(input), null, 4)}\n`);
     } catch {
-        process.stderr.write('Cannot anonymize: expected valid JSON messages.upsert envelope or array.\n');
+        process.stderr.write('Cannot anonymize: expected valid JSON messages.upsert or outgoing send.message envelope or array.\n');
         process.exitCode = 1;
     }
 }

@@ -1,0 +1,27 @@
+{
+    "event": "messages.upsert",
+    "instance": "synthetic-instance",
+    "data": {
+        "key": {
+            "remoteJid": "19995550001@s.whatsapp.net",
+            "participant": "",
+            "remoteJidAlt": "19995550001@s.whatsapp.net",
+            "id": "SYNTH-MESSAGE-1",
+            "fromMe": false,
+            "addressingMode": "lid"
+        },
+        "message": {
+            "reactionMessage": {
+                "key": {
+                    "remoteJid": "990000000000002@lid",
+                    "participant": "",
+                    "id": "SYNTH-MESSAGE-2",
+                    "fromMe": true
+                },
+                "text": "👍"
+            }
+        },
+        "pushName": "Persona Sintética",
+        "messageType": "reactionMessage"
+    }
+}
