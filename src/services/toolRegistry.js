@@ -346,18 +346,43 @@ function getToolDeclarations(isAdmin = false) {
  * @param {object} context - Contexto { from, messageData, userName, senderJid, isAdmin, isGroup }
  * @returns {Promise<object>} Resultado estructurado devuelto al modelo
  */
+// Tool arguments must be JSON data. Reject accessors/cycles/BigInt without
+// evaluating getters or allowing malformed metadata to escape the contract.
+function toolInput(value, ancestors = new Set(), depth = 0) {
+    if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (value === undefined) return undefined;
+    if (typeof value !== 'object' || depth > 12 || ancestors.has(value)) throw new TypeError('Argumentos de herramienta inválidos.');
+    ancestors.add(value);
+    try {
+        const result = Array.isArray(value) ? [] : Object.create(null);
+        for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(value))) {
+            if (!descriptor.enumerable) continue;
+            if (!('value' in descriptor)) throw new TypeError('Argumentos de herramienta inválidos.');
+            result[key] = toolInput(descriptor.value, ancestors, depth + 1);
+        }
+        return result;
+    } finally { ancestors.delete(value); }
+}
+
 async function executeTool(name, args = {}, context = {}) {
     if (!name || typeof name !== 'string') {
         return { success: false, error: 'Nombre de herramienta no especificado o inválido.' };
     }
 
-    const safeArgs = (args && typeof args === 'object') ? args : {};
-    const safeContext = (context && typeof context === 'object') ? context : {};
-    const { from, messageData, userName, senderJid, isAdmin = false, isGroup = false } = safeContext;
-
-    logger.info(`[TOOL-RUN] Ejecutando herramienta "${name}" con args: ${JSON.stringify(safeArgs)}`);
-
+    if (!BOTSKY_TOOL_DECLARATIONS.some(tool=>tool.name===name)) return {success:false,error:`Herramienta "${name}" no está registrada en el sistema.`};
     try {
+        if (Array.isArray(args)||Array.isArray(context)) throw new TypeError('Argumentos de herramienta inválidos.');
+        const safeArgs = (args && typeof args === 'object') ? toolInput(args) : {};
+        const safeContext = (context && typeof context === 'object') ? toolInput(context) : {};
+        const { from, messageData, userName, isGroup = false } = safeContext;
+        if (typeof from !== 'string' || !from.trim()) return {success:false,error:'Falta el chat autenticado para ejecutar la herramienta.'};
+        const {getSenderJid,isAuthorizedAdmin} = require('../core/auth');
+        const senderJid = getSenderJid(from,messageData);
+        const isAdmin = isAuthorizedAdmin(from,messageData);
+
+        logger.info(`[TOOL-RUN] Ejecutando herramienta "${name}"`);
+
         switch (name) {
             // ── 1. MINECRAFT BEDROCK ─────────────────────────────────────────
             case 'minecraft_control': {
@@ -908,8 +933,10 @@ async function executeTool(name, args = {}, context = {}) {
                 return { success: false, error: `Herramienta "${name}" no está registrada en el sistema.` };
         }
     } catch (err) {
-        logger.error(`[TOOL-ERROR] Error ejecutando herramienta "${name}":`, err.message);
-        return { success: false, error: `Fallo interno al ejecutar ${name}: ${err.message}` };
+        let detail = 'Argumentos de herramienta inválidos.';
+        try { const message = err && Object.getOwnPropertyDescriptor(err,'message')?.value; if (typeof message === 'string') detail = message; } catch (_) {}
+        logger.error(`[TOOL-ERROR] Error ejecutando herramienta "${name}":`, detail);
+        return { success: false, error: `Fallo interno al ejecutar ${name}: ${detail}` };
     }
 }
 
@@ -918,6 +945,14 @@ module.exports = {
     getToolDeclarations,
     executeTool: (name, args, context) => {
         if (typeof process === 'undefined' || process.env.LEGACY_COMMAND_USAGE_ENABLED !== 'true') return executeTool(name, args, context);
-        return require('./commandUsageRuntime').trackTool(name, args, context, () => executeTool(name, args, context));
+        let safeArgs; let safeContext;
+        try {
+            safeArgs = args && typeof args === 'object' ? toolInput(args) : {};
+            safeContext = context && typeof context === 'object' ? toolInput(context) : {};
+        } catch (_) { return executeTool(name, args, context); }
+        let operation;
+        const run = () => operation || (operation = executeTool(name, args, context));
+        try { return require('./commandUsageRuntime').trackTool(name, safeArgs, safeContext, run); }
+        catch (_) { return run(); }
     }
 };

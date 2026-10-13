@@ -461,15 +461,27 @@ register(['horafeliz', 'happyhour', 'hf'], {
 // ─── Métodos Públicos ──────────────────────────────────────────────────────────
 
 function isRegisteredCommand(name) {
-    return registry.has(name?.toLowerCase());
+    return typeof name === 'string' && registry.has(name.toLowerCase());
 }
 
 function getRegisteredCommands() {
     return Array.from(registry.keys());
 }
 
-async function getCommandHandler(name, { parsed, from, messageData }) {
-    const config = registry.get(name?.toLowerCase());
+async function getCommandHandler(name, context = {}) {
+    if (typeof name !== 'string') return null;
+    context = context && typeof context === 'object' ? context : {};
+    const {from,messageData} = context;
+    if (typeof from !== 'string' || !from.trim()) return null;
+    const input = context.parsed;
+    if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
+    const parsed = input;
+    parsed.args = Array.isArray(parsed.args) ? parsed.args : [];
+    if (parsed.args.some(arg => typeof arg !== 'string' && typeof arg !== 'number')) return null;
+    parsed.args = parsed.args.map(arg => typeof arg === 'number' ? String(arg) : arg);
+    parsed.flags = parsed.flags && typeof parsed.flags === 'object' && !Array.isArray(parsed.flags) ? parsed.flags : {};
+    parsed.raw = typeof parsed.raw === 'string' ? parsed.raw : '';
+    const config = registry.get(name.toLowerCase());
     if (!config) return null;
     return await config.execute(parsed, from, messageData);
 }

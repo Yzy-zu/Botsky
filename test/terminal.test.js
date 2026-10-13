@@ -3,6 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
+const fs = require('node:fs');
+const os = require('node:os');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
 const {
@@ -65,10 +67,19 @@ test('Terminal 7: free -m devuelve memoria RAM del sistema', async () => {
     assert.ok(res.stdout.includes('Mem:') || res.stdout.includes('Memoria:'));
 });
 
-test('Terminal 8: docker ps lista contenedores si Docker está disponible', async () => {
-    const res = await executeCommand('docker ps');
+test('Terminal 8: docker ps ejecuta un backend CLI de fixture explícito sin daemon', async t => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'botsky-docker-cli-'));
+    fs.chmodSync(directory, 0o755);
+    const backend = path.join(directory, 'docker');
+    fs.writeFileSync(backend, '#!/bin/sh\n[ "$#" -eq 1 ] && [ "$1" = ps ] || exit 64\nprintf "CONTAINER ID  IMAGE\\nfixture-container  fixture-image\\n"\n', { mode: 0o755 });
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const res = await executeCommand([backend, 'ps']);
     assert.strictEqual(res.success, true);
+    assert.strictEqual(res.exitCode, 0);
     assert.ok(res.stdout.includes('CONTAINER ID'));
+    assert.ok(res.stdout.includes('fixture-container'));
+    const invalid = await executeCommand([backend, 'unexpected']);
+    assert.strictEqual(invalid.exitCode, 64);
 });
 
 // ─── 2. Pruebas de Códigos de Salida y Errores (9 a 10) ───────────────────────

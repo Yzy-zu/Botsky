@@ -9,6 +9,17 @@ const db = require('../src/services/db');
 const { handleAfinidad, renderBar } = require('../src/commands/afinidad');
 const evolution = require('../src/services/evolution');
 
+test('Affinity: malformed identifiers reject before scheduling a SQLite callback', async () => {
+    for (const jid of [undefined, null, false, 42, {}, [], '', '   ']) {
+        await assert.rejects(db.getUserAffinity(jid), /valid user JID/);
+    }
+    for (const alias of [false, 42, {}, [], '', '  ']) {
+        await assert.rejects(db.getUserAffinity('synthetic-affinity@s.whatsapp.net', 'Synthetic', alias), /alternative JID/);
+    }
+    const affinity = await db.getUserAffinity(' synthetic-affinity:7@s.whatsapp.net ');
+    assert.equal(affinity.jid, 'synthetic-affinity@s.whatsapp.net');
+});
+
 test('Affinity 1: Usuario nuevo inicia por defecto en modo grosero y desconfiado (-20)', async () => {
     const testJid = `test_affinity_new_${Date.now()}@s.whatsapp.net`;
     const aff = await db.getUserAffinity(testJid, 'Paco');

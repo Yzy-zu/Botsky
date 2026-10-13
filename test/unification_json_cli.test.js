@@ -3,7 +3,11 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
+if(!process.env.DATA_DIR?.startsWith('/tmp/botsky-data'))throw Error('Run integration tests with isolated Docker verifier');
+// These canonical command tests must never infer through a live provider.
+const axios=require('axios');const originalPost=axios.post;
+axios.post=async()=>{throw Error('Unexpected unification HTTP/provider call');};
+test.after(()=>{axios.post=originalPost;});
 
 const evolution = require('../src/services/evolution');
 const db = require('../src/services/db');
@@ -47,7 +51,7 @@ test('Unificación: applyAiArgsToParsed y handleTareas soporta JSON nativo y CLI
                 accion: 'crear',
                 materia: 'Arquitectura Cloud',
                 titulo: 'Proyecto Microservicios',
-                fecha: 'viernes',
+                fecha: new Date(Date.now()+7*86400000).toISOString(),
                 detalles: 'Subir a GitHub'
             }
         }, adminUser, { key: { remoteJid: adminUser, participant: adminUser } });
@@ -76,7 +80,7 @@ test('Unificación: applyAiArgsToParsed y handleTareas soporta JSON nativo y CLI
         // 5. Backwards compatibility: Crear tarea usando CLI positional
         sent.length = 0;
         await handleTareas({
-            args: ['crear', 'Redes', 'Configurar Router', 'lunes']
+            args: ['crear', 'Redes', 'Configurar Router', new Date(Date.now()+8*86400000).toISOString()]
         }, adminUser, { key: { remoteJid: adminUser, participant: adminUser } });
 
         assert.ok(sent.some(s => s.text.includes('Redes') && s.text.includes('Configurar Router')));
@@ -231,7 +235,8 @@ test('Unificación: handleNotas y handleRecordar con JSON nativo', async () => {
             aiArgs: { accion: 'guardar', contenido: 'Llave de paso cerrada' }
         }, chat, { key: { remoteJid: chat, participant: user }, pushName: 'Tester' });
 
-        assert.ok(sent.some(s => s.text.includes('Nota') && s.text.includes('guardada')));
+        assert.ok(sent.some(s => /guardé la nota/i.test(s.text)&&s.text.includes('Llave de paso cerrada')));
+        const notes=await db.getNotes(chat);assert.ok(notes.some(n=>n.content==='Llave de paso cerrada'));
 
         // Recordatorios: crear con JSON nativo
         sent.length = 0;
@@ -261,6 +266,7 @@ test('Unificación: handleVoz y handleTerminal con JSON nativo', async () => {
 
     const origSend = evolution.sendText;
     const origSendVoice = evolution.sendVoiceNote;
+    const origRecording=evolution.sendRecording;evolution.sendRecording=async()=>{};
     const origTTS = tts.generateVoiceNote;
     const origAgent = agent.runAgentWithTerminal;
 
@@ -289,7 +295,7 @@ test('Unificación: handleVoz y handleTerminal con JSON nativo', async () => {
     try {
         // Voz nativa
         await handleVoz({
-            aiArgs: { texto: 'Buenas tardes a todos', voz: 'dross' }
+            aiArgs: { texto_literal: 'Buenas tardes a todos', modo:'verbatim',destino_scope:'current_chat',voz: 'dross' }
         }, adminUser, {});
 
         assert.ok(generatedVoice);
@@ -307,6 +313,7 @@ test('Unificación: handleVoz y handleTerminal con JSON nativo', async () => {
     } finally {
         evolution.sendText = origSend;
         evolution.sendVoiceNote = origSendVoice;
+        evolution.sendRecording=origRecording;
         tts.generateVoiceNote = origTTS;
         agent.runAgentWithTerminal = origAgent;
     }

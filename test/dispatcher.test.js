@@ -116,7 +116,7 @@ test('Dispatcher: Usuario autorizado invocando /@terminal ejecuta runAgentWithTe
     };
 
     ai.routeWithAI = async () => ({
-        action: 'terminal',
+        action: 'terminal', addressed_to_bot: true,
         args: { comando: 'uptime' }
     });
 
@@ -176,7 +176,7 @@ test('Dispatcher: Usuario NO autorizado invocando /@terminal recibe acceso deneg
     };
 
     ai.routeWithAI = async () => ({
-        action: 'terminal',
+        action: 'terminal', addressed_to_bot: true,
         args: { comando: 'cat /etc/passwd' }
     });
 
@@ -229,7 +229,7 @@ test('Dispatcher: Usuario no autorizado con pushName "Admin" o "Owner" es rechaz
     };
 
     ai.routeWithAI = async () => ({
-        action: 'terminal',
+        action: 'terminal', addressed_to_bot: true,
         args: { comando: 'df -h' }
     });
 
@@ -283,7 +283,7 @@ test('Dispatcher: Usuario autorizado en grupo con pushName cualquiera es admitid
     };
 
     ai.routeWithAI = async () => ({
-        action: 'terminal',
+        action: 'terminal', addressed_to_bot: true,
         args: { comando: 'uptime' }
     });
 
@@ -368,7 +368,7 @@ test('Dispatcher: Mensajes normales de chat siguen respondiendo con chatWithBots
     let sentMessages = [];
 
     ai.routeWithAI = async () => ({
-        action: 'chat',
+        action: 'chat', addressed_to_bot: true,
         message: 'Hola compa, ¿cómo andas?'
     });
 
@@ -457,10 +457,12 @@ test('Dispatcher: action "ignore" descarta el mensaje y no envía nada a WhatsAp
     }
 });
 
-test('Dispatcher: Insultos y mentadas de madre en grupo activan bypass directo de Gatekeeper y responden con chat (Opción 1)', async () => {
+test('Dispatcher: Una petición grupal conserva el plan chat dirigido del modelo sin bypass por insultos', async () => {
     _resetCooldowns();
     const origNormal = process.env.ALLOWED_GROUPS_NORMAL;
     const origRoute = ai.routeWithAI;
+    const origChat = ai.chatWithBotsky;
+    ai.chatWithBotsky = async () => 'A mí no me hables así, cabrón. ¿O qué traes?';
     const origHttp = evolution.client.post;
 
     process.env.ALLOWED_GROUPS_NORMAL = '120363045678901234';
@@ -471,7 +473,7 @@ test('Dispatcher: Insultos y mentadas de madre en grupo activan bypass directo d
     ai.routeWithAI = async (msg) => {
         routedWithAI = true;
         return {
-            action: 'chat',
+            action: 'chat', addressed_to_bot: true,
             message: 'A mí no me hables así, cabrón. ¿O qué traes?'
         };
     };
@@ -494,17 +496,18 @@ test('Dispatcher: Insultos y mentadas de madre en grupo activan bypass directo d
             }
         });
 
-        assert.strictEqual(routedWithAI, true, 'El insulto debe saltarse el gatekeeper y consultar a la IA inmediatamente');
+        assert.strictEqual(routedWithAI, true, 'La petición completa debe consultar al router semántico');
         assert.strictEqual(sentMessages.length, 1, 'Debe responder al usuario que insultó');
         assert.ok(sentMessages[0].text.includes('cabrón'), 'Debe enviar la respuesta de defensa');
     } finally {
         process.env.ALLOWED_GROUPS_NORMAL = origNormal;
         ai.routeWithAI = origRoute;
+        ai.chatWithBotsky = origChat;
         evolution.client.post = origHttp;
     }
 });
 
-test('Dispatcher: Mensajes de una palabra como jaja o ok siguen filtrados a costo cero sin llamar a la IA', async () => {
+test('Dispatcher: Mensajes breves consultan router semántico y conservan plan ignore sin enviar', async () => {
     _resetCooldowns();
     const origNormal = process.env.ALLOWED_GROUPS_NORMAL;
     const origRoute = ai.routeWithAI;
@@ -517,7 +520,7 @@ test('Dispatcher: Mensajes de una palabra como jaja o ok siguen filtrados a cost
 
     ai.routeWithAI = async () => {
         routedWithAI = true;
-        return { action: 'chat', message: 'hola' };
+        return { action: 'ignore', addressed_to_bot: false };
     };
 
     evolution.client.post = async (url, data) => {
@@ -538,7 +541,7 @@ test('Dispatcher: Mensajes de una palabra como jaja o ok siguen filtrados a cost
             }
         });
 
-        assert.strictEqual(routedWithAI, false, 'Risas o relleno simple deben archivarse a costo cero sin llamar a la IA');
+        assert.strictEqual(routedWithAI, true, 'El plan semántico ignore debe conservar silencio sin heurística local');
         assert.strictEqual(sentMessages.length, 0, 'No debe enviar ningún mensaje');
     } finally {
         process.env.ALLOWED_GROUPS_NORMAL = origNormal;
@@ -561,7 +564,7 @@ test('Dispatcher: Conversación grupal sin mención ni cita al bot es archivada 
     ai.routeWithAI = async (msg) => {
         routedWithAI = true;
         return {
-            action: 'chat',
+            action: 'ignore', addressed_to_bot: false,
             message: 'La neta sí estuvo perrísima esa película.'
         };
     };
@@ -585,7 +588,7 @@ test('Dispatcher: Conversación grupal sin mención ni cita al bot es archivada 
             }
         });
 
-        assert.strictEqual(routedWithAI, false, 'No debe llamar a la IA para evitar spam');
+        assert.strictEqual(routedWithAI, true, 'El router semántico decide ignorar; no se clasifica por regex');
         assert.strictEqual(sentMessages.length, 0, 'No debe enviar ningún mensaje al grupo');
     } finally {
         process.env.ALLOWED_GROUPS_NORMAL = origNormal;
@@ -598,6 +601,8 @@ test('Dispatcher: En grupo, responde cuando lo llaman por su nombre ("botsky", "
     _resetCooldowns();
     const origNormal = process.env.ALLOWED_GROUPS_NORMAL;
     const origRoute = ai.routeWithAI;
+    const origChat = ai.chatWithBotsky;
+    ai.chatWithBotsky = async () => 'La neta sí estuvo perrísima esa película.';
     const origHttp = evolution.client.post;
 
     process.env.ALLOWED_GROUPS_NORMAL = '120363045678901234';
@@ -608,7 +613,7 @@ test('Dispatcher: En grupo, responde cuando lo llaman por su nombre ("botsky", "
     ai.routeWithAI = async (msg) => {
         routedWithAI = true;
         return {
-            action: 'chat',
+            action: 'chat', addressed_to_bot: true,
             message: 'La neta sí estuvo perrísima esa película.'
         };
     };
@@ -637,6 +642,7 @@ test('Dispatcher: En grupo, responde cuando lo llaman por su nombre ("botsky", "
     } finally {
         process.env.ALLOWED_GROUPS_NORMAL = origNormal;
         ai.routeWithAI = origRoute;
+        ai.chatWithBotsky = origChat;
         evolution.client.post = origHttp;
     }
 });
@@ -645,6 +651,8 @@ test('Dispatcher: En grupo, responde cuando citan/responden directamente a un me
     _resetCooldowns();
     const origNormal = process.env.ALLOWED_GROUPS_NORMAL;
     const origRoute = ai.routeWithAI;
+    const origChat = ai.chatWithBotsky;
+    ai.chatWithBotsky = async () => 'Te estoy respondiendo porque me citaste, compa.';
     const origHttp = evolution.client.post;
 
     process.env.ALLOWED_GROUPS_NORMAL = '120363045678901234';
@@ -655,7 +663,7 @@ test('Dispatcher: En grupo, responde cuando citan/responden directamente a un me
     ai.routeWithAI = async (msg) => {
         routedWithAI = true;
         return {
-            action: 'chat',
+            action: 'chat', addressed_to_bot: true,
             message: 'Te estoy respondiendo porque me citaste, compa.'
         };
     };
@@ -695,6 +703,7 @@ test('Dispatcher: En grupo, responde cuando citan/responden directamente a un me
     } finally {
         process.env.ALLOWED_GROUPS_NORMAL = origNormal;
         ai.routeWithAI = origRoute;
+        ai.chatWithBotsky = origChat;
         evolution.client.post = origHttp;
     }
 });

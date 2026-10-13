@@ -79,11 +79,9 @@ class TieredQueue {
         const userTotal = tier.userCount[userId] ?? 0;
 
         if (userTotal >= tier.maxPerUser) {
-            return Promise.reject(
-                new Error(
-                    `> ⏳ Tienes ${userTotal} tareas en espera. Aguanta a que terminen antes de agregar más.`
-                )
-            );
+            const error = new Error(`> ⏳ Tienes ${userTotal} tareas en espera. Aguanta a que terminen antes de agregar más.`);
+            error.userMessage = error.message;
+            return Promise.reject(error);
         }
 
         tier.userCount[userId] = userTotal + 1;

@@ -136,7 +136,7 @@ function dailyHarness({ claim = null, failure = false, roll = 0.1 } = {}) {
         '../services/logger': logger, './logger': logger,
         '../utils/messageText': require('../src/utils/messageText'),
         '../utils/reminderInput': require('../src/utils/reminderInput'),
-        '../core/auth': { getSenderJid: from => from }
+        '../core/auth': load('core/auth.js', {})
     };
     const math = Object.create(Math); math.random = () => roll;
     const command = load('commands/daily.js', deps, { Math: math });
@@ -146,7 +146,7 @@ function dailyHarness({ claim = null, failure = false, roll = 0.1 } = {}) {
 
 test('Daily: tool devuelve cooldown real sin inventar premio ni enviar duplicado', async () => {
     const h = dailyHarness({ claim: { last_claim: Date.now(), streak: 3 } });
-    const result = await h.tool.executeTool('juegos_y_economia', { juego: 'daily' }, { from: 'test' });
+    const result = await h.tool.executeTool('juegos_y_economia', { juego: 'daily' }, { from: '19995550001@s.whatsapp.net', messageData: { key: { remoteJid: '19995550001@s.whatsapp.net' } } });
     assert.equal(result.success, false);
     assert.equal(result.status, 'cooldown');
     assert.ok(result.remaining_ms > 0);
@@ -158,7 +158,7 @@ test('Daily: tool devuelve cooldown real sin inventar premio ni enviar duplicado
 test('Daily: éxito informa XP reales, saldo y racha; premio cero sigue siendo giro válido', async () => {
     for (const [roll, gain] of [[0.1, 300], [0.99, 0]]) {
         const h = dailyHarness({ roll });
-        const result = await h.tool.executeTool('juegos_y_economia', { juego: 'daily' }, { from: 'test' });
+        const result = await h.tool.executeTool('juegos_y_economia', { juego: 'daily' }, { from: '19995550001@s.whatsapp.net', messageData: { key: { remoteJid: '19995550001@s.whatsapp.net' } } });
         assert.equal(result.success, true);
         assert.equal(result.status, 'claimed');
         assert.equal(result.xp_ganados, gain);
@@ -170,7 +170,7 @@ test('Daily: éxito informa XP reales, saldo y racha; premio cero sigue siendo g
 
 test('Daily: error real no se convierte en éxito por el wrapper', async () => {
     const h = dailyHarness({ failure: true });
-    const result = await h.tool.executeTool('juegos_y_economia', { juego: 'daily' }, { from: 'test' });
+    const result = await h.tool.executeTool('juegos_y_economia', { juego: 'daily' }, { from: '19995550001@s.whatsapp.net', messageData: { key: { remoteJid: '19995550001@s.whatsapp.net' } } });
     assert.equal(result.success, false);
     assert.equal(result.status, 'error');
     assert.equal(h.writes.length, 0);
@@ -219,7 +219,7 @@ test('Estado: registry selecciona estado local y mantiene info de videos aparte'
     };
     const registry = load('core/commandRegistry.js', deps);
     for (const name of ['estado', 'estadobot', 'status', 'info']) {
-        const handler = await registry.getCommandHandler(name, { parsed: {}, from: 'test', messageData: {} });
+        const handler = await registry.getCommandHandler(name, { parsed: { args: [], flags: {}, raw: '' }, from: '19995550001@s.whatsapp.net', messageData: {} });
         await handler.handler();
     }
     assert.deepEqual(called, ['estado', 'estado', 'estado', 'video']);

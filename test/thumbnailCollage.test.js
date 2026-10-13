@@ -4,9 +4,28 @@ const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { promisify } = require('node:util');
+const execute = promisify(require('node:child_process').execFile);
 const { generateThumbnailCollage, downloadThumbnail } = require('../src/utils/thumbnailCollage');
 
 describe('thumbnailCollage utility', () => {
+
+    let jpeg;
+    test.before(async () => {
+        // Generate actual image bytes locally; only transport is fake.
+        const output = await execute('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=1',
+            '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'mjpeg', '-threads', '1', 'pipe:1'], { encoding: 'buffer' });
+        jpeg = output.stdout;
+    });
+
+    test.beforeEach(t => {
+        const original = global.fetch;
+        global.fetch = async url => {
+            if (!String(url).startsWith('https://i.ytimg.com/')) throw new Error('Synthetic unavailable thumbnail');
+            return { ok: true, arrayBuffer: async () => jpeg.buffer.slice(jpeg.byteOffset, jpeg.byteOffset + jpeg.byteLength) };
+        };
+        t.after(() => { global.fetch = original; });
+    });
 
     test('retorna null si la lista de items está vacía o es inválida', async () => {
         assert.equal(await generateThumbnailCollage([]), null);

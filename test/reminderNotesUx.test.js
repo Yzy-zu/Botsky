@@ -21,6 +21,7 @@ function harness() {
         const file = path.resolve(__dirname, '..', relativePath);
         const module = { exports: {} };
         const requireMock = specifier => {
+            if (specifier === '../core/auth') return load('src/core/auth.js');
             if (specifier.endsWith('/db') || specifier === './db') return db;
             if (specifier.endsWith('/evolution') || specifier === './evolution') return evolution;
             if (specifier.endsWith('/logger') || specifier === './logger') return logger;
@@ -40,10 +41,10 @@ function harness() {
         notes: load('src/commands/notas.js'), reminders: load('src/commands/recordatorios.js') };
 }
 
-const quote = { message: { extendedTextMessage: { contextInfo: { quotedMessage: {
+const quote = { key: { remoteJid: 'grupo@g.us', participant: '19995550001@s.whatsapp.net' }, message: { extendedTextMessage: { contextInfo: { quotedMessage: {
     conversation: 'Comprar hielo para la reunión'
 } } } } };
-const context = { from: 'grupo@g.us', senderJid: 'yo@s.whatsapp.net', userName: 'Compa', messageData: quote };
+const context = { from: 'grupo@g.us', userName: 'Compa', messageData: quote };
 
 test('Herramienta: falta/tiempo inválido pide aclaración y no escribe recordatorios', async () => {
     const h = harness();
@@ -60,7 +61,13 @@ test('Herramienta: minutos inválidos, vacíos o infinitos no crean recordatorio
     const h = harness();
     for (const minutos of [0, -1, NaN, Infinity, 'no', '', null]) {
         const result = await h.tools.executeTool('recordatorios_alarmas', { accion: 'crear', mensaje: 'Comprar hielo', minutos }, context);
-        assert.equal(result.needs_clarification, true);
+        assert.equal(result.success, false);
+        if (typeof minutos === 'number' && !Number.isFinite(minutos)) {
+            // No son valores JSON válidos: la frontera rechaza antes del parser de tiempo.
+            assert.match(result.error, /Argumentos de herramienta inválidos/);
+        } else {
+            assert.equal(result.needs_clarification, true);
+        }
     }
     assert.equal(h.savedReminders.length, 0);
 });
@@ -105,7 +112,7 @@ test('Referencia esto usa cita; contenido explícito conserva prioridad', () => 
 
 test('Sin contenido ni cita pide aclarar; no crea texto genérico', async () => {
     const h = harness();
-    const noQuote = { ...context, messageData: {} };
+    const noQuote = { ...context, messageData: { key: { ...quote.key } } };
     const note = await h.tools.executeTool('notas_tablon', { accion: 'guardar' }, noQuote);
     const reminder = await h.tools.executeTool('recordatorios_alarmas', { accion: 'crear', minutos: 10 }, noQuote);
     assert.equal(note.needs_clarification, true);

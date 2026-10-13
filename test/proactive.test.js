@@ -3,11 +3,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+const {harness,proactiveHarness,gemini}=require('./aiOfflineHarness.test');
+if(!process.env.DATA_DIR?.startsWith('/tmp/botsky-data'))throw Error('Run persistence tests with the isolated Docker verifier');
 
 const db = require('../src/services/db');
-const { evaluateProactiveAction } = require('../src/services/ai');
-const { runProactiveCycle, getActiveGrudges, chooseAutonomyState, detectUnansweredQuestion, detectActivityOpportunity } = require('../src/services/proactive');
+const {evaluateProactiveAction}=harness({post:async()=>gemini(JSON.stringify({should_act:false,channel:'group',message:'',reason:'silence'}))}).ai;
+const {chooseAutonomyState}=proactiveHarness().api;
 
 test('Universal Lore 1: Estado doxxed y auto-canon de lore en db.js', async () => {
     const testJid = `test_lore_universal_${Date.now()}@s.whatsapp.net`;
@@ -94,11 +95,11 @@ test('Proactive 3: evaluateProactiveAction devuelve estructura válida de decisi
 
 test('Proactive 4: estado autónomo cambia según actividad y horario', () => {
     assert.deepEqual(
-        chooseAutonomyState({ idleMinutes: 90, historyLength: 1, currentHour: 14 }),
+        JSON.parse(JSON.stringify(chooseAutonomyState({ idleMinutes: 90, historyLength: 1, currentHour: 14 }))),
         { mood: 'con hueva', objective: 'encontrar una oportunidad natural para reanimar el grupo' }
     );
     assert.deepEqual(
-        chooseAutonomyState({ idleMinutes: 5, historyLength: 8, currentHour: 18 }),
+        JSON.parse(JSON.stringify(chooseAutonomyState({ idleMinutes: 5, historyLength: 8, currentHour: 18 }))),
         { mood: 'atento', objective: 'detectar una pregunta que se haya quedado sin respuesta' }
     );
 });
@@ -149,32 +150,16 @@ test('Proactive 5c: encuesta permite un voto por usuario y cierre', async () => 
     assert.equal(await db.getActivePoll(chatId), null);
 });
 
-test('Proactive 6: detecta una pregunta reciente que quedó sin respuesta', () => {
-    const now = Date.now();
-    const question = detectUnansweredQuestion([
-        { role: 'user', name: 'Ana', content: '¿Alguien sabe si ya prendieron el server?', timestamp: now - 60000 }
-    ], now);
-    assert.equal(question.name, 'Ana');
-    assert.match(question.content, /server/);
-
-    assert.equal(detectUnansweredQuestion([
-        { role: 'user', content: '¿Ya llegó?', timestamp: now - 2 * 60 * 60 * 1000 }
-    ], now), null);
-    assert.equal(detectUnansweredQuestion([
-        { role: 'user', content: 'ya quedó', timestamp: now }
-    ], now), null);
+test('Proactive 6: pregunta reciente se evalúa semánticamente sin heurística de palabras', async () => {
+    const now=Date.parse('2026-10-12T18:00:00Z');const history=[{role:'user',name:'Persona',content:'¿Alguien sabe si ya prendieron el server?',timestamp:now-60000}];
+    const local=proactiveHarness({history,now});const result=await local.api.runProactiveCycle();
+    assert.equal(result.reason,'ai_decided_silence');assert.equal(local.plans.length,1);assert.equal(local.plans[0].mode,'contextual');assert.equal(local.plans[0].groupHistory[0].content,history[0].content);assert.equal(local.sent.length,0);
+    const old=proactiveHarness({history:[{role:'user',content:'¿Ya llegó?',timestamp:now-2*60*60*1000}],now});await old.api.runProactiveCycle();assert.equal(old.plans[0].mode,'idle','El historial vencido no activa modo contextual');
 });
 
-test('Proactive 7: detecta oportunidad de proponer una actividad grupal', () => {
-    const now = Date.now();
-    const opportunity = detectActivityOpportunity([
-        { role: 'user', name: 'Luis', content: 'Al rato armamos partida de Minecraft?', timestamp: now - 120000 },
-        { role: 'user', name: 'Ana', content: 'Yo sí me apunto', timestamp: now - 60000 }
-    ], now);
-    assert.equal(opportunity.name, 'Luis');
-    assert.match(opportunity.topic, /partida/i);
-
-    assert.equal(detectActivityOpportunity([
-        { role: 'user', content: 'Qué calor hace', timestamp: now }
-    ], now), null);
+test('Proactive 7: actividad grupal usa decisión semántica y no convierte palabras en ejecución', async () => {
+    const now=Date.parse('2026-10-12T18:00:00Z');const history=[{role:'user',name:'Persona',content:'Al rato armamos partida de Minecraft?',timestamp:now-120000},{role:'user',content:'Yo sí me apunto',timestamp:now-60000}];
+    const local=proactiveHarness({history,now,decision:{should_act:true,channel:'group',message:'¿A qué hora se arma?',reason:'activity'}});const result=await local.api.runProactiveCycle();
+    assert.equal(result.executed,true);assert.equal(local.plans[0].mode,'contextual');assert.deepEqual(local.sent,[['offline@g.us','¿A qué hora se arma?']]);
+    const silence=proactiveHarness({history:[{role:'user',content:'Qué calor hace',timestamp:now}],now});await silence.api.runProactiveCycle();assert.equal(silence.plans.length,1);assert.equal(silence.sent.length,0);
 });

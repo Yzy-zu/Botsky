@@ -9,6 +9,7 @@ const logger = require('../services/logger');
  * Solo ejecutable por números en ALLOWED_NUMBERS_ADMIN.
  */
 async function handleApagar(from) {
+    if (typeof from !== 'string' || !from.trim()) return;
     logger.warn(`[SISTEMA] Apagado remoto solicitado por ${from}`);
 
     try {

@@ -2,18 +2,47 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { handleMensaje, findGroupContact } = require('../src/commands/mensaje');
-const { executeTool, getToolDeclarations } = require('../src/services/toolRegistry');
-const evolution = require('../src/services/evolution');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const syntheticEnv = { ALLOWED_NUMBERS_ADMIN: '19995550100' };
+const logger = { info() {}, warn() {}, error() {} };
+function load(file, dependencies) {
+    const module = { exports: {} };
+    vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src',file),'utf8'), {
+        module, exports:module.exports, process:{env:syntheticEnv}, Date, Buffer,
+        require(name) { if (!(name in dependencies)) throw new Error('Missing explicit test dependency: '+name); return dependencies[name]; }
+    }, {filename:file});
+    return module.exports;
+}
+const auth = load('core/auth.js', {});
+const contacts = [
+    {jid:'19995550101@s.whatsapp.net',user_name:'Fernando'},
+    {jid:'19995550102@s.whatsapp.net',user_name:'Lisandro'}
+];
+const database = { db:{ all(sql,params,callback) { callback(null,contacts.filter(contact=>contact.user_name.toLowerCase().includes(params[0].replace(/%/g,'')))); } } };
+const evolution = {sendText:async()=>({key:{id:'synthetic-default'}}),getGroupInfo:async()=>({data:{participants:contacts.map(contact=>({id:contact.jid,name:contact.user_name}))}})};
+const ai = {
+    async callGemini({userMessage}) { return userMessage.includes('para enviar a el grupo') ? 'Bola de inútiles, dejen de mentar madres.' : 'Qué onda Fernando, dice Azael que te extraña.'; },
+    async callGroq() { assert.fail('Unexpected fallback model'); },
+    async routeWithAI() { return {action:'mensaje',args:{destino_scope:'main_group',mensaje:'Mientales la madre a todos',anonimo:true}}; }
+};
+let outbound;
+const mensaje = load('commands/mensaje.js', {'../services/evolution':evolution,'../core/auth':auth,'../services/db':database,'../services/logger':logger,'../services/ai':ai,
+    '../services/outboundDelivery':{deliverSemantic:options=>outbound.deliverSemantic(options)}});
+outbound = load('services/outboundDelivery.js',{'./evolution':evolution,'./logger':logger,'../core/auth':auth,'../commands/mensaje':mensaje});
+const {handleMensaje,findGroupContact}=mensaje;
+const {executeTool,getToolDeclarations}=load('services/toolRegistry.js',{'./logger':logger,'./db':database,'./evolution':evolution,
+    '../utils/messageText':{resolveMessageText:(text)=>text||''},'../utils/reminderInput':{},'../core/auth':auth,'../commands/mensaje':mensaje});
 
 test('Mensaje: findGroupContact resuelve contactos de Gente del señor chiqui', async () => {
     const fer = await findGroupContact('Fernando');
     assert.ok(fer);
-    assert.equal(fer.jid, '5214431851495@s.whatsapp.net');
+    assert.equal(fer.jid, '19995550101@s.whatsapp.net');
 
     const lisandro = await findGroupContact('Lisandro');
     assert.ok(lisandro);
-    assert.equal(lisandro.jid, '5214435846547@s.whatsapp.net');
+    assert.equal(lisandro.jid, '19995550102@s.whatsapp.net');
 
     const none = await findGroupContact('PersonaInexistente12345XYZ');
     assert.equal(none, null);
@@ -30,8 +59,8 @@ test('Mensaje: handleMensaje rechaza no-administradores', async () => {
     try {
         await handleMensaje(
             { args: ['Fernando', 'hola'] },
-            '5219999999999@s.whatsapp.net',
-            { key: { participant: '5219999999999@s.whatsapp.net' } }
+            '19995550199@s.whatsapp.net',
+            { key: { participant: '19995550199@s.whatsapp.net' } }
         );
         assert.match(sent, /Acceso denegado/i);
     } finally {
@@ -52,12 +81,12 @@ test('Mensaje: handleMensaje envía mensaje a contacto para admin', async () => 
     try {
         await handleMensaje(
             { args: ['Fernando', 'dile que lo extraño'] },
-            '5214435810175@s.whatsapp.net',
-            { pushName: 'Azael', key: { participant: '5214435810175@s.whatsapp.net' } }
+            '19995550100@s.whatsapp.net',
+            { pushName: 'Azael', key: { participant: '19995550100@s.whatsapp.net' } }
         );
 
         // Se envía al destinatario (Fernando)
-        assert.ok(sentTo.includes('5214431851495@s.whatsapp.net'));
+        assert.ok(sentTo.includes('19995550101@s.whatsapp.net'));
         const ferMsg = sentMessages.find(m => m.toLowerCase().includes('azael'));
         assert.ok(ferMsg);
         assert.match(ferMsg, /extrañ/i);
@@ -65,8 +94,8 @@ test('Mensaje: handleMensaje envía mensaje a contacto para admin', async () => 
         assert.ok(!ferMsg.includes('💬 *Mensaje de'));
 
         // Y se envía confirmación al emisor (Azael)
-        assert.ok(sentTo.includes('5214435810175@s.whatsapp.net'));
-        const confirmMsg = sentMessages.find(m => m.includes('Mensaje enviado') || m.includes('Ya le escribí'));
+        assert.ok(sentTo.includes('19995550100@s.whatsapp.net'));
+        const confirmMsg = sentMessages.find(m => m.toLowerCase().includes('mensaje enviado') || m.toLowerCase().includes('ya le escribí'));
         assert.ok(confirmMsg);
     } finally {
         evolution.sendText = origSend;
@@ -83,19 +112,19 @@ test('Mensaje: executeTool en toolRegistry ejecuta enviar_mensaje_contacto', asy
 
     try {
         // Bloqueado para no-admin
-        const resBlock = await executeTool('enviar_mensaje_contacto', { contacto: 'Fernando', mensaje: 'hola' }, { isAdmin: false });
+        const resBlock = await executeTool('enviar_mensaje_contacto', { contacto: 'Fernando', mensaje: 'hola' }, { isAdmin: false, from:'19995550199@s.whatsapp.net',messageData:{key:{participant:'19995550199@s.whatsapp.net'}} });
         assert.match(resBlock.error, /Acceso denegado/i);
 
         // Permitido para admin
         const resOk = await executeTool(
             'enviar_mensaje_contacto',
             { contacto: 'Fernando', mensaje: 'hola bro' },
-            { isAdmin: true, userName: 'Azael' }
+            { isAdmin: true, userName: 'Azael', from:'19995550100@s.whatsapp.net',messageData:{pushName:'Azael',key:{participant:'19995550100@s.whatsapp.net'}} }
         );
         assert.equal(resOk.success, true);
         assert.equal(resOk.destinatario, 'Fernando');
-        assert.equal(resOk.jid, '5214431851495@s.whatsapp.net');
-        assert.ok(sentTo.includes('5214431851495@s.whatsapp.net'));
+        assert.equal(resOk.jid, '19995550101@s.whatsapp.net');
+        assert.ok(sentTo.includes('19995550101@s.whatsapp.net'));
     } finally {
         evolution.sendText = origSend;
     }
@@ -126,8 +155,8 @@ test('Mensaje: mensaje cizañoso al grupo sale de Botsky y NO menciona al emisor
     try {
         await handleMensaje(
             { args: ['grupo', 'mentándole la madre a todos'], raw: 'manda un mensaje al grupo mentándole la madre a todos' },
-            '5214435810175@s.whatsapp.net',
-            { pushName: 'Azael', key: { participant: '5214435810175@s.whatsapp.net' } }
+            '19995550100@s.whatsapp.net',
+            { pushName: 'Azael', key: { participant: '19995550100@s.whatsapp.net' } }
         );
 
         // Se envía al grupo Gente del señor chiqui
@@ -157,8 +186,8 @@ test('Mensaje: mandales un mensaje al grupo y mientales la madre a Adrian se env
     try {
         await handleMensaje(
             { raw: 'mandales un mensaje al grupo y mientales la madre a todos en especial a Adrian, pero no digas que fui yo' },
-            '5214435810175@s.whatsapp.net',
-            { pushName: 'Azael', key: { participant: '5214435810175@s.whatsapp.net' } }
+            '19995550100@s.whatsapp.net',
+            { pushName: 'Azael', key: { participant: '19995550100@s.whatsapp.net' } }
         );
 
         // Se envía al grupo Gente del señor chiqui
@@ -173,3 +202,54 @@ test('Mensaje: mandales un mensaje al grupo y mientales la madre a Adrian se env
     }
 });
 
+
+
+test('Mensaje: forged admin and sender claims cannot authorize tool delivery',async()=>{
+    let sends=0;const original=evolution.sendText;evolution.sendText=async()=>{sends++;return{key:{id:'forged'}}};
+    try {
+        const result=await executeTool('enviar_mensaje_contacto',{contacto:'Fernando',mensaje:'fake'},
+            {isAdmin:true,senderJid:'19995550100@s.whatsapp.net',from:'19995550199@s.whatsapp.net',messageData:{key:{participant:'19995550199@s.whatsapp.net'}}});
+        assert.equal(result.success,false);assert.match(result.error,/Acceso denegado/i);assert.equal(sends,0);
+    } finally {evolution.sendText=original;}
+    assert.equal(await findGroupContact('grupo desconocido XYZ'),null);
+});
+
+test('Mensaje: tool arguments with cycles, BigInt or accessors fail before delivery',async()=>{
+    const circular={contacto:'Fernando',mensaje:'no enviar'};circular.self=circular;
+    let reads=0;const accessor={contacto:'Fernando',get mensaje(){reads++;throw Error('getter must not run');}};
+    const context={from:'19995550100@s.whatsapp.net',messageData:{key:{participant:'19995550100@s.whatsapp.net'}}};
+    let sends=0;const original=evolution.sendText;evolution.sendText=async()=>{sends++;return{key:{id:'bad-input'}}};
+    try {
+        for(const args of [circular,{contacto:'Fernando',mensaje:'no enviar',amount:1n},accessor]){
+            const result=await executeTool('enviar_mensaje_contacto',args,context);
+            assert.equal(result.success,false);assert.match(result.error,/inválidos/i);
+        }
+        assert.equal(reads,0);assert.equal(sends,0);
+    } finally {evolution.sendText=original;}
+});
+
+test('Mensaje: absent chat and forged terminal admin return errors without loading terminal',async()=>{
+    const absent=await executeTool('ejecutar_terminal',{comando:'id'},null);
+    assert.equal(absent.success,false);assert.match(absent.error,/chat autenticado/i);
+    const forged=await executeTool('ejecutar_terminal',{comando:'id'},
+        {isAdmin:true,from:'19995550199@s.whatsapp.net',messageData:{key:{participant:'19995550199@s.whatsapp.net'}}});
+    assert.equal(forged.success,false);assert.match(forged.error,/Acceso denegado/i);
+});
+
+
+test('Mensaje: telemetry wrapper rejects getters without evaluating them and never duplicates tool execution',async()=>{
+    const enabledEnv=syntheticEnv.LEGACY_COMMAND_USAGE_ENABLED;
+    syntheticEnv.LEGACY_COMMAND_USAGE_ENABLED='true';
+    let reads=0;let tracks=0;let sends=0;const original=evolution.sendText;
+    evolution.sendText=async()=>{sends++;return{key:{id:'telemetry-only-once'}}};
+    const registry=load('services/toolRegistry.js',{'./logger':logger,'./db':database,'./evolution':evolution,
+        '../utils/messageText':{resolveMessageText:text=>text||''},'../utils/reminderInput':{},'../core/auth':auth,'../commands/mensaje':mensaje,
+        './commandUsageRuntime':{trackTool(name,args,context,run){tracks++;run();throw Error('Synthetic telemetry failure after operation start');}}});
+    const context={from:'19995550100@s.whatsapp.net',messageData:{key:{participant:'19995550100@s.whatsapp.net'}}};
+    try{
+        const result=await registry.executeTool('enviar_mensaje_contacto',{contacto:'Fernando',mensaje:'hola'},context);
+        assert.equal(result.success,true);assert.equal(tracks,1);assert.equal(sends,2,'One delivery and one confirmation');
+        const invalid=await registry.executeTool('enviar_mensaje_contacto',{get contacto(){reads++;throw Error('must not read');}},context);
+        assert.equal(invalid.success,false);assert.equal(reads,0);assert.equal(tracks,1);assert.equal(sends,2);
+    }finally{evolution.sendText=original;if(enabledEnv===undefined)delete syntheticEnv.LEGACY_COMMAND_USAGE_ENABLED;else syntheticEnv.LEGACY_COMMAND_USAGE_ENABLED=enabledEnv;}
+});

@@ -4,7 +4,7 @@ const evolution = require('../services/evolution');
 const sendText = (to, text, opts) => evolution.sendText(to, text, opts);
 const db = require('../services/db');
 const { getSenderJid, isAuthorizedAdmin, isAuthorizedTaskUploader } = require('../core/auth');
-const { WEEKDAYS, parseClock, formatDueDate, normalizeTaskPieces, handleDirectTaskMessage } = require('../services/school');
+const { WEEKDAYS, parseClock, formatDueDate, normalizeTaskPieces, handleDirectTaskMessage, cancelTaskAndMedia } = require('../services/school');
 
 function isPrivateChat(from) {
     return typeof from === 'string' && from.endsWith('@s.whatsapp.net');
@@ -118,7 +118,7 @@ async function handleTareas(parsed = {}, from, messageData = {}) {
     if (action === 'cancelar' || action === 'borrar') {
         const id = Number.parseInt(params.id ?? args[1], 10);
         if (!Number.isInteger(id)) return sendText(from, '> Especifica el ID: `tarea cancelar 3`');
-        const cancelled = await db.cancelSchoolTask(id);
+        const cancelled = await cancelTaskAndMedia(id);
         return sendText(from, cancelled ? `✅ Tarea #${id} cancelada.` : '> No encontré esa tarea activa.');
     }
 

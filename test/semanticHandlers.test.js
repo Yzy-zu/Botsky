@@ -17,7 +17,7 @@ test('Permisos críticos Minecraft se verifican sobre la acción canónica',asyn
  const h=mcHarness(false);await h.api.handleMaicra({semanticDecision:{action:'maicra'},aiArgs:{subcomando:'on'},raw:'hola'},'g@g.us',{});assert.equal(h.calls.length,0);assert.match(h.messages[0],/denegado/);
 });
 test('XP usa la cantidad del modelo, no el primer número ni un valor inventado',async()=>{
- const calls=[],messages=[];const h=load('commands/niveles.js',{'../services/evolution':{sendText:async(_,text)=>messages.push(text)},'../services/db':{addXp:async(jid,n)=>{calls.push(n);return {xp:n,level:1};}},'../core/auth':{isAuthorizedAdmin:()=>true,getSenderJid:()=> 'sender@s.whatsapp.net'},'../services/logger':logger});
+ const calls=[],messages=[];const h=load('commands/niveles.js',{'../services/evolution':{sendText:async(_,text)=>messages.push(text)},'../services/db':{addXp:async(jid,n)=>{calls.push(n);return {xp:n,level:1};}},'../core/auth':{isAuthorizedAdmin:()=>true,getSenderJid:()=> 'sender@s.whatsapp.net',cleanJidNumber:jid=>String(jid||'').split('@')[0],normalizePhoneNumber:number=>number},'../services/logger':logger});
  await h.handleDarXp({semanticDecision:{action:'darxp'},aiArgs:{cantidad:500},raw:'Tengo 2 tareas, súmame 500 XP'},'sender@s.whatsapp.net',{});assert.deepEqual(calls,[500]);
  await h.handleDarXp({semanticDecision:{action:'darxp'},aiArgs:{},raw:'Tengo 99 tareas, dame XP'},'sender@s.whatsapp.net',{});assert.deepEqual(calls,[500]);assert.match(messages.at(-1),/Cuánta XP/);
 });

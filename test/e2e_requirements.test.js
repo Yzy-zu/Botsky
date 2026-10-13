@@ -24,7 +24,27 @@ const assert = require('node:assert/strict');
 
 // Target modules under test
 const { executeTool, BOTSKY_TOOL_DECLARATIONS } = require('../src/services/toolRegistry');
-const { dispatch, _resetCooldowns } = require('../src/core/dispatcher');
+// Compose the real dispatcher with an injectable command executor. This makes
+// the error-boundary tests exercise the handler they actually replace.
+const fs = require('fs');
+const vm = require('vm');
+const { createRequire } = require('module');
+const dispatcherPath = path.resolve(__dirname, '../src/core/dispatcher.js');
+const dispatcherRequire = createRequire(dispatcherPath);
+const dispatcherModule = { exports: {} };
+vm.runInNewContext(fs.readFileSync(dispatcherPath, 'utf8'), {
+    require(name) {
+        const actual = dispatcherRequire(name);
+        if (name !== './commandRegistry') return actual;
+        return { ...actual, getCommandHandler(command, context) {
+            if (command === 'info') return { handler: () => dispatcherRequire('../commands/info').handleInfo(context.parsed, context.from, context.messageData), queueTier: null };
+            return actual.getCommandHandler(command, context);
+        } };
+    },
+    module: dispatcherModule, exports: dispatcherModule.exports,
+    process, console, Buffer, setTimeout, clearTimeout, setInterval, clearInterval
+}, { filename: dispatcherPath });
+const { dispatch, _resetCooldowns } = dispatcherModule.exports;
 const evolution = require('../src/services/evolution');
 const { Progress, spawnWithProgress } = require('../src/services/progress');
 const queue = require('../src/core/queue');
@@ -48,6 +68,20 @@ const ADMIN_JID = '5214435810175@s.whatsapp.net';
 const NORMAL_JID = '5214432173905@s.whatsapp.net';
 const UNAUTHORIZED_JID = '5219999999999@s.whatsapp.net';
 const GROUP_JID = '120363427922045362@g.us';
+process.env.ALLOWED_NUMBERS_ADMIN = ADMIN_JID.split('@')[0];
+process.env.ALLOWED_NUMBERS_NORMAL = NORMAL_JID.split('@')[0];
+process.env.ALLOWED_GROUPS_NORMAL = GROUP_JID.split('@')[0];
+const originalRouter = ai.routeWithAI;
+const originalChat = ai.chatWithBotsky;
+test.beforeEach(() => {
+    ai.routeWithAI = async text => {
+        const command = String(text || '').replace(/^\/@/, '').split(/\s/)[0];
+        const plans = { ayuda: 'ayuda', info: 'info', terminal: 'terminal', apagate: 'apagate', notas: 'nota' };
+        return { action: plans[command] || 'ignore', addressed_to_bot: true, args: {} };
+    };
+    ai.chatWithBotsky = async () => 'Synthetic chat response';
+});
+test.afterEach(() => { ai.routeWithAI = originalRouter; ai.chatWithBotsky = originalChat; });
 
 /**
  * Creates an isolated mock environment for Evolution API HTTP transport.
@@ -137,7 +171,7 @@ test('T1.5 F1 ToolRegistry: enviar_mensaje_contacto denies unauthorized access s
 
 // ── Feature 2: Command Dispatch & Resilient Execution (R1) ────────────────────
 
-test('T1.6 F2 Dispatch: /@ayuda fast-path routes successfully and delivers user guide', async () => {
+test('T1.6 F2 Dispatch: help plan routes successfully and delivers natural interaction guide', async () => {
     _resetCooldowns();
     const mock = createEvolutionMock();
     try {
@@ -148,7 +182,7 @@ test('T1.6 F2 Dispatch: /@ayuda fast-path routes successfully and delivers user 
             messageData: { key: { participant: ADMIN_JID } }
         });
         assert.ok(mock.sentMessages.length >= 1, 'Should send help message to WhatsApp chat');
-        assert.match(mock.sentMessages[0].text, /comandos disponibles/i);
+        assert.match(mock.sentMessages[0].text, /puedes pedirme las cosas/i);
     } finally {
         mock.restore();
     }
@@ -232,7 +266,8 @@ test('T1.10 F2 Dispatch: audio message without text auto-routes to transcribir c
 test('T1.11 F3 UX: error with userMessage is delivered cleanly without stack traces', async () => {
     _resetCooldowns();
     const mock = createEvolutionMock();
-    const origHandler = (await getCommandHandler('descargar', { parsed: { args: [] }, from: ADMIN_JID })).handler;
+    const infoCmd = require('../src/commands/info');
+    const origHandler = infoCmd.handleInfo;
     
     // Inject a simulated error with userMessage
     const customCmd = async () => {
@@ -241,6 +276,7 @@ test('T1.11 F3 UX: error with userMessage is delivered cleanly without stack tra
         throw err;
     };
 
+    infoCmd.handleInfo = customCmd;
     try {
         // Test dispatcher error handling directly
         const { getCommandHandler: origGet } = require('../src/core/commandRegistry');
@@ -251,11 +287,14 @@ test('T1.11 F3 UX: error with userMessage is delivered cleanly without stack tra
             messageType: 'conversation',
             messageData: { key: { participant: ADMIN_JID } }
         });
+        assert.equal(mock.sentMessages.length, 1);
+        assert.match(mock.sentMessages[0].text, /El archivo solicitado ya no está disponible/);
         for (const msg of mock.sentMessages) {
             assert.doesNotMatch(msg.text, /at Object\./, 'Must not expose stack traces');
             assert.doesNotMatch(msg.text, /node:internal/, 'Must not expose Node internals');
         }
     } finally {
+        infoCmd.handleInfo = origHandler;
         mock.restore();
     }
 });
@@ -278,6 +317,7 @@ test('T1.12 F3 UX: raw stack traces with "at Object" are suppressed from user ou
             messageType: 'conversation',
             messageData: { key: { participant: ADMIN_JID } }
         });
+        assert.ok(mock.sentMessages.length > 0, 'Injected error must produce a response');
         for (const msg of mock.sentMessages) {
             assert.doesNotMatch(msg.text, /at Object\./, 'User message must not leak code line numbers or stack');
         }
@@ -304,6 +344,7 @@ test('T1.13 F3 UX: shell errors starting with "Command failed" do not expose raw
             messageType: 'conversation',
             messageData: { key: { participant: ADMIN_JID } }
         });
+        assert.ok(mock.sentMessages.length > 0, 'Injected error must produce a response');
         for (const msg of mock.sentMessages) {
             assert.doesNotMatch(msg.text, /Command failed: \/bin\/sh/, 'Must not output raw shell execution string');
         }
@@ -342,7 +383,8 @@ test('T1.15 F3 UX: help guide uses readable layout and proper formatting', async
         });
         assert.ok(mock.sentMessages.length >= 1);
         const text = mock.sentMessages[0].text;
-        assert.ok(text.includes('/@'), 'Must guide user with valid invocation prefix');
+        assert.match(text, /como las dirías en el chat/i, 'Guide teaches natural interaction');
+        assert.match(text, /recuérdame/i);
     } finally {
         mock.restore();
     }
@@ -472,7 +514,11 @@ test('T1.23 F5 Stability: Queue rejects when exceeding maxPerUser rate limit wit
             async () => {
                 await q.add('user_rate_limit', async () => 'ok', 'light', 'cmd2');
             },
-            /espera|límite/i
+            error => {
+                assert.match(error.message, /espera|límite/i);
+                assert.match(error.userMessage, /tareas en espera/i, 'Capacity rejection must keep user feedback after technical errors become generic');
+                return true;
+            }
         );
 
         releaseFirst();
@@ -508,7 +554,7 @@ test('T1.25 F5 Stability: master scheduler unref ticker operates without holding
 
 test('T1.26 F6 Synthetic: ejecutar_terminal requires admin and executes safely', async () => {
     // Non-admin call
-    const resNoAdmin = await executeTool('ejecutar_terminal', { comando: 'echo test' }, { isAdmin: false });
+    const resNoAdmin = await executeTool('ejecutar_terminal', { comando: 'echo test' }, { from: NORMAL_JID, messageData: { key: { remoteJid: NORMAL_JID } }, isAdmin: false });
     assert.ok(resNoAdmin && typeof resNoAdmin === 'object');
     assert.match(String(resNoAdmin.error), /acceso denegado/i);
 });
@@ -659,7 +705,7 @@ test('T2.11 F3 Boundary: circular reference in error does not crash serializatio
             messageType: 'conversation',
             messageData: { key: { participant: ADMIN_JID } }
         });
-        assert.ok(true);
+        assert.equal(mock.sentMessages.length, 1, 'Injected handler error must reach the boundary');
     } finally {
         infoCmd.handleInfo = origHandleInfo;
         mock.restore();
@@ -707,7 +753,7 @@ test('T2.13 F3 Boundary: error with null stack does not crash dispatcher inspect
             messageType: 'conversation',
             messageData: { key: { participant: ADMIN_JID } }
         });
-        assert.ok(true);
+        assert.equal(mock.sentMessages.length, 1, 'Injected handler error must reach the boundary');
     } finally {
         infoCmd.handleInfo = origHandleInfo;
         mock.restore();
@@ -731,7 +777,7 @@ test('T2.14 F3 Boundary: non-Error string throwable handled safely by error boun
             messageType: 'conversation',
             messageData: { key: { participant: ADMIN_JID } }
         });
-        assert.ok(true);
+        assert.equal(mock.sentMessages.length, 1, 'Injected handler error must reach the boundary');
     } finally {
         infoCmd.handleInfo = origHandleInfo;
         mock.restore();
@@ -745,7 +791,7 @@ test('T2.15 F3 Boundary: sensitive API keys in error message are sanitized or ma
     const origHandleInfo = infoCmd.handleInfo;
     const dummySecret = 'dummy_mock_secret_key_0123456789abcdef';
     infoCmd.handleInfo = async () => {
-        throw new Error(`Failed with API_KEY=${dummySecret}`);
+        throw new Error(`Falló durante la espera: API_KEY=${dummySecret}`);
     };
 
     try {
@@ -755,6 +801,7 @@ test('T2.15 F3 Boundary: sensitive API keys in error message are sanitized or ma
             messageType: 'conversation',
             messageData: { key: { participant: ADMIN_JID } }
         });
+        assert.equal(mock.sentMessages.length, 1);
         for (const msg of mock.sentMessages) {
             assert.doesNotMatch(msg.text, new RegExp(dummySecret));
         }
@@ -762,6 +809,19 @@ test('T2.15 F3 Boundary: sensitive API keys in error message are sanitized or ma
         infoCmd.handleInfo = origHandleInfo;
         mock.restore();
     }
+});
+
+test('Dispatcher: null throwable produces a controlled response', async () => {
+    _resetCooldowns();
+    const mock = createEvolutionMock();
+    const info = require('../src/commands/info');
+    const original = info.handleInfo;
+    info.handleInfo = async () => { throw null; };
+    try {
+        await dispatch({ from: ADMIN_JID, text: '/@info', messageType: 'conversation', messageData: { key: { participant: ADMIN_JID } } });
+        assert.equal(mock.sentMessages.length, 1);
+        assert.match(mock.sentMessages[0].text, /error al ejecutar/i);
+    } finally { info.handleInfo = original; mock.restore(); }
 });
 
 // ── Boundary Feature 4: Progress Indicator Boundaries ────────────────────────

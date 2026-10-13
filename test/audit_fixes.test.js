@@ -92,7 +92,7 @@ test('Fix 1d (Terminal Seguridad): executeCommand con options.env forzado pasa o
     assert.strictEqual(res.stdout.trim(), 'G:|E:|GR:', 'Ningún secreto debe sobrevivir aunque options.env sea process.env');
 });
 
-test('Fix 1e (Terminal Seguridad): executeBash permite ejecutar comandos normales del agente (id, pwd, uptime, git status, docker ps)', async () => {
+test('Fix 1e (Terminal Seguridad): comandos locales reales y Docker CLI fixture explícito', async t => {
     const resId = await executeBash('id');
     assert.strictEqual(resId.success, true);
     assert.ok(resId.stdout.includes('petrov'));
@@ -108,8 +108,16 @@ test('Fix 1e (Terminal Seguridad): executeBash permite ejecutar comandos normale
     const resGit = await executeBash('git status --short');
     assert.strictEqual(resGit.success, true);
 
-    const resDocker = await executeBash('docker ps');
+    const fs = require('node:fs');
+    const os = require('node:os');
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'botsky-audit-docker-cli-'));
+    fs.chmodSync(directory, 0o755);
+    const backend = path.join(directory, 'docker');
+    fs.writeFileSync(backend, '#!/bin/sh\n[ "$#" -eq 1 ] && [ "$1" = ps ] || exit 64\nprintf "CONTAINER ID  IMAGE\\nfixture-container  fixture-image\\n"\n', { mode: 0o755 });
+    t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+    const resDocker = await executeBash('docker ps', { env: { ...process.env, PATH: `${directory}:${process.env.PATH}` } });
     assert.strictEqual(resDocker.success, true);
+    assert.ok(resDocker.stdout.includes('fixture-container'));
 });
 
 // ─── 2. Pruebas de LID y Autorización ─────────────────────────────────────────
@@ -382,21 +390,43 @@ test('Fix 6 (Recordatorios): sendText serializa options.mentions para mención n
 
 // ─── 7. Pruebas de UX: Detección Automática de Intención VPS vs Chat ──────────
 
-test('UX 1: Petición VPS sin prefijo en privado ("cómo está el servidor?") enruta a agent (terminal)', async () => {
+function routerProviderFixture(t, decisions) {
+    const previous = axios.post;
+    _resetPoolState();
+    const seen = [];
+    axios.post = async (url, payload) => {
+        assert.ok(String(url).includes('generativelanguage.googleapis.com'), 'Solo proveedor Gemini de fixture');
+        const part = payload.contents.flatMap(content => content.parts || []).find(entry => entry.text);
+        const request = JSON.parse(part.text);
+        assert.ok(Object.hasOwn(decisions, request.peticion), 'La petición completa debe llegar al proveedor');
+        seen.push(request.peticion);
+        return { data: { candidates: [{ finishReason: 'STOP', content: { role: 'model', parts: [{
+            text: JSON.stringify({ args: {}, confidence: 1, addressed_to_bot: true, ...decisions[request.peticion] })
+        }] } }] } };
+    };
+    t.after(() => { axios.post = previous; _resetPoolState(); });
+    return seen;
+}
+
+test('UX 1: Petición VPS sin prefijo pasa al proveedor fixture y conserva plan terminal', async t => {
+    const seen = routerProviderFixture(t, { 'cómo está el servidor?': { action: 'terminal', args: { comando: 'uptime' } } });
     // Probar tanto con Gemini real/mock como con router
     const res = await routeWithAI('cómo está el servidor?', 'AdminUser', false, []);
     assert.ok(res, 'routeWithAI debe devolver decisión estructurada');
     assert.strictEqual(res.action, 'terminal', 'Petición sobre el servidor debe resolver action: terminal');
+    assert.equal(seen.length, 1);
 });
 
-test('UX 2: Charla normal en privado ("hola qué haces?") enruta a chat sin invocar terminal', async () => {
+test('UX 2: Charla privada conserva plan chat del proveedor fixture sin terminal', async t => {
+    routerProviderFixture(t, { 'hola qué haces?': { action: 'chat' } });
     const res = await routeWithAI('hola qué haces?', 'Compa', false, []);
     assert.ok(res, 'routeWithAI debe devolver decisión estructurada');
     assert.strictEqual(res.action, 'chat', 'Charla casual debe resolver action: chat');
     assert.notStrictEqual(res.action, 'terminal');
 });
 
-test('UX 3: Comando explícito ("/@terminal uptime" o "!terminal uptime") enruta a agent', async () => {
+test('UX 3: Comando explícito conserva petición normalizada y plan terminal del proveedor fixture', async t => {
+    routerProviderFixture(t, { 'terminal uptime': { action: 'terminal', args: { comando: 'uptime' } } });
     const rawMsg = {
         key: { remoteJid: '5215512345678@s.whatsapp.net', id: 'UX_EXPL_1' },
         message: { conversation: '/@terminal uptime' }
@@ -409,7 +439,8 @@ test('UX 3: Comando explícito ("/@terminal uptime" o "!terminal uptime") enruta
     assert.strictEqual(res.action, 'terminal');
 });
 
-test('UX 4: Petición VPS en grupo sin prefijo ("qué contenedores Docker están activos?") enruta a agent', async () => {
+test('UX 4: Petición VPS grupal conserva plan del proveedor fixture sin ejecutar Docker', async t => {
+    routerProviderFixture(t, { 'qué contenedores Docker están activos?': { action: 'terminal', args: { comando: 'docker ps' } } });
     const rawMsg = {
         key: {
             remoteJid: '120363045678901234@g.us',
@@ -426,7 +457,8 @@ test('UX 4: Petición VPS en grupo sin prefijo ("qué contenedores Docker están
     assert.strictEqual(res.action, 'terminal', 'Consulta de Docker en grupo debe enrutar a terminal');
 });
 
-test('UX 5: Charla normal en grupo sin prefijo ("hola gente cómo andan?") enruta a ignore o chat y no a terminal', async () => {
+test('UX 5: Charla grupal conserva plan ignore del proveedor fixture sin terminal', async t => {
+    routerProviderFixture(t, { 'hola gente cómo andan?': { action: 'ignore', addressed_to_bot: false } });
     const rawMsg = {
         key: {
             remoteJid: '120363045678901234@g.us',
@@ -444,7 +476,8 @@ test('UX 5: Charla normal en grupo sin prefijo ("hola gente cómo andan?") enrut
     assert.notStrictEqual(res.action, 'terminal', 'No debe ejecutar terminal');
 });
 
-test('UX 6: Mensaje ambiguo con términos técnicos ("¿qué es Linux?") enruta a chat sin ejecutar terminal', async () => {
+test('UX 6: Consultas conceptuales conservan plan chat del proveedor fixture sin terminal', async t => {
+    routerProviderFixture(t, { '¿qué es Linux y para qué sirve?': { action: 'chat' }, '¿para qué sirve un servidor web?': { action: 'chat' } });
     // Preguntas teóricas o conceptuales NO deben ejecutar terminal en el VPS
     const resLinux = await routeWithAI('¿qué es Linux y para qué sirve?', 'Curioso', false, []);
     assert.strictEqual(resLinux.action, 'chat', 'Pregunta conceptual sobre Linux debe ser chat');

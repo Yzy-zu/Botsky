@@ -35,7 +35,8 @@ test('Convertir: Rechaza si no se adjunta archivo ni url', async () => {
         (err) => {
             assert.ok(err.userMessage || err.message);
             const msg = err.userMessage || err.message;
-            assert.ok(msg.includes('no se encontró archivo') || msg.includes('adjunta un archivo'));
+            assert.match(msg, /archivo.*(?:enlace|formato)/i);
+            assert.doesNotMatch(msg, /Error:|\bat .*\.js:/);
             return true;
         }
     );

@@ -48,6 +48,13 @@ test.beforeEach(() => {
 });
 
 test.after(() => {
+    // The robustness matrix may start valid empty-argument games. Dispose
+    // those test-owned timers before restoring the fake transport.
+    const blackjack = require('../src/commands/blackjack');
+    for (const game of blackjack.activeGames.values()) clearTimeout(game.timer);
+    for (const table of blackjack.activeTables.values()) clearTimeout(table.timer);
+    blackjack.activeGames.clear();
+    blackjack.activeTables.clear();
     restoreMocks();
 });
 
@@ -282,6 +289,12 @@ test('Stress: All exported command handlers tolerate null/undefined/malformed ar
             try {
                 await ch.fn(...input.args);
             } catch (err) {
+                // Progress.fail intentionally rejects with a user-facing error.
+                // Technical failures must retain their failing assertion.
+                const isBusinessRejection = err instanceof Error && err.name === 'Error' &&
+                    Object.hasOwn(err, 'userMessage') && typeof err.userMessage === 'string' &&
+                    err.userMessage.trim().length > 0 && err.userMessage === err.message;
+                if (isBusinessRejection) continue;
                 failures.push({
                     command: ch.name,
                     testCase: input.label,
@@ -321,6 +334,10 @@ test('Stress: commandRegistry getCommandHandler handles null/empty parsed withou
                     await handlerObj.handler();
                 }
             } catch (err) {
+                const isBusinessRejection = err instanceof Error && err.name === 'Error' &&
+                    Object.hasOwn(err, 'userMessage') && typeof err.userMessage === 'string' &&
+                    err.userMessage.trim().length > 0 && err.userMessage === err.message;
+                if (isBusinessRejection) continue;
                 failures.push({
                     command: cmdName,
                     payload: tp.label,
@@ -334,4 +351,21 @@ test('Stress: commandRegistry getCommandHandler handles null/empty parsed withou
         const errorSummary = failures.map(f => `  - ${f.command} (${f.payload}): ${f.error}`).join('\n');
         assert.fail(`Found ${failures.length} uncaught exceptions in commandRegistry.getCommandHandler:\n${errorSummary}`);
     }
+});
+
+test('Stress: shutdown rejects malformed destination before scheduling or invoking shell',async()=>{
+    const fs=require('node:fs');const vm=require('node:vm');
+    const module={exports:{}};let sends=0;let timers=0;let shellCalls=0;
+    const dependencies={
+        child_process:{execSync(){shellCalls++;}},
+        '../services/evolution':{sendText:async()=>{sends++;}},
+        '../services/logger':{warn(){},error(){}}
+    };
+    vm.runInNewContext(fs.readFileSync(path.resolve(__dirname,'../src/commands/sistema.js'),'utf8'),{
+        module,exports:module.exports,
+        require(name){assert.ok(Object.hasOwn(dependencies,name),'Unexpected shutdown dependency');return dependencies[name];},
+        setTimeout(){timers++;}
+    });
+    for(const from of [null,undefined,{},[],Symbol('invalid'),1n,'','   '])await module.exports.handleApagar(from);
+    assert.equal(sends,0);assert.equal(timers,0);assert.equal(shellCalls,0);
 });

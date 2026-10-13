@@ -1063,13 +1063,9 @@ async function dispatch(context) {
                 await handler();
             }
         } catch (err) {
-            if (err.userMessage) {
+            if (typeof err?.userMessage === 'string' && err.userMessage.trim()) {
                 await sendText(from, `> ❌ ${err.userMessage}`);
-            } else if (err.message && err.message.includes('espera')) {
-                await sendText(from, err.message);
-            } else if (err.message && !err.message.startsWith('Command failed') && !err.stack?.includes('at Object.')) {
-                logger.warn(`[COMMAND-WARN] ${cmdToSwitch}: ${err.message}`);
-                await sendText(from, `> ⚠️ ${err.message}`);
+
             } else {
                 logger.error(`error al ejecutar comando ${cmdToSwitch}:`, err);
                 await sendText(from, `[!] error al ejecutar: ${cmdToSwitch}`);

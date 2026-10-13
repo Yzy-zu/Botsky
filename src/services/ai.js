@@ -1051,9 +1051,17 @@ Modo: ${mode}
 
         if (!rawResponse) return { should_act: false };
         const parsed = safeJsonParse(rawResponse);
-        if (!parsed || typeof parsed !== 'object') return { should_act: false };
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) || typeof parsed.should_act !== 'boolean') return { should_act: false };
+        // Provider JSON is a proposal, never truthy authorization to intervene.
+        // A malformed active proposal must remain silent rather than defaulting
+        // an unknown channel to group or converting a string "false" to true.
+        if (parsed.should_act && (
+            !['group', 'private'].includes(parsed.channel) ||
+            typeof parsed.message !== 'string' || !parsed.message.trim() ||
+            (parsed.channel === 'private' && (typeof parsed.target_jid !== 'string' || !parsed.target_jid.trim()))
+        )) return { should_act: false };
 
-        const shouldAct = Boolean(parsed.should_act);
+        const shouldAct = parsed.should_act;
         const now = Date.now();
         if (shouldAct && !bypassCooldown && (now - lastProactiveActionTime < PROACTIVE_COOLDOWN_MS)) {
             logger.warn(`[PROACTIVE-AI] Rate-limit anti-spam activo: bloqueando intervención espontánea repetitiva (enfriamiento restante: ${Math.round((PROACTIVE_COOLDOWN_MS - (now - lastProactiveActionTime)) / 1000)}s).`);

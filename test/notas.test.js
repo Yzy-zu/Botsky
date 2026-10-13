@@ -77,7 +77,7 @@ test('Notas: handleNotas maneja guardar, listar, buscar y borrar en chat', async
             { key: { participant: userJid }, pushName: userName }
         );
         assert.ok(sentMessages.length > 0);
-        assert.ok(sentMessages[0].includes('Nota #'));
+        assert.ok( /guardé la nota \*#\d+\*/i.test(sentMessages[0]));
         assert.ok(sentMessages[0].includes('Revisar la bomba de agua'));
 
         // 2. Listar notas
@@ -88,7 +88,7 @@ test('Notas: handleNotas maneja guardar, listar, buscar y borrar en chat', async
             { key: { participant: userJid }, pushName: userName }
         );
         assert.ok(sentMessages.length > 0);
-        assert.ok(sentMessages[0].includes('TABLÓN DE NOTAS'));
+        assert.ok(sentMessages[0].includes('Notas del chat'));
         assert.ok(sentMessages[0].includes('Revisar la bomba de agua'));
 
         // 3. Buscar notas
@@ -99,7 +99,7 @@ test('Notas: handleNotas maneja guardar, listar, buscar y borrar en chat', async
             { key: { participant: userJid }, pushName: userName }
         );
         assert.ok(sentMessages.length > 0);
-        assert.ok(sentMessages[0].includes('NOTAS ENCONTRADAS'));
+        assert.ok(sentMessages[0].includes('Esto encontré'));
         assert.ok(sentMessages[0].includes('bomba'));
 
         // 4. Borrar nota
@@ -114,7 +114,8 @@ test('Notas: handleNotas maneja guardar, listar, buscar y borrar en chat', async
             { key: { participant: userJid }, pushName: userName }
         );
         assert.ok(sentMessages.length > 0);
-        assert.ok(sentMessages[0].includes(`Nota *#${noteId}* eliminada`));
+        assert.ok(sentMessages[0].includes(`borré la nota *#${noteId}*`));
+        assert.deepEqual(await db.getNotes(testChat), []);
     } finally {
         evolution.client.post = origPost;
     }

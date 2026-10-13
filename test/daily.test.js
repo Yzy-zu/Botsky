@@ -21,7 +21,7 @@ test('Daily: commandRegistry reconoce los aliases de daily', () => {
 test('Daily: pickPrize mapea probabilidades correctamente con descripciones limpias', () => {
     const jackpot = pickPrize(1);
     assert.strictEqual(jackpot.baseXp, 1000);
-    assert.ok(jackpot.title.includes('JACKPOT'));
+    assert.ok(jackpot.title.includes('Premio mayor'));
     assert.ok(!jackpot.desc.includes('chicle'), 'Cero modismos nacos');
 
     const big = pickPrize(10);
@@ -29,7 +29,7 @@ test('Daily: pickPrize mapea probabilidades correctamente con descripciones limp
 
     const empty = pickPrize(98);
     assert.strictEqual(empty.baseXp, 0);
-    assert.ok(empty.title.includes('VACÍA'));
+    assert.ok(empty.title.includes('Sin premio'));
 });
 
 test('Daily: formatCooldownRemaining calcula horas y minutos correctamente', () => {
@@ -57,21 +57,24 @@ test('Daily: ciclo completo de primer reclamo, cooldown de 24h y racha consecuti
         const initialXp = initialUser.xp;
 
         // 1. Primer reclamo (racha = 1)
-        await handleDaily({}, testChat, { key: { participant: userJid }, pushName: userName });
+        const result = await handleDaily({}, testChat, { key: { participant: userJid }, pushName: userName });
         assert.ok(sentMessages.length > 0);
-        assert.ok(sentMessages[0].includes('RULETA DE LA SUERTE DIARIA'));
+        assert.ok(sentMessages[0].includes('Tu daily'));
 
         const claim1 = await db.getDailyClaim(userJid);
         assert.ok(claim1);
         assert.strictEqual(claim1.streak, 1);
         assert.strictEqual(claim1.total_claims, 1);
+        assert.equal(result.status, 'claimed');
+        assert.equal(result.success, true);
+        assert.equal((await db.getOrCreateUser(userJid)).xp - initialXp, result.xp_ganados);
 
         // 2. Intento inmediato antes de 24 horas -> Debe rechazar con cooldown
         sentMessages.length = 0;
         await handleDaily({}, testChat, { key: { participant: userJid }, pushName: userName });
         assert.ok(sentMessages.length > 0);
-        assert.ok(sentMessages[0].includes('YA GIRASTE TU RULETA DE HOY'));
-        assert.ok(sentMessages[0].includes('Vuelve en:'));
+        assert.ok(sentMessages[0].includes('Tu giro ya salió'));
+        assert.ok(sentMessages[0].includes('El siguiente está listo'));
 
         // 3. Simular que transcurrieron 25 horas (racha consecutiva exitosa -> racha = 2)
         const past25Hours = Date.now() - (25 * 60 * 60 * 1000);
@@ -80,7 +83,7 @@ test('Daily: ciclo completo de primer reclamo, cooldown de 24h y racha consecuti
         sentMessages.length = 0;
         await handleDaily({}, testChat, { key: { participant: userJid }, pushName: userName });
         assert.ok(sentMessages.length > 0);
-        assert.ok(sentMessages[0].includes('RULETA DE LA SUERTE DIARIA'));
+        assert.ok(sentMessages[0].includes('Tu daily'));
 
         const claim2 = await db.getDailyClaim(userJid);
         assert.strictEqual(claim2.streak, 2);
@@ -101,15 +104,15 @@ test('Daily: ciclo completo de primer reclamo, cooldown de 24h y racha consecuti
     }
 });
 
-test('Daily: message_normalizer detecta frases naturales para daily', () => {
+test('Daily: normalizador conserva frases sin prefijo para interpretación semántica', () => {
     const msg1 = normalizeIncomingMessage({
         key: { remoteJid: 'test_group@g.us', participant: '123@s.whatsapp.net', fromMe: false, id: 'd1' },
         message: { conversation: 'mi daily' },
         pushName: 'User1'
     });
     assert.ok(msg1);
-    assert.strictEqual(msg1.text, 'daily');
-    assert.strictEqual(msg1.hasPrefix, true);
+    assert.strictEqual(msg1.text, 'mi daily');
+    assert.strictEqual(msg1.hasPrefix, false);
 
     const msg2 = normalizeIncomingMessage({
         key: { remoteJid: 'test_group@g.us', participant: '123@s.whatsapp.net', fromMe: false, id: 'd2' },
@@ -117,7 +120,7 @@ test('Daily: message_normalizer detecta frases naturales para daily', () => {
         pushName: 'User1'
     });
     assert.ok(msg2);
-    assert.strictEqual(msg2.text, 'daily');
+    assert.strictEqual(msg2.text, 'ruleta diaria');
 
     const msg3 = normalizeIncomingMessage({
         key: { remoteJid: 'test_group@g.us', participant: '123@s.whatsapp.net', fromMe: false, id: 'd3' },
@@ -125,5 +128,5 @@ test('Daily: message_normalizer detecta frases naturales para daily', () => {
         pushName: 'User1'
     });
     assert.ok(msg3);
-    assert.strictEqual(msg3.text, 'daily');
+    assert.strictEqual(msg3.text, 'girar ruleta diaria');
 });

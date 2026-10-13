@@ -793,6 +793,14 @@ const calculateMood = (score) => {
 };
 
 const getUserAffinity = (jid, userName = 'Compa', altJid = null) => {
+    if (typeof jid !== 'string' || !jid.trim()) {
+        return Promise.reject(new TypeError('A valid user JID is required for affinity.'));
+    }
+    if (altJid !== null && altJid !== undefined && (typeof altJid !== 'string' || !altJid.trim())) {
+        return Promise.reject(new TypeError('A valid alternative JID is required for affinity.'));
+    }
+    jid = normalizeUserJid(jid);
+    altJid = altJid == null ? null : normalizeUserJid(altJid);
     return new Promise((resolve, reject) => {
         const now = Math.floor(Date.now() / 1000);
         const searchJids = altJid && altJid !== jid ? [jid, altJid] : [jid];

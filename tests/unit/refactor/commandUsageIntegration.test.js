@@ -17,6 +17,7 @@ function toolRegistry(enabled, withProcess = true) {
         module, exports: module.exports, ...(withProcess ? { process: { env: { LEGACY_COMMAND_USAGE_ENABLED: enabled ? 'true' : 'false' } } } : {}),
         require(id) {
             if (id === './logger') return { info() {}, error() {} };
+            if (id === '../core/auth') return { getSenderJid: from => from, isAuthorizedAdmin: () => false };
             if (id === './commandUsageRuntime') { assert.ok(enabled); return runtime; }
             if (['./db', './evolution', '../utils/messageText', '../utils/reminderInput'].includes(id)) return {};
             throw new Error('Unexpected dependency: ' + id);

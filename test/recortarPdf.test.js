@@ -89,10 +89,12 @@ test('Recortar PDF: Flujo completo con Ghostscript real', async () => {
         assert.ok(sentMedias[0].caption.includes('2-4'));
         assert.ok(sentMedias[0].fileName.includes('documento_largo'));
 
-        // Caso 2: Recortar desde la página 3 (deben ser páginas 3-5 = 3 páginas)
+        // Caso 2: el modelo normaliza "desde 3" a rango canónico 3-;
+        // el ejecutor conserva las páginas 3-5 sin reinterpretar lenguaje humano.
         await handleRecortarPdf({
             command: 'recortar',
-            flags: { p: 'desde 3' },
+            raw: 'recortar desde 3',
+            flags: { p: '3-' },
             args: []
         }, 'test_user', dummyMessageData);
 
@@ -119,6 +121,17 @@ test('Recortar PDF: Flujo completo con Ghostscript real', async () => {
         }, 'test_user', dummyMessageData);
 
         assert.ok(sentTexts.some(t => t.text.includes('indica qué páginas recortar')));
+
+        // Canonical open ranges retain validation; human phrases are not executor grammar.
+        sentTexts.length = 0;
+        const beforeInvalidRanges = sentMedias.length;
+        await handleRecortarPdf({ command: 'recortar', flags: { p: '0-' }, args: [] }, 'test_user', dummyMessageData);
+        assert.ok(sentTexts.some(t => t.text.includes('mayor a 0')));
+        await handleRecortarPdf({ command: 'recortar', flags: { p: '10-' }, args: [] }, 'test_user', dummyMessageData);
+        assert.ok(sentTexts.some(t => t.text.includes('supera el total de páginas (5)')));
+        await handleRecortarPdf({ command: 'recortar', flags: { p: 'desde 3' }, args: [] }, 'test_user', dummyMessageData);
+        assert.ok(sentTexts.some(t => t.text.includes('formato de páginas inválido')));
+        assert.equal(sentMedias.length, beforeInvalidRanges);
 
         // Caso 5: Redirección automática desde handleDoc cuando se envía un PDF con páginas
         sentMedias.length = 0;

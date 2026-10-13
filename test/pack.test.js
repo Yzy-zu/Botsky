@@ -368,7 +368,7 @@ test('Pack 10: Comando explícito !comprar pack forwardea correctamente a handle
 
     try {
         const cmdHandler = await getCommandHandler('comprar', {
-            parsed: { command: 'comprar', args: ['pack', 'anime'] },
+            parsed: { command: 'comprar', args: ['pack', 'anime'], flags: {}, raw: '!comprar pack anime' },
             from: AUTHORIZED_GROUP,
             messageData: { key: { participant: userJid }, pushName: 'AnimeFan' }
         });

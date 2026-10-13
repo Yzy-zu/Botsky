@@ -92,15 +92,17 @@ test('Ruleta: ciclo completo de creación de sala, mensaje sin comandos y unión
         assert.ok(!lobbyMsg.includes('/ruleta entrar'), 'No debe contener comandos para unirse');
         assert.ok(!lobbyMsg.includes('!ruleta entrar'), 'No debe contener comandos para unirse');
 
-        // 3. Probar que message_normalizer convierte frases naturales a 'ruleta entrar' durante el lobby
+        // Contrato docs/interpretacion-semantica: preservar texto y aportar lobby;
+        // el ejecutor recibe argumentos estructurados, no otra frase reinterpretada.
         const msgYoJuego = normalizeIncomingMessage({
             key: { remoteJid: groupJid, participant: player2Jid, fromMe: false, id: 'msg_yj' },
             message: { conversation: 'yo juego' },
             pushName: 'Player2'
         });
         assert.ok(msgYoJuego);
-        assert.strictEqual(msgYoJuego.text, 'ruleta entrar');
-        assert.strictEqual(msgYoJuego.hasPrefix, true);
+        assert.strictEqual(msgYoJuego.text, 'yo juego');
+        assert.strictEqual(msgYoJuego.hasPrefix, false);
+        assert.equal(msgYoJuego.sessions.rouletteLobby, true);
 
         const msgLeEntro = normalizeIncomingMessage({
             key: { remoteJid: groupJid, participant: player2Jid, fromMe: false, id: 'msg_le' },
@@ -108,7 +110,7 @@ test('Ruleta: ciclo completo de creación de sala, mensaje sin comandos y unión
             pushName: 'Player2'
         });
         assert.ok(msgLeEntro);
-        assert.strictEqual(msgLeEntro.text, 'ruleta entrar');
+        assert.strictEqual(msgLeEntro.text, 'yo le entro');
 
         // 4. Jugador 2 se une a la partida
         sentMessages.length = 0;

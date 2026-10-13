@@ -5,8 +5,18 @@ const assert = require('node:assert/strict');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
-const { handleMaicra } = require('../src/commands/maicra');
 const evolution = require('../src/services/evolution');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const remote = require('./helpers/minecraftOffline').createMinecraftOffline().remote;
+const moduleFixture = { exports: {} };
+const dependencies = { '../services/evolution': evolution, '../services/minecraftRemote': remote,
+    '../services/logger': { info() {}, warn() {}, error() {} }, '../core/auth': require('../src/core/auth') };
+vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/commands/maicra.js'), 'utf8'), {
+    module: moduleFixture, exports: moduleFixture.exports, Map, Set, Buffer,
+    require(id) { assert.ok(id in dependencies, `Missing Minecraft command dependency ${id}`); return dependencies[id]; }
+}, { filename: 'maicra-command-offline.js' });
+const { handleMaicra } = moduleFixture.exports;
 
 // Mock temporal de sendText y sendPoll para pruebas
 let sentMessages = [];
@@ -77,20 +87,20 @@ test('Maicra Command 5: "mundos" lista los mundos creados y el activo', async ()
     assert.ok(msg.includes('MUNDO ACTIVO'));
 });
 
-test('Maicra Command 6: Opción de encuesta WhatsApp "📦 Ver Mods y Addons" detecta intención', async () => {
-    await handleMaicra({ args: ['📦', 'Ver', 'Mods', 'y', 'Addons'] }, '5214435810175@s.whatsapp.net', {});
+test('Maicra Command 6: Opción de encuesta WhatsApp "📦 Ver Mods y Addons" conserva plan canónico del modelo', async () => {
+    await handleMaicra({ args: ['📦', 'Ver', 'Mods', 'y', 'Addons'], aiArgs: { subcomando: 'mods' }, semanticDecision: { action: 'maicra' } }, '5214435810175@s.whatsapp.net', {});
     const finalMsg = sentMessages[sentMessages.length - 1].text;
     assert.ok(finalMsg.includes('Mundo activo:'));
 });
 
-test('Maicra Command 7: Frase natural "qué mods tiene el server" detecta mods', async () => {
-    await handleMaicra({ args: ['qué', 'mods', 'tiene', 'el', 'server'] }, '5214435810175@s.whatsapp.net', {});
+test('Maicra Command 7: Frase natural "qué mods tiene el server" conserva subcomando canónico mods', async () => {
+    await handleMaicra({ args: ['qué', 'mods', 'tiene', 'el', 'server'], aiArgs: { subcomando: 'mods' }, semanticDecision: { action: 'maicra' } }, '5214435810175@s.whatsapp.net', {});
     const finalMsg = sentMessages[sentMessages.length - 1].text;
     assert.ok(finalMsg.includes('Mundo activo:'));
 });
 
-test('Maicra Command 8: Frase natural "quién está jugando" detecta jugadores', async () => {
-    await handleMaicra({ args: ['quién', 'está', 'jugando'] }, '5214435810175@s.whatsapp.net', {});
+test('Maicra Command 8: Frase natural "quién está jugando" conserva subcomando canónico jugadores', async () => {
+    await handleMaicra({ args: ['quién', 'está', 'jugando'], aiArgs: { subcomando: 'jugadores' }, semanticDecision: { action: 'maicra' } }, '5214435810175@s.whatsapp.net', {});
     const msg = sentMessages[0].text;
     assert.ok(msg.includes('Jugadores en línea'));
 });

@@ -543,6 +543,21 @@ async function publishDueSchoolTasks(now = Date.now()) {
     }
 }
 
+// Cancel first, then remove only the uploaded file inside the school media directory.
+async function cancelTaskAndMedia(id) {
+    const task = await db.getSchoolTaskById(id);
+    if (!task || !await db.cancelSchoolTask(id)) return false;
+    const mediaDir = path.resolve(process.cwd(), 'data', 'school_media');
+    if (typeof task.media_path === 'string' && path.dirname(path.resolve(task.media_path)) === mediaDir) {
+        try {
+            await fs.promises.unlink(path.resolve(task.media_path));
+        } catch (err) {
+            if (err.code !== 'ENOENT') logger.warn(`[SCHOOL] No se pudo limpiar el adjunto de la tarea #${id}: ${err.code}`);
+        }
+    }
+    return true;
+}
+
 registerIntervalSeconds('school-task-publisher', 10, () => publishDueSchoolTasks().catch(err => logger.error(`[SCHOOL] Publisher: ${err.message}`)));
 
 module.exports = {
@@ -555,6 +570,7 @@ module.exports = {
     formatTask,
     extractSchoolTaskDetails,
     handleDirectTaskMessage,
+    cancelTaskAndMedia,
     prepareDailySchoolDigest,
     publishDailySchoolDigest,
     publishDueSchoolTasks

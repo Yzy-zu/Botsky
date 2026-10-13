@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
+const {loadModule}=require('./aiOfflineHarness.test');
 
 const contacts = [
     { jid: '5215511111111@s.whatsapp.net', user_name: 'Fernando' },
@@ -28,10 +29,7 @@ function harness({ authorized = true, failRecipient = false, failConfirmation = 
             },
             async getGroupInfo() { return { participants: [] }; }
         },
-        '../core/auth': {
-            isAuthorizedAdmin: () => authorized,
-            getSenderJid: (chat, data) => data.key?.participantAlt || data.key?.participant || chat
-        },
+        '../core/auth':loadModule('core/auth.js',{}, {env:{ALLOWED_NUMBERS_ADMIN:authorized?'5215599999999,5215500000001':''}}),
         '../services/db': { db: { all: (_, params, done) => done(null, contacts) } },
         '../services/logger': { info() {}, warn() {}, error() {} },
         '../services/ai': {
@@ -50,6 +48,7 @@ function harness({ authorized = true, failRecipient = false, failConfirmation = 
     function loadTool() {
         const toolModule = { exports: {} };
         const toolDeps = {
+            '../core/auth':deps['../core/auth'], './commandUsageRuntime':{trackTool:(_name,_args,_ctx,run)=>run()},
             './logger': deps['../services/logger'], './db': deps['../services/db'], './evolution': deps['../services/evolution'],
             '../utils/messageText': { resolveMessageText() { throw new Error('Unexpected quoted text resolution'); } },
             '../utils/reminderInput': { prepareReminder() { throw new Error('Unexpected reminder preparation'); } },

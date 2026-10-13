@@ -65,6 +65,13 @@ function hasActiveSession(from, participant = null) {
 }
 
 async function handleDoc(parsed = {}, from, messageData = {}) {
+    if (typeof from !== 'string' || !from.trim()) return;
+    parsed = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+    parsed.args = Array.isArray(parsed.args) ? parsed.args : [];
+    parsed.flags = parsed.flags && typeof parsed.flags === 'object' && !Array.isArray(parsed.flags) ? parsed.flags : {};
+    if (parsed.args.some(arg => typeof arg !== 'string' && typeof arg !== 'number')) return;
+    parsed.args = parsed.args.map(arg => typeof arg === 'number' ? String(arg) : arg);
+    messageData = messageData && typeof messageData === 'object' && !Array.isArray(messageData) ? messageData : {};
     if (!from) return;
     cleanExpiredSessions();
     const participant = messageData?.key?.participant || messageData?.participant || from;
@@ -245,6 +252,13 @@ async function handleDoc(parsed = {}, from, messageData = {}) {
 }
 
 async function handleComprimir(parsed, from, messageData) {
+    if (typeof from !== 'string' || !from.trim()) return;
+    parsed = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+    parsed.args = Array.isArray(parsed.args) ? parsed.args : [];
+    parsed.flags = parsed.flags && typeof parsed.flags === 'object' && !Array.isArray(parsed.flags) ? parsed.flags : {};
+    if (parsed.args.some(arg => typeof arg !== 'string' && typeof arg !== 'number')) return;
+    parsed.args = parsed.args.map(arg => typeof arg === 'number' ? String(arg) : arg);
+    messageData = messageData && typeof messageData === 'object' && !Array.isArray(messageData) ? messageData : {};
     if (!isDocumentMessage(messageData)) {
         return sendText(from, 'Responde al PDF con `comprimir` y trato de reducir su tamaño.');
     }
@@ -374,6 +388,13 @@ function isDocumentMessage(messageData) {
 }
 
 async function handleRecortarPdf(parsed = {}, from, messageData = {}) {
+    if (typeof from !== 'string' || !from.trim()) return;
+    parsed = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+    parsed.args = Array.isArray(parsed.args) ? parsed.args : [];
+    parsed.flags = parsed.flags && typeof parsed.flags === 'object' && !Array.isArray(parsed.flags) ? parsed.flags : {};
+    if (parsed.args.some(arg => typeof arg !== 'string' && typeof arg !== 'number')) return;
+    parsed.args = parsed.args.map(arg => typeof arg === 'number' ? String(arg) : arg);
+    messageData = messageData && typeof messageData === 'object' && !Array.isArray(messageData) ? messageData : {};
     if (!from) return;
     if (!isDocumentMessage(messageData)) {
         return sendText(from, '> adjunta o cita un pdf\nusa `recortar [páginas]` (ej: `recortar 1-5` o `recortar 68-`)');
@@ -455,6 +476,13 @@ async function handleRecortarPdf(parsed = {}, from, messageData = {}) {
 }
 
 async function handlePdf2Img(parsed = {}, from, messageData = {}) {
+    if (typeof from !== 'string' || !from.trim()) return;
+    parsed = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+    parsed.args = Array.isArray(parsed.args) ? parsed.args : [];
+    parsed.flags = parsed.flags && typeof parsed.flags === 'object' && !Array.isArray(parsed.flags) ? parsed.flags : {};
+    if (parsed.args.some(arg => typeof arg !== 'string' && typeof arg !== 'number')) return;
+    parsed.args = parsed.args.map(arg => typeof arg === 'number' ? String(arg) : arg);
+    messageData = messageData && typeof messageData === 'object' && !Array.isArray(messageData) ? messageData : {};
     if (!from) return;
     if (!isDocumentMessage(messageData)) {
         return sendText(from, '> adjunta un pdf\nusa `pdf2img`');
@@ -551,6 +579,13 @@ async function handlePdf2Img(parsed = {}, from, messageData = {}) {
 }
 
 async function handleUnirPdf(parsed = {}, from, messageData = {}) {
+    if (typeof from !== 'string' || !from.trim()) return;
+    parsed = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+    parsed.args = Array.isArray(parsed.args) ? parsed.args : [];
+    parsed.flags = parsed.flags && typeof parsed.flags === 'object' && !Array.isArray(parsed.flags) ? parsed.flags : {};
+    if (parsed.args.some(arg => typeof arg !== 'string' && typeof arg !== 'number')) return;
+    parsed.args = parsed.args.map(arg => typeof arg === 'number' ? String(arg) : arg);
+    messageData = messageData && typeof messageData === 'object' && !Array.isArray(messageData) ? messageData : {};
     if (!from) return;
     cleanExpiredSessions();
     const participant = messageData?.key?.participant || messageData?.participant || from;

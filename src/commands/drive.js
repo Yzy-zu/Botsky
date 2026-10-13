@@ -9,6 +9,13 @@ const drive = require('../services/drive');
 const logger = require('../services/logger');
 
 async function handleDrive(parsed = {}, from, messageData = {}) {
+    if (typeof from !== 'string' || !from.trim()) return;
+    parsed = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+    parsed.args = Array.isArray(parsed.args) ? parsed.args : [];
+    parsed.flags = parsed.flags && typeof parsed.flags === 'object' && !Array.isArray(parsed.flags) ? parsed.flags : {};
+    if (parsed.args.some(arg => typeof arg !== 'string' && typeof arg !== 'number')) return;
+    parsed.args = parsed.args.map(arg => typeof arg === 'number' ? String(arg) : arg);
+    messageData = messageData && typeof messageData === 'object' && !Array.isArray(messageData) ? messageData : {};
     // Si se pasa messageData como primer argumento o parsed contiene datos de mensaje
     if (parsed && (parsed.key || parsed.message) && (!messageData || typeof messageData === "string")) {
         messageData = parsed;

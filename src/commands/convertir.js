@@ -160,6 +160,13 @@ function buildFfmpegArgs({ inputPath, outputPath, format, quality, timeIn, timeE
 }
 
 async function handleConvertir(parsed = {}, from, messageData = {}) {
+    if (typeof from !== 'string' || !from.trim()) return;
+    parsed = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+    parsed.args = Array.isArray(parsed.args) ? parsed.args : [];
+    parsed.flags = parsed.flags && typeof parsed.flags === 'object' && !Array.isArray(parsed.flags) ? parsed.flags : {};
+    if (parsed.args.some(arg => typeof arg !== 'string' && typeof arg !== 'number')) return;
+    parsed.args = parsed.args.map(arg => typeof arg === 'number' ? String(arg) : arg);
+    messageData = messageData && typeof messageData === 'object' && !Array.isArray(messageData) ? messageData : {};
     if (!from) return;
     const flags = parsed?.flags || {};
     const args = Array.isArray(parsed?.args) ? parsed.args : [];

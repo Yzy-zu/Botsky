@@ -3,7 +3,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../.env') });
+const {harness,gemini}=require('./aiOfflineHarness.test');
+if(!process.env.DATA_DIR?.startsWith('/tmp/botsky-data'))throw Error('Run persistence tests with the isolated Docker verifier');
 
 const db = require('../src/services/db');
 
@@ -37,8 +38,9 @@ test('Personality 2: Voz mexicana compartida sin cuota de insultos ni saludos', 
 
 test('Personality 3: Ritmo contextual y memoria de expresiones recientes', () => {
     const { getResponseMode, getRecentStyle } = require('../src/services/conversationStyle');
-    assert.ok(getResponseMode('hola').maxOutputTokens < getResponseMode('explica paso a paso').maxOutputTokens);
-    assert.equal(getResponseMode('explica, pero breve').name, 'brief');
+    assert.equal(getResponseMode('hola').maxOutputTokens,getResponseMode('explica paso a paso').maxOutputTokens,'Palabras no eligen el presupuesto');
+    assert.equal(getResponseMode('explica, pero breve','brief').name, 'brief');
+    assert.ok(getResponseMode('hola','brief').maxOutputTokens<getResponseMode('hola','explanation').maxOutputTokens);
     const recent = getRecentStyle([
         { role: 'assistant', content: 'Va, compa.' },
         { role: 'assistant', content: 'Aquí ando, compa.' }
@@ -47,8 +49,8 @@ test('Personality 3: Ritmo contextual y memoria de expresiones recientes', () =>
     assert.equal(getRecentStyle([]).repeated.length, 0);
 });
 
-test('Personality 4: Inferencia en vivo clasifica ofensa sin redactar la conversación', async () => {
-    const ai = require('../src/services/ai');
+test('Personality 4: Inferencia offline clasifica ofensa sin redactar la conversación', async () => {
+    const local=harness({post:async()=>gemini(JSON.stringify({action:'chat',args:{},addressed_to_bot:true,sentiment:'ofensa',message:'Descartar borrador'}))});const ai=local.ai;
     const result = await ai.routeWithAI(
         'chinga tu madre pinche chatarra',
         'Brayan',
@@ -71,10 +73,10 @@ test('Personality 5: Creador/Admin tiene jerarquía suprema y directiva estricta
     assert.ok(contextAdmin.includes('DEBES SELECCIONAR LA ACCIÓN Y EJECUTARLA'), 'Debe ordenar ejecutar las acciones');
     assert.ok(!contextAdmin.includes('Mándalo al carajo'), 'No debe mandar al carajo al creador');
 
-    // Comprobar que ai.js contiene la separación estricta entre herramientas y afinidad
-    const fs = require('fs');
-    const aiCode = fs.readFileSync(path.join(__dirname, '../src/services/ai.js'), 'utf8');
-    assert.ok(aiCode.includes('SEPARACIÓN ESTRICTA ENTRE HERRAMIENTAS Y AFINIDAD'), 'ai.js debe tener la regla 0');
-    assert.ok(aiCode.includes('TIENES PROHIBIDO RECHAZARLO'), 'ai.js debe prohibir rechazar al creador');
+    // Verify the actual route payload keeps tone context from granting access.
+    const local=harness({post:async()=>gemini(JSON.stringify({action:'chat',args:{},addressed_to_bot:true}))});
+    await local.ai.routeWithAI('saludo','Persona',false,[],null,contextAdmin);
+    const prompt=local.calls[0][1].systemInstruction.parts[0].text;
+    assert.match(prompt,/La afinidad sólo afecta el tono/);assert.match(prompt,/Nunca decide permisos/);
+    assert.equal((await local.ai.routeWithAI('saludo','Persona',false)).message,'');
 });
-

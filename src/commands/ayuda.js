@@ -178,6 +178,12 @@ _O en lenguaje natural:_
 };
 
 async function handleAyuda(parsed = {}, from) {
+    if (typeof from !== 'string' || !from.trim()) return;
+    parsed = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+    parsed.args = Array.isArray(parsed.args) ? parsed.args : [];
+    parsed.flags = parsed.flags && typeof parsed.flags === 'object' && !Array.isArray(parsed.flags) ? parsed.flags : {};
+    if (parsed.args.some(arg => typeof arg !== 'string' && typeof arg !== 'number')) return;
+    parsed.args = parsed.args.map(arg => typeof arg === 'number' ? String(arg) : arg);
     if (!from) return;
     const safeParsed = parsed || {};
     const args = Array.isArray(safeParsed.args) ? safeParsed.args : [];

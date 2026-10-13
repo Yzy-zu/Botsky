@@ -1,141 +1,44 @@
 'use strict';
-
-const test = require('node:test');
-const assert = require('node:assert/strict');
-
-// ─── 1. Tests de Circuit Breaker para Groq ──────────────────────────────────
-test('Groq Circuit Breaker: Manejo de cooldown ante errores de cuota', async () => {
-    const ai = require('../src/services/ai');
-
-    // Reset inicial
-    ai._resetGroqCircuitBreaker();
-    assert.equal(ai.isGroqAvailable(), true, 'Groq debe estar disponible inicialmente');
-
-    // Activar cooldown simulando 429
-    ai.markGroqCooldown(60000);
-    assert.equal(ai.isGroqAvailable(), false, 'Groq debe estar marcado como no disponible tras cooldown');
-
-    // callGroq debe retornar null inmediatamente sin llamar a la red
-    const result = await ai.callGroq({
-        systemInstruction: 'test',
-        userMessage: 'hola'
-    });
-    assert.equal(result, null, 'callGroq debe devolver null de inmediato durante cooldown');
-
-    // Restaurar estado
-    ai._resetGroqCircuitBreaker();
-    assert.equal(ai.isGroqAvailable(), true, 'Groq debe volver a estar disponible tras reset');
+const test=require('node:test');const assert=require('node:assert/strict');
+const fs=require('node:fs');const path=require('node:path');
+const {harness,loadModule,gemini,groq}=require('./aiOfflineHarness.test');
+const logger={info(){},warn(){},error(){},cmd(){}};
+function downloadHarness(){return loadModule('commands/descargar.js',{
+    fs:{mkdirSync(){},existsSync:()=>false},path,'../core/parser':loadModule('core/parser.js',{}),
+    '../services/evolution':{sendText:async()=>{},sendMedia:async()=>{}},'../services/logger':logger,
+    '../services/progress':{Progress:class{async start(){}async done(){}},spawnWithProgress:async()=>{throw Error('Unexpected download');}},
+    '../services/drive':{},'../services/mediaSearch':{searchMedia:async()=>({status:'success',items:[{url:'https://youtube.com/watch?v=fake',title:'long video',duration:'1h',secs:3600}]})},'../services/operationFeedback':{},'../utils/thumbnailCollage':{}
+});}
+test('Groq Circuit Breaker: cooldown rechaza de forma tipada sin transporte',async()=>{
+    const h=harness();h.ai.markGroqCooldown(60000);assert.equal(h.ai.isGroqAvailable(),false);
+    await assert.rejects(h.ai.callGroq({userMessage:'hola'}),error=>error.diagnostic.kind==='provider_unavailable');assert.equal(h.calls.length,0);
+    h.ai._resetGroqCircuitBreaker();assert.equal(h.ai.isGroqAvailable(),true);
 });
-
-// ─── 2. Tests de Descargas Ligeras de Video (<=10MB, 480p, <=5 min) ───────────
-test('Descargar: Calidad por defecto 480p y selectores <=10MB', async () => {
-    const fs = require('fs');
-    const path = require('path');
-    const content = fs.readFileSync(path.join(__dirname, '../src/commands/descargar.js'), 'utf-8');
-
-    // Verificar que DEFAULT_QUALITY sea 480
-    assert.match(content, /DEFAULT_QUALITY = process\.env\.YTDLP_DEFAULT_QUALITY \?\? '480'/);
-
-    // Verificar selectores de bajo peso <10M y límite 15M
-    assert.match(content, /filesize<\?10M/);
-    assert.match(content, /--max-filesize', '15M'/);
-
-    // Verificar recorte automático a 5 minutos (300 segundos) para videos
-    assert.match(content, /\*00:00:00-00:05:00/);
-
-    // Verificar filtro de duración en búsquedas (300 segundos)
-    assert.match(content, /shortVideos = allCandidates\.filter\(r => r\.secs > 0 && r\.secs <= 300\)/);
+test('Descargar: calidad 480p por defecto sin límites de corte/peso arbitrarios retirados',async()=>{
+    const api=downloadHarness();await api.handleDescargar({args:['video largo'],flags:{}},'offline@s.whatsapp.net',{});const session=api.getSearchSession(api.getDownloadSessionKey('offline@s.whatsapp.net',{}));assert.equal(session.quality,'480');assert.equal(session.results.length,1,'Conservar video de una hora');const args=api.buildArgs('https://youtube.com/watch?v=fake','mp4',session.quality,false,'/tmp/out');
+    assert.match(args.join(' '),/480/);assert.ok(!args.includes('--max-filesize'));assert.ok(!args.join(' ').includes('00:05:00'));assert.ok(!args.join(' ').includes('filesize<?10M'));
 });
-
-// ─── 3. Tests del Gatekeeper Local y Memoria Pasiva en Grupos ────────────────
-test('Gatekeeper: Ingesta en historial y filtrado de ruido trivial en grupos', async () => {
-    const { dispatch, _resetCooldowns } = require('../src/core/dispatcher');
-    const history = require('../src/services/history');
-
-    _resetCooldowns();
-    const groupJid = '120363888888888888@g.us';
-    const userJid = '5214435810175@s.whatsapp.net';
-
-    const evolution = require('../src/services/evolution');
-    const ai = require('../src/services/ai');
-    const origPost = evolution.client.post;
-    const origChat = ai.chatWithBotsky;
-    const origRoute = ai.routeWithAI;
-
-    evolution.client.post = async () => ({ data: { status: 'SUCCESS' } });
-    ai.chatWithBotsky = async () => 'Qué onda compa, aquí andamos';
-
-    const origGroups = process.env.ALLOWED_GROUPS_NORMAL;
-    const origAdmin = process.env.ALLOWED_NUMBERS_ADMIN;
-    process.env.ALLOWED_GROUPS_NORMAL = '120363888888888888';
-    process.env.ALLOWED_NUMBERS_ADMIN = '5214435810175';
-
-    // Limpiar historial de pruebas
-    history.clearHistory(groupJid);
-
-    try {
-        // Mensaje de risa trivial en grupo
-        await dispatch({
-            from: groupJid,
-            text: 'jajajajaja xd',
-            messageType: 'conversation',
-            messageData: {
-                key: { remoteJid: groupJid, participant: userJid, fromMe: false, id: 'MSG-FILLER-1' },
-                pushName: 'Paco'
-            }
-        });
-
-        // 1. El mensaje DEBE haberse guardado en el historial (Memoria pasiva a costo cero)
-        const hist = history.getHistory(groupJid, 5);
-        assert.equal(hist.length >= 1, true, 'El mensaje trivial debe quedar registrado en historial');
-        assert.equal(hist[hist.length - 1].content.includes('jajajajaja xd'), true);
-
-        // 2. Mensaje dirigido explícitamente a Botsky debe saltarse el gatekeeper y procesarse
-        const addressedMsg = 'oye botsky qué onda';
-        await dispatch({
-            from: groupJid,
-            text: addressedMsg,
-            messageType: 'conversation',
-            messageData: {
-                key: { remoteJid: groupJid, participant: userJid, fromMe: false, id: 'MSG-BOTSKY-1' },
-                pushName: 'Paco'
-            }
-        });
-
-        const hist2 = history.getHistory(groupJid, 5);
-        assert.equal(hist2.some(m => m.content.includes('botsky qué onda')), true);
-    } finally {
-        process.env.ALLOWED_GROUPS_NORMAL = origGroups;
-        process.env.ALLOWED_NUMBERS_ADMIN = origAdmin;
-        evolution.client.post = origPost;
-        ai.chatWithBotsky = origChat;
-        ai.routeWithAI = origRoute;
-    }
+test('Gatekeeper: ingesta pasiva conserva historial y decisión semántica de silencio',async()=>{
+    const source=fs.readFileSync(path.join(__dirname,'../src/core/dispatcher.js'),'utf8');const history=[],sent=[],requests=[];
+    const deps=Object.fromEntries([...source.matchAll(/require\('([^']+)'\)/g)].map(m=>[m[1],{}]));
+    Object.assign(deps,{'../core/parser':loadModule('core/parser.js',{}),'../services/scheduler':{registerTask(){}},'../services/logger':logger,
+        '../services/evolution':{sendText:async(...args)=>sent.push(args),sendTyping:async()=>{}},'../services/history':{getHistory:()=>history,addMessage:(chat,role,content)=>history.push({chat,role,content})},
+        '../services/ai':{routeWithAIOutcome:async text=>{requests.push(text);return{ok:true,decision:{action:'ignore',args:{},addressed_to_bot:false}};}},
+        '../services/db':{getUserAffinityContext:async()=>''},'../services/proactive':{recordGroupActivity(){}},'../commands/mensaje':{getPendingContactContext:()=>[]},
+        '../commands/cooperacha':{hasActiveCooperacha:()=>false},'../commands/buscar':{getSearchContext:()=>[]},'../services/attachmentContext':{getAttachmentState:()=>({attachments:[],activeId:null,pendingRequest:null}),clearPendingRequest(){}},
+        '../services/semanticRouting':loadModule('services/semanticRouting.js',{}),'../services/operationFeedback':loadModule('services/operationFeedback.js',{}),
+        './auth':loadModule('core/auth.js',{}),'./commandRegistry':{isRegisteredCommand:()=>false}});
+    const dispatch=loadModule('core/dispatcher.js',deps,{env:{ALLOWED_GROUPS_NORMAL:'offline'}}).dispatch;
+    await dispatch({from:'offline@g.us',text:'jajaja qué calor',messageType:'conversation',messageData:{key:{id:'passive',participant:'19995550001@s.whatsapp.net'}}});
+    assert.equal(history.length,1);assert.match(history[0].content,/jajaja qué calor/);assert.equal(requests.length,1);assert.equal(sent.length,0);
 });
-
-// ─── 4. Tests de Validación Silenciosa de Enlaces y Configuración IA ──────────
-test('Descargar: Enlace de foto de TikTok es ignorado en silencio sin lanzar error', async () => {
-    const { handleDescargar } = require('../src/commands/descargar');
-    const photoUrl = 'https://www.tiktok.com/@zen__070/photo/7680791101401304328?_r=1&_t=ZS-99xmLcBEG07';
-    let threw = false;
-    try {
-        await handleDescargar({ flags: {}, args: [photoUrl] }, '123@s.whatsapp.net', { key: { id: 'test_photo_msg' } });
-    } catch (e) {
-        threw = true;
-    }
-    assert.equal(threw, false, 'No debe arrojar error para enlaces de fotos de TikTok');
+test('Descargar: enlace de foto TikTok se ignora sin ejecutar descargas',async()=>{
+    const api=downloadHarness();await api.handleDescargar({flags:{},args:['https://www.tiktok.com/@offline/photo/123']},'offline@s.whatsapp.net',{key:{id:'photo'}});
 });
-
-test('IA: Configuración Groq y timeout rápido de Gemini (3s)', async () => {
-    const fs = require('fs');
-    const path = require('path');
-    const aiContent = fs.readFileSync(path.join(__dirname, '../src/services/ai.js'), 'utf-8');
-
-    // Modelo Groq 70B / 20B
-    assert.match(aiContent, /llama-3\.3-70b-versatile/);
-    // Timeout Gemini 3s / GEMINI_TIMEOUT_MS
-    assert.match(aiContent, /timeout:\s*media\s*\?\s*35000\s*:\s*\(?parseInt\(process\.env\.GEMINI_TIMEOUT_MS/);
-    // Manejo 413 en circuit breaker
-    assert.match(aiContent, /status === 413/);
+test('IA: modelo/respaldo/timeout configurados se verifican en HTTP sin regex sobre fuente',async()=>{
+    const h=harness({env:{GEMINI_API_KEY:'offline-gemini-key',GROQ_API_KEY:'offline-groq-key',GEMINI_TIMEOUT_MS:'3000',GROQ_MODEL:'openai/gpt-oss-20b'},post:async url=>url.includes('googleapis')?gemini('ok'):groq('backup')});
+    await h.ai.callGemini({userMessage:'hola'});assert.equal(h.calls[0][2].timeout,3000);
+    await h.ai.callGemini({userMessage:'leer',media:{mimeType:'image/jpeg',data:'aW1n'}});assert.equal(h.calls[1][2].timeout,35000);
+    await h.ai.callGroq({userMessage:'hola'});assert.equal(h.calls[2][1].model,'openai/gpt-oss-20b');assert.equal(h.calls[2][1].max_completion_tokens,300);
+    h.http.post=async()=>{throw Object.assign(Error('too large'),{response:{status:413}});};await assert.rejects(h.ai.callGroq({userMessage:'large'}));assert.equal(h.ai.isGroqAvailable(),false);
 });
-

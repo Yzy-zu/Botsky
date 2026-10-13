@@ -5,6 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 
+const syntheticToolContext = {from:'19995550101@s.whatsapp.net',messageData:{key:{participant:'19995550101@s.whatsapp.net'}}};
 const { executeTool, getToolDeclarations } = require('../src/services/toolRegistry');
 const { cambiarTele, handleCambiarTV } = require('../src/commands/cambiarTV');
 const { handleRank, handleTop, handleDarXp, handleNiveles } = require('../src/commands/niveles');
@@ -98,24 +99,24 @@ test('Tool Registry Robustness: juegos_y_economia despacha rank, top y valida ha
 
 test('Tool Registry Robustness: juegos_y_economia rechaza apuestas o montos inválidos/NaN', async () => {
     // Ruleta con apuesta no entera
-    const resString = await executeTool('juegos_y_economia', { juego: 'ruleta', apuesta: 'mucho' }, {});
+    const resString = await executeTool('juegos_y_economia', { juego: 'ruleta', apuesta: 'mucho' }, syntheticToolContext);
     assert.strictEqual(resString.success, false);
     assert.match(resString.error, /número entero positivo/i);
 
-    const resNeg = await executeTool('juegos_y_economia', { juego: 'ruleta', apuesta: -100 }, {});
+    const resNeg = await executeTool('juegos_y_economia', { juego: 'ruleta', apuesta: -100 }, syntheticToolContext);
     assert.strictEqual(resNeg.success, false);
     assert.match(resNeg.error, /número entero positivo/i);
 
-    const resDecimal = await executeTool('juegos_y_economia', { juego: 'ruleta', apuesta: 10.5 }, {});
+    const resDecimal = await executeTool('juegos_y_economia', { juego: 'ruleta', apuesta: 10.5 }, syntheticToolContext);
     assert.strictEqual(resDecimal.success, false);
     assert.match(resDecimal.error, /número entero positivo/i);
 
     // Darxp con cantidad no entera
-    const resXpNeg = await executeTool('juegos_y_economia', { juego: 'darxp', cantidad: -50 }, {});
+    const resXpNeg = await executeTool('juegos_y_economia', { juego: 'darxp', cantidad: -50 }, syntheticToolContext);
     assert.strictEqual(resXpNeg.success, false);
     assert.match(resXpNeg.error, /número entero positivo/i);
 
-    const resXpNaN = await executeTool('juegos_y_economia', { juego: 'darxp', cantidad: 'cien' }, {});
+    const resXpNaN = await executeTool('juegos_y_economia', { juego: 'darxp', cantidad: 'cien' }, syntheticToolContext);
     assert.strictEqual(resXpNaN.success, false);
     assert.match(resXpNaN.error, /número entero positivo/i);
 });
@@ -146,11 +147,11 @@ test('Tool Registry Robustness: notas_tablon valida IDs y maneja args nulos sin 
 });
 
 test('Tool Registry Robustness: recordatorios_alarmas valida IDs y opera con args nulos', async () => {
-    const resCancelInvalid = await executeTool('recordatorios_alarmas', { accion: 'cancelar', id: 'abc' }, {});
+    const resCancelInvalid = await executeTool('recordatorios_alarmas', { accion: 'cancelar', id: 'abc' }, syntheticToolContext);
     assert.strictEqual(resCancelInvalid.success, false);
     assert.ok(resCancelInvalid.error);
 
-    const resCancelNeg = await executeTool('recordatorios_alarmas', { accion: 'cancelar', id: -1 }, {});
+    const resCancelNeg = await executeTool('recordatorios_alarmas', { accion: 'cancelar', id: -1 }, syntheticToolContext);
     assert.strictEqual(resCancelNeg.success, false);
     assert.ok(resCancelNeg.error);
 });

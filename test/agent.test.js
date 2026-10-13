@@ -402,7 +402,21 @@ test('Agent-Loop: error de herramienta no causa crash y es comunicado al modelo'
     }
 });
 
-test('Agent-Live: Gemini ejecuta uptime en VPS mediante Function Calling real y responde', async () => {
+test('Agent: proveedor Gemini fixture solicita uptime real en contenedor y recibe su resultado', async t => {
+    const previous = axios.post;
+    let turn = 0;
+    axios.post = async (url, payload) => {
+        assert.ok(String(url).includes('generativelanguage.googleapis.com'));
+        turn++;
+        if (turn === 1) return { data: { candidates: [{ content: { role: 'model', parts: [{
+            functionCall: { name: 'ejecutar_terminal', args: { comando: 'uptime' } }
+        }] } }] } };
+        const response = payload.contents.flatMap(content => content.parts || []).find(part => part.functionResponse);
+        assert.ok(response, 'El segundo turno debe incluir resultado de herramienta real');
+        assert.ok(JSON.stringify(response).includes('load average'));
+        return { data: { candidates: [{ content: { role: 'model', parts: [{ text: 'Uptime confirmado por la herramienta.' }] } }] } };
+    };
+    t.after(() => { axios.post = previous; });
     const agentResult = await runAgentWithTerminal({
         userMessage: '¿cuánto tiempo lleva encendido el servidor? Usa la herramienta ejecutar_terminal con el comando uptime'
     });
@@ -412,6 +426,7 @@ test('Agent-Live: Gemini ejecuta uptime en VPS mediante Function Calling real y 
     assert.strictEqual(agentResult.executedTools[0].name, 'ejecutar_terminal');
     const out = agentResult.executedTools[0].result.stdout;
     assert.ok(out.includes('load average') || out.includes('up'), 'La salida debe contener datos reales de uptime');
+    assert.strictEqual(turn, 2);
 });
 
 

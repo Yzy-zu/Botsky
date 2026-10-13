@@ -272,6 +272,7 @@ test('Herramienta de voz transmite petición e historial reales y devuelve el re
     const actual = { success: false, error: 'Proveedor caído', enviado_al_chat: true };
     const registry = load('services/toolRegistry.js', {
         './logger': logger, './db': {}, './evolution': {},
+        '../core/auth': { getSenderJid: from => from, isAuthorizedAdmin: () => false },
         '../utils/messageText': require('../src/utils/messageText'), '../utils/reminderInput': require('../src/utils/reminderInput'),
         '../commands/voz': { handleVoz: async (...args) => { received.push(args); return actual; } }
     });
@@ -279,7 +280,8 @@ test('Herramienta de voz transmite petición e historial reales y devuelve el re
     const result = await registry.executeTool('sintetizar_voz', { texto: 'borrador', durationSeconds: 30 }, { from: 'student@s.whatsapp.net', userMessage: 'manda un audio sobre eso', history });
     assert.equal(result.success, false); assert.equal(result.error, 'Proveedor caído');
     assert.equal(received[0][0].raw, 'manda un audio sobre eso');
-    assert.equal(received[0][0].voiceContext.history, history);
+    // Tool input is copied to null-prototype JSON objects at the security boundary.
+    assert.deepEqual(JSON.parse(JSON.stringify(received[0][0].voiceContext.history)), history);
     assert.equal(received[0][0].aiArgs.durationSeconds, 30);
 });
 

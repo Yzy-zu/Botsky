@@ -2,20 +2,10 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const path = require('path');
-require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
-
-const axios = require('axios');
-const {
-    maskKey,
-    getNextApiKey,
-    markKeyCooldown,
-    isRateLimitError,
-    getConfiguredApiKeys,
-    callGemini,
-    _keyStateMap,
-    _resetPoolState
-} = require('../src/services/ai');
+const {harness}=require('./aiOfflineHarness.test');
+const h=harness({env:{GEMINI_API_KEY:'offline-pool-key-long'}});
+const env=h.env;const axios=h.http;
+const {maskKey,getNextApiKey,markKeyCooldown,isRateLimitError,getConfiguredApiKeys,callGemini,_keyStateMap,_resetPoolState}=h.ai;
 
 test('AI-Pool: maskKey enmascara claves y nunca expone el secreto completo', () => {
     const fullKey = 'AQ.MockKeyTestSample1234567890abcdefghijklmnopqrstuvwxyz9999';
@@ -99,7 +89,7 @@ test('AI-Pool: recuperación de una clave tras expirar su cooldown', () => {
 
     // Simular un cooldown que ya expiró en el pasado
     _keyStateMap.set(mockKeys[0], {
-        cooldownUntil: Date.now() - 500, // Expiró hace medio segundo
+        cooldownUntil: h.now - 500, // Expiró hace medio segundo
         failures: 1
     });
 
@@ -125,41 +115,41 @@ test('AI-Pool: isRateLimitError identifica códigos 429 y RESOURCE_EXHAUSTED', (
 
 test('AI-Pool: getConfiguredApiKeys soporta 1, 2, 3 o ninguna clave de forma independiente', () => {
     const savedKeys = {};
-    for (const k of Object.keys(process.env)) {
+    for (const k of Object.keys(env)) {
         if (k.startsWith('GEMINI_API_KEY')) {
-            savedKeys[k] = process.env[k];
-            delete process.env[k];
+            savedKeys[k] = env[k];
+            delete env[k];
         }
     }
 
     try {
         // 1. Ninguna clave
-        assert.deepStrictEqual(getConfiguredApiKeys(), [], 'Sin variables debe devolver array vacío');
+        assert.deepStrictEqual(JSON.parse(JSON.stringify(getConfiguredApiKeys())), [], 'Sin variables debe devolver array vacío');
 
         // 2. Solo GEMINI_API_KEY_2 (segunda clave únicamente)
-        process.env.GEMINI_API_KEY_2 = 'AQ.OnlyKeyTwo_222222222222222222222222222222222';
-        assert.deepStrictEqual(getConfiguredApiKeys(), ['AQ.OnlyKeyTwo_222222222222222222222222222222222']);
+        env.GEMINI_API_KEY_2 = 'AQ.OnlyKeyTwo_222222222222222222222222222222222';
+        assert.deepStrictEqual(JSON.parse(JSON.stringify(getConfiguredApiKeys())), ['AQ.OnlyKeyTwo_222222222222222222222222222222222']);
 
         // 3. Dos claves: GEMINI_API_KEY_2 y GEMINI_API_KEY_3
-        process.env.GEMINI_API_KEY_3 = 'AQ.OnlyKeyThree_33333333333333333333333333333333';
-        assert.deepStrictEqual(getConfiguredApiKeys(), [
+        env.GEMINI_API_KEY_3 = 'AQ.OnlyKeyThree_33333333333333333333333333333333';
+        assert.deepStrictEqual(JSON.parse(JSON.stringify(getConfiguredApiKeys())), [
             'AQ.OnlyKeyTwo_222222222222222222222222222222222',
             'AQ.OnlyKeyThree_33333333333333333333333333333333'
         ]);
 
         // 4. Tres claves completas
-        process.env.GEMINI_API_KEY = 'AQ.OnlyKeyOne_111111111111111111111111111111111';
-        assert.deepStrictEqual(getConfiguredApiKeys(), [
+        env.GEMINI_API_KEY = 'AQ.OnlyKeyOne_111111111111111111111111111111111';
+        assert.deepStrictEqual(JSON.parse(JSON.stringify(getConfiguredApiKeys())), [
             'AQ.OnlyKeyOne_111111111111111111111111111111111',
             'AQ.OnlyKeyTwo_222222222222222222222222222222222',
             'AQ.OnlyKeyThree_33333333333333333333333333333333'
         ]);
     } finally {
-        for (const k of Object.keys(process.env)) {
-            if (k.startsWith('GEMINI_API_KEY')) delete process.env[k];
+        for (const k of Object.keys(env)) {
+            if (k.startsWith('GEMINI_API_KEY')) delete env[k];
         }
         for (const [k, v] of Object.entries(savedKeys)) {
-            process.env[k] = v;
+            env[k] = v;
         }
     }
 });
@@ -210,16 +200,16 @@ test('AI-Pool: simulación HTTP de error 429 con Axios mock -> reintento con sig
     };
 
     const savedKeys = {};
-    for (const k of Object.keys(process.env)) {
+    for (const k of Object.keys(env)) {
         if (k.startsWith('GEMINI_API_KEY')) {
-            savedKeys[k] = process.env[k];
-            delete process.env[k];
+            savedKeys[k] = env[k];
+            delete env[k];
         }
     }
 
     try {
-        process.env.GEMINI_API_KEY = mockKeys[0];
-        process.env.GEMINI_API_KEY_2 = mockKeys[1];
+        env.GEMINI_API_KEY = mockKeys[0];
+        env.GEMINI_API_KEY_2 = mockKeys[1];
 
         const result = await callGemini({
             userMessage: 'Test de failover por 429',
@@ -245,20 +235,20 @@ test('AI-Pool: simulación HTTP de error 429 con Axios mock -> reintento con sig
         // 4. Verificación de que la primera clave quedó en cooldown
         const state1 = _keyStateMap.get(mockKeys[0]);
         assert.ok(state1, 'Debe existir registro en _keyStateMap para Key 1');
-        assert.ok(state1.cooldownUntil > Date.now(), 'Key 1 debe tener cooldown activo');
+        assert.ok(state1.cooldownUntil > h.now, 'Key 1 debe tener cooldown activo');
         assert.strictEqual(state1.failures, 1, 'Key 1 debe registrar 1 fallo acumulado');
 
         // 5. Verificación de que la segunda clave NO quedó en cooldown
         const state2 = _keyStateMap.get(mockKeys[1]);
-        assert.ok(!state2 || state2.cooldownUntil <= Date.now(), 'Key 2 no debe estar en cooldown');
+        assert.ok(!state2 || state2.cooldownUntil <= h.now, 'Key 2 no debe estar en cooldown');
 
     } finally {
         axios.post = originalPost;
-        for (const k of Object.keys(process.env)) {
-            if (k.startsWith('GEMINI_API_KEY')) delete process.env[k];
+        for (const k of Object.keys(env)) {
+            if (k.startsWith('GEMINI_API_KEY')) delete env[k];
         }
         for (const [k, v] of Object.entries(savedKeys)) {
-            process.env[k] = v;
+            env[k] = v;
         }
     }
 });
@@ -271,35 +261,35 @@ test('AI-Pool: backoff exponencial escala los cooldowns ante 429 repetidos (15s 
     markKeyCooldown(testKey, 15000, 'Rate Limit 429', true);
     let state = _keyStateMap.get(testKey);
     assert.strictEqual(state.failures, 1);
-    let remaining = state.cooldownUntil - Date.now();
+    let remaining = state.cooldownUntil - h.now;
     assert.ok(remaining >= 14000 && remaining <= 16000, `Debe rondar 15s, got ${remaining}ms`);
 
     // Fallo 2 (prev=1): 15s * 2^1 = 30s (30000ms)
     markKeyCooldown(testKey, 15000, 'Rate Limit 429', true);
     state = _keyStateMap.get(testKey);
     assert.strictEqual(state.failures, 2);
-    remaining = state.cooldownUntil - Date.now();
+    remaining = state.cooldownUntil - h.now;
     assert.ok(remaining >= 29000 && remaining <= 31000, `Debe rondar 30s, got ${remaining}ms`);
 
     // Fallo 3 (prev=2): 15s * 2^2 = 60s (60000ms)
     markKeyCooldown(testKey, 15000, 'Rate Limit 429', true);
     state = _keyStateMap.get(testKey);
     assert.strictEqual(state.failures, 3);
-    remaining = state.cooldownUntil - Date.now();
+    remaining = state.cooldownUntil - h.now;
     assert.ok(remaining >= 59000 && remaining <= 61000, `Debe rondar 60s, got ${remaining}ms`);
 
     // Fallo 4 (prev=3): 15s * 2^3 = 120s (cap máximo 120000ms)
     markKeyCooldown(testKey, 15000, 'Rate Limit 429', true);
     state = _keyStateMap.get(testKey);
     assert.strictEqual(state.failures, 4);
-    remaining = state.cooldownUntil - Date.now();
+    remaining = state.cooldownUntil - h.now;
     assert.ok(remaining >= 119000 && remaining <= 121000, `Debe rondar 120s, got ${remaining}ms`);
 
     // Fallo 5 (prev=4): sigue con cap en 120s
     markKeyCooldown(testKey, 15000, 'Rate Limit 429', true);
     state = _keyStateMap.get(testKey);
     assert.strictEqual(state.failures, 5);
-    remaining = state.cooldownUntil - Date.now();
+    remaining = state.cooldownUntil - h.now;
     assert.ok(remaining >= 119000 && remaining <= 121000, `Debe topar en 120s, got ${remaining}ms`);
 });
 

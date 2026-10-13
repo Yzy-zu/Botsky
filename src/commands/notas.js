@@ -28,6 +28,13 @@ function formatNoteDate(timestamp) {
  * Manejador principal del comando de notas compartidas.
  */
 async function handleNotas(parsed = {}, from, messageData = {}) {
+    if (typeof from !== 'string' || !from.trim()) return;
+    parsed = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? { ...parsed } : {};
+    parsed.args = Array.isArray(parsed.args) ? parsed.args : [];
+    parsed.flags = parsed.flags && typeof parsed.flags === 'object' && !Array.isArray(parsed.flags) ? parsed.flags : {};
+    if (parsed.args.some(arg => typeof arg !== 'string' && typeof arg !== 'number')) return;
+    parsed.args = parsed.args.map(arg => typeof arg === 'number' ? String(arg) : arg);
+    messageData = messageData && typeof messageData === 'object' && !Array.isArray(messageData) ? messageData : {};
     const participant = messageData?.key?.participant || messageData?.participant || from;
     const userName = messageData?.pushName || 'Usuario';
     const params = parsed.aiArgs || parsed;

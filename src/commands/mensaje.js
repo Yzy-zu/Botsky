@@ -108,6 +108,9 @@ function clearExpiredContactSessions() {
 async function findGroupContact(query) {
     if (typeof query !== 'string' || !query.trim()) return null;
     const clean = normalizeName(query);
+    if (['grupo','el grupo','al grupo','grupo principal','chiqui','gente del senor chiqui','gente del senor chiqui 🐓'].includes(clean)) {
+        return {jid:MAIN_GROUP_JID,user_name:'el grupo Gente del señor chiqui 🐓',is_group:true};
+    }
     // Only an actual phone number is a direct destination (not a name containing digits).
     const digitsOnly = clean.replace(/[^0-9]/g, '');
     if (/^[+\d\s().-]+$/.test(clean) && digitsOnly.length >= 10 && digitsOnly.length <= 15) {
@@ -324,7 +327,11 @@ async function handlePendingContactChoice({ from, messageData = {}, args = {} } 
 }
 
 async function handleMensaje(parsed = {}, from, messageData = {}) {
+    parsed = parsed && typeof parsed === 'object' ? parsed : {};
+    messageData = messageData && typeof messageData === 'object' ? messageData : {};
+    if (!isAuthorizedAdmin(from, messageData)) return sendFeedback(from,{success:false,status:'denied',error:'Acceso denegado: solo el creador y los administradores autorizados pueden mandar recados.'},true);
     let args = parsed.aiArgs || parsed.semanticDecision?.args;
+    if (!args && Array.isArray(parsed.args) && parsed.args.length >= 2) args = {contacto:parsed.args[0],mensaje:parsed.args.slice(1).join(' '),destino_scope:'contact'};
     if (!args) {
         const { routeWithAI } = require('../services/ai');
         const decision = await routeWithAI(parsed.raw || '', messageData.pushName, from.endsWith('@g.us'),

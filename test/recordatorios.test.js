@@ -9,21 +9,23 @@ const db = require('../src/services/db');
 const { parseReminderTime, formatTimeDiff } = require('../src/commands/recordatorios');
 const { isRegisteredCommand } = require('../src/core/commandRegistry');
 
-test('Recordatorios: parseReminderTime parsea tiempos relativos correctamente', () => {
+test('Recordatorios: admite duraciones CLI y minutos canónicos del modelo sin inventar fechas', () => {
     const res15m = parseReminderTime('15m');
     assert.ok(res15m);
     assert.ok(res15m.dueAt > Date.now());
     assert.strictEqual(res15m.timeDesc, '15m');
 
-    const res2h = parseReminderTime('en 2 horas');
+    const res2h = parseReminderTime(null, 120);
     assert.ok(res2h);
     assert.ok(res2h.dueAt > Date.now());
     assert.strictEqual(res2h.timeDesc, '2h');
 
-    const resSecs = parseReminderTime('45 segundos');
+    const resSecs = parseReminderTime('45s');
     assert.ok(resSecs);
     assert.ok(resSecs.dueAt > Date.now());
     assert.strictEqual(resSecs.timeDesc, '45s');
+    assert.equal(parseReminderTime('en 2 horas'), null);
+    assert.equal(parseReminderTime('45 segundos'), null);
 });
 
 test('Recordatorios: parseReminderTime prioriza minutesHint de Gemini', () => {

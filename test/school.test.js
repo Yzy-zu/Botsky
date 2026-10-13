@@ -17,7 +17,30 @@ const {
     normalizeSubject,
     UTM_SCHEDULE_TI7B
 } = require('../src/services/school_schedule_data');
-const { parseScheduleLine } = require('../src/commands/tareas');
+const { parseScheduleLine, handleTareas } = require('../src/commands/tareas');
+
+// Contract: docs/interpretacion-semantica.md. Natural text goes to the model;
+// executors receive canonical fields and never infer dates on provider failure.
+const aiModule = require('../src/services/ai');
+const schoolPlans = [
+    ['tarea de formulacion de proyectos dejo hacer la pagina de classrom donde estan las preguntas y hcerlas en la libreta', { subject: 'Formulación de Proyectos de Tecnología', task: 'Hacer la página de classroom y las preguntas en la libreta' }],
+    ['anotar 3 ejemplos de empresas de capital de materia de optativa', { subject: 'Optativa I', task: 'anotar 3 ejemplos de empresas de capital' }],
+    ['tarea de seguridad informatica investigar puertos tcp y udp', { subject: 'Seguridad Informática', task: 'investigar puertos tcp y udp' }],
+    ['proyecto de formulacion de proyectos se entrega el 24 de octubre hacer el prototipo', { subject: 'Formulación de Proyectos de Tecnología', task: 'hacer el prototipo', explicit_due: '2026-10-24T12:00:00-06:00' }],
+    ['tarea de habilidades gerenciales resolver el caso de la foto', { subject: 'Habilidades Gerenciales', task: 'resolver el caso de la foto' }]
+];
+let originalGemini;
+test.beforeEach(() => {
+    originalGemini = aiModule.callGemini;
+    aiModule.callGemini = async request => {
+        assert.equal(request.responseMimeType, 'application/json');
+        assert.match(request.systemInstruction, /extractor de tareas escolares/);
+        const entry = schoolPlans.find(([text]) => text === request.userMessage);
+        assert.ok(entry, 'All school provider requests must use a declared synthetic fixture');
+        return JSON.stringify({ explicit_due: null, details: null, ...entry[1] });
+    };
+});
+test.afterEach(() => { aiModule.callGemini = originalGemini; });
 
 test('School: parsea horas y fechas escolares en español', () => {
     assert.equal(parseClock('15:00'), '15:00');
@@ -26,7 +49,8 @@ test('School: parsea horas y fechas escolares en español', () => {
     assert.equal(parseScheduleLine('día inválido | Materia'), null);
 
     const now = new Date(2026, 8, 27, 10, 0, 0);
-    const due = parseDueDate('viernes', now);
+    const due = parseDueDate('2026-10-02T12:00:00-06:00');
+    assert.equal(parseDueDate('viernes'), null);
     assert.equal(new Date(due).getDay(), 5);
     assert.ok(due > now.getTime());
 });
@@ -106,27 +130,13 @@ test('School: extractSchoolTaskDetails extrae materia y descripción en lenguaje
     assert.match(res2.task, /anotar 3 ejemplos/i);
 });
 
-test('School: fallback local extrae limpiamente fecha y tarea sin borrar la descripción (Bug 4.1)', async () => {
-    const aiModule = require('../src/services/ai');
-    const origCallGemini = aiModule.callGemini;
-    aiModule.callGemini = async () => { throw new Error('Simulated Gemini API offline'); };
-
-    try {
-        const raw = '/! proyecto de formulacion de proyectos se entrega el 24 de octubre hacer el prototipo funcional';
-        const res = await extractSchoolTaskDetails(raw);
-
-        assert.equal(res.subject, 'Formulación de Proyectos de Tecnología');
-        assert.match(res.explicit_due, /24 de octubre/i);
-        assert.match(res.task, /hacer el prototipo funcional/i);
-        assert.doesNotMatch(res.task, /se entrega/i, 'No debe incluir la frase de fecha en la descripción');
-
-        const raw2 = '/! tarea de optativa para el viernes anotar 3 ejemplos de empresas';
-        const res2 = await extractSchoolTaskDetails(raw2);
-        assert.equal(res2.subject, 'Optativa I');
-        assert.match(res2.explicit_due, /viernes/i);
-        assert.match(res2.task, /anotar 3 ejemplos de empresas/i);
-    } finally {
-        aiModule.callGemini = origCallGemini;
+test('School: provider failure does not invent subject, date or task from natural text', async () => {
+    aiModule.callGemini = async () => { throw new Error('Synthetic provider unavailable'); };
+    for (const raw of [
+        '/! proyecto de formulacion de proyectos se entrega el 24 de octubre hacer el prototipo funcional',
+        '/! tarea de optativa para el viernes anotar 3 ejemplos de empresas'
+    ]) {
+        assert.deepEqual(await extractSchoolTaskDetails(raw), { subject: null, task: null, explicit_due: null, details: null });
     }
 });
 
@@ -162,15 +172,11 @@ test('School: handleDirectTaskMessage procesa /! y registra tarea en lote del d�
         assert.match(lastTask.title, /puertos tcp y udp/i);
         assert.ok(lastTask.due_text && lastTask.due_text.length > 0);
 
-        // Probar cancelación inmediata con prefijo recortado por normalizador: "cancelar <id>"
-        const cancelWithoutPrefix = await handleDirectTaskMessage({
-            text: `cancelar ${lastTask.id}`,
-            from,
-            messageData,
-            norm: { actualMessageType: 'conversation', isTaskDirectCommand: true }
-        });
-        assert.equal(cancelWithoutPrefix, true);
-        assert.match(sentMsg, /cancelada correctamente/i);
+        // The model resolves natural cancellation into canonical executor arguments.
+        await handleTareas({ aiArgs: { accion: 'cancelar', id: lastTask.id }, semanticDecision: true }, from, messageData);
+        assert.match(sentMsg, /cancelada/i);
+        assert.equal((await db.getSchoolTaskById(lastTask.id)).status, 'cancelled');
+
     } finally {
         evolution.sendText = origSendText;
     }
@@ -223,23 +229,26 @@ test('School: publishDailySchoolDigest consolida tareas del día a las 15:00 y 1
     }
 });
 
-test('School: parseDueDate soporta fechas explícitas en español (24 de octubre, en 1 mes)', () => {
+test('School: fecha canónica del modelo se valida sin reinterpretar lenguaje natural', () => {
     const now = new Date(2026, 8, 28, 10, 0, 0); // 28 de septiembre 2026
-    const oct24 = parseDueDate('24 de octubre', now);
+    const oct24 = parseDueDate('2026-10-24T12:00:00-06:00');
     assert.ok(oct24);
     const dOct = new Date(oct24);
     assert.equal(dOct.getDate(), 24);
     assert.equal(dOct.getMonth(), 9); // Octubre (0-indexed: 9)
 
-    const enUnMes = parseDueDate('en 1 mes', now);
+    const enUnMes = parseDueDate('2026-10-28T12:00:00-06:00');
     assert.ok(enUnMes);
     const dMes = new Date(enUnMes);
     assert.equal(dMes.getMonth(), 9);
 
-    const enTresDias = parseDueDate('en 3 días', now);
+    const enTresDias = parseDueDate('2026-10-01T12:00:00-06:00');
     assert.ok(enTresDias);
     const dDias = new Date(enTresDias);
-    assert.equal(dDias.getDate(), 1); // 28 + 3 = 1 oct
+    assert.equal(dDias.getDate(), 1);
+    assert.equal(parseDueDate('24 de octubre'), null);
+    assert.equal(parseDueDate('en 1 mes'), null);
+    assert.equal(parseDueDate('2026-02-30'), null); // 28 + 3 = 1 oct
 });
 
 test('School: handleDirectTaskMessage respeta fecha explícita especificada por el usuario', async () => {
@@ -494,18 +503,44 @@ test('School: elimina archivo local al cancelar tarea con multimedia (Bug 2.1)',
     evolution.sendText = async () => ({ success: true });
 
     try {
-        await handleDirectTaskMessage({
-            text: `cancelar ${task.id}`,
-            from,
-            messageData,
-            norm: { actualMessageType: 'conversation', isTaskDirectCommand: true }
-        });
+        await handleTareas({ aiArgs: { accion: 'cancelar', id: task.id }, semanticDecision: true }, from, messageData);
+        assert.equal((await db.getSchoolTaskById(task.id)).status, 'cancelled');
 
         // Verificar que el archivo fue eliminado del disco
         assert.equal(fs.existsSync(dummyFile), false, 'El archivo en disco debe haberse borrado al cancelar');
     } finally {
         evolution.sendText = origSendText;
         if (fs.existsSync(dummyFile)) fs.unlinkSync(dummyFile);
+    }
+});
+
+test('School: cancelación no borra archivos ajenos y requiere usuario autorizado', async () => {
+    const fs = require('fs');
+    const os = require('os');
+    const path = require('path');
+    const from = '5214438887766@s.whatsapp.net';
+    process.env.ALLOWED_NUMBERS_ADMIN = '5214438887766';
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'school-external-'));
+    const file = path.join(outside, 'keep.jpg');
+    fs.writeFileSync(file, 'external fixture');
+    const task = await db.createSchoolTask({ ownerJid: from, targetGroupJid: 'group_media@g.us', title: 'External attachment', mediaPath: file });
+    const evolution = require('../src/services/evolution');
+    const originalSend = evolution.sendText;
+    evolution.sendText = async () => ({ success: true });
+    try {
+        const unauthorized = '5210000000000@s.whatsapp.net';
+        const plan = { aiArgs: { accion: 'cancelar', id: task.id }, semanticDecision: true };
+        await handleTareas(plan, unauthorized, { key: { remoteJid: unauthorized } });
+        assert.equal((await db.getSchoolTaskById(task.id)).status, 'active');
+        assert.equal(fs.existsSync(file), true);
+        await handleTareas(plan, from, { key: { remoteJid: from } });
+        assert.equal((await db.getSchoolTaskById(task.id)).status, 'cancelled');
+        assert.equal(fs.existsSync(file), true, 'Cancel cannot unlink outside school_media');
+        const { cancelTaskAndMedia } = require('../src/services/school');
+        assert.equal(await cancelTaskAndMedia(task.id), false, 'Duplicate cancellation is inert');
+    } finally {
+        evolution.sendText = originalSend;
+        fs.rmSync(outside, { recursive: true, force: true });
     }
 });
 
@@ -661,6 +696,29 @@ test('School: reintenta publicación si sendText falla temporalmente por red (Bu
 test('School: usuario en ALLOWED_NUMBERS_TASKS puede registrar tareas escolares', async () => {
     const { isAuthorizedTaskUploader } = require('../src/core/auth');
     const { handleTareas } = require('../src/commands/tareas');
+
+// Contract: docs/interpretacion-semantica.md. Natural text goes to the model;
+// executors receive canonical fields and never infer dates on provider failure.
+const aiModule = require('../src/services/ai');
+const schoolPlans = [
+    ['tarea de formulacion de proyectos dejo hacer la pagina de classrom donde estan las preguntas y hcerlas en la libreta', { subject: 'Formulación de Proyectos de Tecnología', task: 'Hacer la página de classroom y las preguntas en la libreta' }],
+    ['anotar 3 ejemplos de empresas de capital de materia de optativa', { subject: 'Optativa I', task: 'anotar 3 ejemplos de empresas de capital' }],
+    ['tarea de seguridad informatica investigar puertos tcp y udp', { subject: 'Seguridad Informática', task: 'investigar puertos tcp y udp' }],
+    ['proyecto de formulacion de proyectos se entrega el 24 de octubre hacer el prototipo', { subject: 'Formulación de Proyectos de Tecnología', task: 'hacer el prototipo', explicit_due: '2026-10-24T12:00:00-06:00' }],
+    ['tarea de habilidades gerenciales resolver el caso de la foto', { subject: 'Habilidades Gerenciales', task: 'resolver el caso de la foto' }]
+];
+let originalGemini;
+test.beforeEach(() => {
+    originalGemini = aiModule.callGemini;
+    aiModule.callGemini = async request => {
+        assert.equal(request.responseMimeType, 'application/json');
+        assert.match(request.systemInstruction, /extractor de tareas escolares/);
+        const entry = schoolPlans.find(([text]) => text === request.userMessage);
+        assert.ok(entry, 'All school provider requests must use a declared synthetic fixture');
+        return JSON.stringify({ explicit_due: null, details: null, ...entry[1] });
+    };
+});
+test.afterEach(() => { aiModule.callGemini = originalGemini; });
 
     const origTasks = process.env.ALLOWED_NUMBERS_TASKS;
     const origAdmin = process.env.ALLOWED_NUMBERS_ADMIN;

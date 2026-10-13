@@ -15,7 +15,7 @@ const {
     formatModsSummary,
     formatStatusSummary,
     invalidateManifestCache
-} = require('../src/services/minecraftRemote');
+} = require('./helpers/minecraftOffline').createMinecraftOffline().remote;
 
 // ─── Pruebas Unitarias de Formato y Lógica Pura ──────────────────────────────
 
@@ -88,9 +88,9 @@ test('MinecraftRemote 4: Invalidate manifest cache limpia caché en memoria', ()
     });
 });
 
-// ─── Pruebas de Integración en Vivo vía Tailscale (redspi) ───────────────────
+// ─── Pruebas de Contrato offline con respuestas SSH de fixture ───────────────────
 
-test('MinecraftRemote 5 [Live]: getRemoteServerStatus consulta contenedor en redspi', async () => {
+test('MinecraftRemote 5 [SSH fixture]: getRemoteServerStatus consulta contenedor en redspi', async () => {
     const status = await getRemoteServerStatus(true);
     assert.strictEqual(typeof status, 'object');
     assert.strictEqual(status.reachable, true);
@@ -102,7 +102,7 @@ test('MinecraftRemote 5 [Live]: getRemoteServerStatus consulta contenedor en red
     assert.ok(status.memory.includes('iB') || status.memory.includes('B'));
 });
 
-test('MinecraftRemote 6 [Live]: getOnlinePlayers obtiene jugadores y límite de slots', async () => {
+test('MinecraftRemote 6 [SSH fixture]: getOnlinePlayers obtiene jugadores y límite de slots', async () => {
     const players = await getOnlinePlayers();
     assert.strictEqual(typeof players, 'object');
     assert.strictEqual(players.online, true);
@@ -112,7 +112,7 @@ test('MinecraftRemote 6 [Live]: getOnlinePlayers obtiene jugadores y límite de 
     assert.ok(Array.isArray(players.players));
 });
 
-test('MinecraftRemote 7 [Live]: getActiveModsAndPacks extrae addons y global_mods', async () => {
+test('MinecraftRemote 7 [SSH fixture]: getActiveModsAndPacks extrae addons y global_mods', async () => {
     const mods = await getActiveModsAndPacks();
     assert.strictEqual(typeof mods, 'object');
     assert.strictEqual(typeof mods.activeWorld, 'string');
@@ -123,7 +123,7 @@ test('MinecraftRemote 7 [Live]: getActiveModsAndPacks extrae addons y global_mod
     assert.ok(mods.globalMods.length > 0, 'Debería detectar addons en global_mods');
 });
 
-test('MinecraftRemote 8 [Live]: getWorldsList lista los mundos creados en redspi', async () => {
+test('MinecraftRemote 8 [SSH fixture]: getWorldsList lista los mundos creados en redspi', async () => {
     const data = await getWorldsList();
     assert.strictEqual(typeof data, 'object');
     assert.ok(Array.isArray(data.worlds));
@@ -132,14 +132,14 @@ test('MinecraftRemote 8 [Live]: getWorldsList lista los mundos creados en redspi
     assert.ok(active, 'Debería haber un mundo activo');
 });
 
-test('MinecraftRemote 9 [Live]: deactivateWorldPack maneja mod no existente con mensaje claro', async () => {
+test('MinecraftRemote 9 [SSH fixture]: deactivateWorldPack maneja mod no existente con mensaje claro', async () => {
     const res = await deactivateWorldPack('mod_inexistente_xyz_123', false);
     assert.strictEqual(typeof res, 'object');
     assert.strictEqual(res.success, false);
     assert.ok(res.message.includes('No se encontró'));
 });
 
-test('MinecraftRemote 10 [Live]: activateWorldPack maneja mod no existente con mensaje claro', async () => {
+test('MinecraftRemote 10 [SSH fixture]: activateWorldPack maneja mod no existente con mensaje claro', async () => {
     const res = await activateWorldPack('mod_inexistente_xyz_123', false);
     assert.strictEqual(typeof res, 'object');
     assert.strictEqual(res.success, false);

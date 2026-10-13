@@ -89,6 +89,10 @@ test('Challenger 2 — Tarea 1.1: server.js otorga exactamente 20 XP durante Hor
     const serverProc = spawn(process.execPath, [path.join(__dirname, '../src/core/server.js')], {
         env: {
             ...process.env,
+            // The server is an application child, not another test worker. Do not
+            // inherit test IPC/bootstrap or the harness per-worker DB preload.
+            NODE_TEST_CONTEXT: '',
+            NODE_OPTIONS: '',
             PORT: String(serverPort),
             WEBHOOK_PORT: String(serverPort),
             WEBHOOK_HOST: serverHost,

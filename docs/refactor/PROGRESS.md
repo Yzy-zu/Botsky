@@ -1,6 +1,6 @@
 # Refactor v2 — registro de continuidad
 
-Actualizado: 2026-10-12 UTC. Maestro: Codex. Plano: `plan.md`.
+Actualizado: 2026-10-13 UTC. Maestro: Codex. Plano: `plan.md`.
 
 ## Retomar el trabajo
 
@@ -23,7 +23,7 @@ Actualizado: 2026-10-12 UTC. Maestro: Codex. Plano: `plan.md`.
 | 0 Baseline y seguridad | Cerrada con excepción autorizada F0-E001 | Gate0 PASS; 21 fixtures reales / 14 categorías; poll diferido por cliente; baseline y trazabilidad completos |
 | 1 Cimientos | Cerrada | Gate1 PASS: verify exit0; 42 tests; 100% líneas config/TTL/queue/scheduler; 90 env documentadas |
 | 2 Adaptadores | Cerrada con excepción F2-E001 | verify:phase2 PASS; 123 tests verdes; legacy636/159, cero nuevos y28resueltos |
-| 3 Pipeline y sombra | Lista para iniciar | Gate2 PASS con deudaF2-E001; 24h reales de sombra requeridas |
+| 3 Pipeline y sombra | Pausada antes de iniciar | Auditoría focal verde; suite integral interrumpida por pausa del usuario, pendiente de repetir |
 | 4 Migración A–D | No iniciada | Gate 3 pendiente |
 | 5 IA y duplicados | No iniciada | Gate 4 pendiente |
 | 6 Cutover y retiro | No iniciada | Soaks, rollback probado y aceptación pendientes |
@@ -58,11 +58,11 @@ Actualizado: 2026-10-12 UTC. Maestro: Codex. Plano: `plan.md`.
 
 ## Próximo paso concreto
 
-Entregables WO001–007 revisados e integrados; se conservan en commit local.
-Gate0 y Gate1 PASS; F0-E001 difiere encuesta hasta antes de polls.
-Fase2 entregada y Gate2PASS con F2-E001. Próximo: WOs pipeline/políticas/
-featureshelp-system-info, revisión arquitectónica y sombra con cero efectos.
-No comenzar sombra/canario antes de Gates2/3. Telemetría v1 continúa.
+Trabajo PAUSADO por petición del usuario. Reanudar en refactor/v2, leer WO027–030,
+revisar checkpoint de pausa al final y repetir la suite integral aislada.
+Los subsets y verify están verdes; la corrida general final quedó incompleta.
+No declarar los159 totalmente cerrados ni empezar Fase3 hasta esa evidencia.
+Producción v1 sigue online; no desplegar estos fixes durante la pausa.
 
 ## Checkpoint operacional histórico previo a captura
 
@@ -192,3 +192,48 @@ No comenzar sombra/canario antes de Gates2/3. Telemetría v1 continúa.
 - SmokeadminXP7/7 yRikolino7/7, recortarPDF1/2: total16tests15pass1fail0skip, exit1. Toolingahorapermite reproducirfailPDFcongsreal; registrarpendiente,no cambiar aserciones para aprobar. SHA43525dccd34481a7cebecfd404ad52133cda0808f38a8e07d0ed6cafdbcef636; TAP /tmp/botsky-legacy-enhanced-smoke.tap.
 - Entornoenhanced distinto delbaseline, no prueba ausencia deregresiones porcomparaciónnumérica entreesosentornos. CierreGate2 usa sólo comparable795/636/159zeroNew+F2-E001. Enhancedfullsuite se reevalúa condeudafuncional enolas.
 - Comandos: bash scripts/refactor/legacy-verification.sh --prepare / --check / --files test/nombre.test.js; defaultcorresuitecompletasin whitelist. No requerirproducción/serviciospagados.
+
+## PAUSA — auditoría de los 159
+
+- Fecha: 2026-10-12T21:23:03.018225+00:00. Usuario pide pausar por tokens y retomar exactamente aquí. No más correcciones o suites hasta que reanude.
+- Rama/worktree: refactor/v2 en /home/petrov/botsky-v2; último cierre publicado399286e. Este checkpoint se publica por separado. Producción permanece v1, sin despliegues/fixes de esta auditoría aplicados.
+- Trabajo autorizado: clasificación reproducible antes de Fase3, corregir mocks/defectos confirmados y conservar pruebas de comportamiento; no modificar aserciones solo para obtener verde.
+- WO027 contracts_review: entorno/E2/E4, runner enhanced FULL inicial inmutable terminó804tests/708pass/96fail/0skip. TAP /tmp/botsky-debt-initial.tap. Este entorno difiere del comparable795/636/159 y recupera11casos antes bloqueados por imports: NO decir que se corrigieron63bugs por restar159-96.
+- WO028 traceability: IA/proactivo/engine, transport mocks offline. Test aiOfflineHarness nuevo; ai/ai_pool/agentEngine/contactos_naturales cambios en curso. Esperar/revisar reporte WO028 antes de integración global.
+- WO029 fixtures: mensaje/toolRegistry/commandRegistry, autenticación desde remitente real y argumentosJSONmalformados; cambios sin validación global final. Tests mensaje/toolRegistryRobustness cambiados. Reporte focalizado19pass/4fail; defecto confirmado pendiente en src/services/db.js:813: searchJids.find llama endsWith sobre null/undefined desde afinidad. No corregido aún. BF120 handlers variados pertenece al maestro.
+- WO030 maestro: norma contractual previa docs/interpretacion-semantica.md: normalizador conserva texto y aporta sesiones; fechas/páginas naturales son normalizadas por modelo, executor usa datos canónicos. No restaurar heurísticas retiradas para aprobar tests.
+- Root juegos: tests blackjack/daily/ruleta ahora preservan texto+sesión sinprefijo; validación de XP/estado/reembolso continúa. Daily confirmación española actual y resultadoestructurado comprobados; convertir missing-file conserva rechazo y siguiente paso sinstack. Subset20/20pass0fail0skip en /tmp/botsky-debt-games.tap.
+- Subsetroot anterior237tests/189pass/48fail/0skip en /tmp/botsky-debt-root-initial.tap; no es suitefinalni incluye cambiosposteriores. Mantener como diagnóstico inicial.
+- WO027 propuesta desde3 parser descartada tras leercontratoactual; testPDF usa p=3- provenienteplan canónico, conserva conteopáginas y rechazo desde3/0-/10-. NO source documentos.js modificado según última coordinación.
+- Todos los contenedores de tests legacy aisladamente detenidos al pausar (los que terminaron antes se preservaron). Nada de detener Evolution/Postgres/Redis/productivo. No jobs v2/sombra activos.
+- No se ejecutó verifyglobal después de estos cambios. Gate2 PASS corresponde al cierre399286e anterior, no certifica este checkpoint en curso. No avanzar Fase3 ni afirmar que159todosresueltos.
+- RETOMAR: leer reportes WO027–029 + gitstatus; reparar db813/nullJid y VMmock authnuevo de toolRegistry; revisar semántica de testsobsoletos con docsantesassertchanges; correr subsets y enhancedFULL; ledger por BF con evidencia/reproducción/conclusión; verify:phase2 y nueva evidencia solo después de green adecuado; commit/push.
+
+## Reanudación auditoría — 2026-10-13
+
+- Usuario reanuda y solicita resumen legible en ~/; creado /home/petrov/BOTSKY-AVANCE.md antes de continuar. Sin credenciales/datos personales.
+- WO030 maestro: getUserAffinity ahora rechaza JID/alias inválidos antes de SQLite y normaliza aliases; regresión añadida. El callback ya no cancela tests: stress7/6pass/1fail BF120, cero cancelaciones.
+- Juegos20/20; escuelas/notas/recordatorios31/29pass/2fail con proveedores offline y fechas ISO canónicas. Dos fallos restantes cancelación escolar: tests llamaban extractor de creación en vez del executor; confirmar cleanup en ruta real antes cerrar.
+- WO027 entrega128/128pass,0skip/cancel en /tmp/botsky-wo027-final.tap; WO029 entrega19/19pass y6/7stress (BF120 sigue). Son subsets, NO suite completa certificada.
+- WO028 validación proactiva detectó string false convertido a true por Boolean; corrección de esquema y regresión en validación final. No restaurar heurísticas retiradas.
+- Nuevas delegaciones: WO027 dispatcher/Minecraft/Whisper; WO029 BF120 guards handlers. Maestro cancelación escolar e integración. Fase3 permanece sin iniciar; producción intacta.
+
+- WO030: cancelación escolar por executor canónico repara limpieza adjunto dentro school_media; nuevo test mantiene archivo externo y niega usuario no autorizado. Root integrado113/113pass en /tmp/botsky-debt-e2e-final.tap (e2e+school+affinity+notas+recordatorios), antesúltimo hardening de errores.
+- Fallo real adicional reproducido: e2e mocking antiguo no inyectaba handler capturado por registry; composición VM lo ejecuta y detecta API_KEY sintética enviada al usuario. Dispatcher ahora expone sólo userMessage explícito y genérico para excepciones técnicas/null; queue marca rechazo de capacidad como userMessage. Revalidación pendiente tras última edición.
+- verify:phase2 actual123/123 y telemetría/refactor35/35 verdes. Atestación Gate2 sigue histórica F2-E001; auditoría general en curso no certificada aún.
+
+- Primera integración completa814/802pass/12fail, cero skip/cancel; /tmp/botsky-debt-integrated.tap. Fallos nuevos fueron fixtures: registry optionalfields/mutaciónMP3, servidor hijo DATA_DIR/instrumentación heredada y VMauth en wrappers. Corregidos por WOs, sin ocultar resultados.
+- La segunda corrida /tmp/botsky-debt-final.tap se detuvo exclusivamente en contenedor de tests a299eadb36f7 (mount /tmp/botsky-legacy-harness.aiJQI2ZP), porque su snapshot precedía última expectativa NaN/Infinity; NO usar TAP incompleto como certificación. Ningún contenedor productivo afectado.
+- Corrida final vigente /tmp/botsky-debt-verified.tap toma snapshot idéntico a src/test/scripts actuales (comparación SHA por archivo sin diferencias). No editar fuentes hasta conclusión. Runner fixes y fakes finales congelados.
+- PM2 wasa onlinePID2606310 y /status HTTP200 comprobados de nuevo; sin reinicios/deploy/env/DB productivos.
+
+## PAUSA solicitada — 2026-10-13T00:54:32.708363+00:00
+
+- Usuario: “pausa, los tokens se van a acabar. guarda el progreso y dime donde nos quedamos”. Se detuvo SOLO contenedor de tests c6d9a63bf6d7, imagen legacy-verification, mounts /tmp/botsky-legacy-harness.mtcjFvqG; no producción. Todos los agentes terminaron y no hay nuevos trabajos autorizados mientras dure pausa.
+- Estado: auditoría de159 implementada e integrada localmente, pruebas focalizadas verdes y revisión read-only sin nuevos defects confirmados. NO cierre global: /tmp/botsky-debt-verified.tap detenido aproximadamente tras caso719, sin resumen final válido. No tratar sus resultados parciales como suite verde. /tmp/botsky-debt-final.tap también fue detenido antes; primera integración completa /tmp/botsky-debt-integrated.tap814/802/12 documenta los fallos de fixtures ya corregidos.
+- Verificación completa disponible del código actual v2: /tmp/botsky-audit-final-v2.log npm run verify:phase2 PASS123; telemetría/refactor /tmp/botsky-audit-final-refactor.tap35/35pass. Gate2 attestation F2-E001 corresponde a evidencia histórica, no certifica los cambios legacy de esta auditoría.
+- WOs:027 entorno/providers128/128+expanded75/75+Challenger4/4;028 IA82/82+semántica/unificación14/14+wrappers27/27;029 permisos19/19, ampliaciónstress/mensaje27/27, regresióncomandos82/82, registry+stress13/13;030 root juegos20/20, e2e/escuela/afinidad/notas/reminders113/113 antesúltimoerrorhardening, e2e final73/73 después. Sin skips ni paid calls. Detalles y rutas exactas en WOs.
+- Fixes confirmados: db affinity valida JID/alias antescallback; AI proactiva valida bool/canal/mensaje; toolRegistry auth desde remitente y JSON seguro, telemetrymemoización sin duplicate; handlers malformedinputs no TypeError; sistema invalidfrom no timer; cancelación escolar limpia sólo school_media; dispatcher no envía errores técnicos/secretos, queue marca userMessage de capacidad.
+- Integración adicional: registry conserva parsed/flags mutación pública MP3 y defaults de argumentos opcionales; runner configura DATA_DIR por testworker y childserver conserva DB explícita sin NODE_TEST_CONTEXT/NODE_OPTIONS heredados. Tests usan planes canónicos y fakes proveedores; no heurísticas naturales restauradas.
+- Resumen personal /home/petrov/BOTSKY-AVANCE.md actualizado. Checkpoint se guarda en commit/push refactor/v2 sin merge main, .env/DB/logs excluidos.
+- RETOMAR EXACTO: gitstatus/log en /home/petrov/botsky-v2; leer WO027–030 y este checkpoint. Ejecutar BOTSKY_LEGACY_VERIFICATION_OUTPUT=/tmp/botsky-debt-verified-resumed.tap bash scripts/refactor/legacy-verification.sh (sin editar scripts/fuentes mientras esté corriendo). Exigir resumen completo, exit0, cero fallos/cancel/skip; si falla investigar antescerrar. Crear conciliación final por159BF y evidencia hashes separada (ledgerF2histórico intacto), actualizar reportes/PROGRESS y publicar. Sólo después planificar Fase3/pipeline y sombra24h; ninguna sombra activa hoy.

@@ -94,7 +94,7 @@ test('Blackjack 3: calculateScore maneja Ases suaves, figuras y sumas compuestas
     assert.strictEqual(isNaturalBlackjack(hand1), false);
 });
 
-test('Blackjack 4: message_normalizer detecta comandos naturales e interacciones de partida', async () => {
+test('Blackjack 4: normalizador conserva peticiones y aporta sesión sin reinterpretar el plan', async () => {
     const testChat = `test_norm_${Date.now()}@g.us`;
     const userJid = `52155${Date.now().toString().slice(-8)}@s.whatsapp.net`;
 
@@ -103,14 +103,14 @@ test('Blackjack 4: message_normalizer detecta comandos naturales e interacciones
         key: { remoteJid: testChat, participant: userJid },
         message: { conversation: 'botsky 21 150' }
     });
-    assert.strictEqual(normStart.text, 'blackjack 150');
-    assert.strictEqual(normStart.hasPrefix, true);
+    assert.strictEqual(normStart.text, 'botsky 21 150');
+    assert.strictEqual(normStart.hasPrefix, false);
 
     const normStartAlt = normalizeIncomingMessage({
         key: { remoteJid: testChat, participant: userJid },
         message: { conversation: 'jugar al 21' }
     });
-    assert.strictEqual(normStartAlt.text, 'blackjack');
+    assert.strictEqual(normStartAlt.text, 'jugar al 21');
 
     // 2. Simular partida activa para probar interacciones (pedir, plantar, doblar)
     const gameKey = `${testChat}_${userJid}`;
@@ -132,19 +132,21 @@ test('Blackjack 4: message_normalizer detecta comandos naturales e interacciones
         key: { remoteJid: testChat, participant: userJid },
         message: { conversation: 'pedir' }
     });
-    assert.strictEqual(normPedir.text, 'blackjack pedir');
+    assert.strictEqual(normPedir.text, 'pedir');
+    assert.equal(normPedir.sessions.blackjackHand, true);
+    assert.equal(normPedir.hasPrefix, false);
 
     const normPlantar = normalizeIncomingMessage({
         key: { remoteJid: testChat, participant: userJid },
         message: { conversation: 'me planto' }
     });
-    assert.strictEqual(normPlantar.text, 'blackjack plantar');
+    assert.strictEqual(normPlantar.text, 'me planto');
 
     const normDoblar = normalizeIncomingMessage({
         key: { remoteJid: testChat, participant: userJid },
         message: { conversation: 'doblar' }
     });
-    assert.strictEqual(normDoblar.text, 'blackjack doblar');
+    assert.strictEqual(normDoblar.text, 'doblar');
 
     // Limpiar partida de prueba
     activeGames.delete(gameKey);
@@ -304,7 +306,7 @@ test('Blackjack 7: Mesa Multijugador: creación de lobby, unión y rechazo de du
     }
 });
 
-test('Blackjack 8: Mesa Multijugador: message_normalizer detecta atajos de lobby', async () => {
+test('Blackjack 8: Mesa Multijugador: normalizador conserva texto y expone lobby al router semántico', async () => {
     const groupJid = `test_norm_mesa_${Date.now()}@g.us`;
     const userJid = `5215533333333@s.whatsapp.net`;
 
@@ -313,14 +315,14 @@ test('Blackjack 8: Mesa Multijugador: message_normalizer detecta atajos de lobby
         key: { remoteJid: groupJid, participant: userJid },
         message: { conversation: 'mesa 21 200' }
     });
-    assert.strictEqual(normMesa.text, 'blackjack mesa 200');
-    assert.strictEqual(normMesa.hasPrefix, true);
+    assert.strictEqual(normMesa.text, 'mesa 21 200');
+    assert.strictEqual(normMesa.hasPrefix, false);
 
     const normMesaAlt = normalizeIncomingMessage({
         key: { remoteJid: groupJid, participant: userJid },
         message: { conversation: 'botsky mesa 21' }
     });
-    assert.strictEqual(normMesaAlt.text, 'blackjack mesa');
+    assert.strictEqual(normMesaAlt.text, 'botsky mesa 21');
 
     // 2. Simular mesa en lobby para probar 'le entro' e 'iniciar'
     activeTables.set(groupJid, {
@@ -335,13 +337,15 @@ test('Blackjack 8: Mesa Multijugador: message_normalizer detecta atajos de lobby
         key: { remoteJid: groupJid, participant: userJid },
         message: { conversation: 'le entro' }
     });
-    assert.strictEqual(normEntro.text, 'blackjack entrar');
+    assert.strictEqual(normEntro.text, 'le entro');
+    assert.equal(normEntro.sessions.blackjackLobby, true);
+    assert.equal(normEntro.hasPrefix, false);
 
     const normInicia = normalizeIncomingMessage({
         key: { remoteJid: groupJid, participant: userJid },
         message: { conversation: 'arranca' }
     });
-    assert.strictEqual(normInicia.text, 'blackjack iniciar');
+    assert.strictEqual(normInicia.text, 'arranca');
 
     activeTables.delete(groupJid);
 });

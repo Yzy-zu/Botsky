@@ -104,7 +104,7 @@ const configuration={TZ:'America/Mexico_City',DATA_DIR:'/tmp/botsky-data',TMP_DI
  LEGACY_COMMAND_USAGE_ENABLED:'false',REFRACTOR_CAPTURE_ENABLED:'false'};
 fs.writeFileSync('.env',Object.entries(configuration).map(([k,v])=>`${k}=${v}`).join('\n')+'\n',{mode:0o600});
 // Snapshot every legacy test process into its own storage, without modifying test code.
-fs.writeFileSync('/tmp/verification-preload.cjs',`'use strict';if(process.getuid()===0){const fs=require('node:fs');const dotenv=require('/opt/botsky-dependencies/node_modules/dotenv');Object.assign(process.env,dotenv.parse(fs.readFileSync('/home/petrov/botsky/.env')));const dir='/tmp/botsky-data/test-'+process.pid;fs.mkdirSync(dir,{recursive:true});process.env.DATA_DIR=dir;}`);
+fs.writeFileSync('/tmp/verification-preload.cjs',`'use strict';if(process.getuid()===0&&(process.argv[1]||'').endsWith('.test.js')){const fs=require('node:fs');const dotenv=require('/opt/botsky-dependencies/node_modules/dotenv');Object.assign(process.env,dotenv.parse(fs.readFileSync('/home/petrov/botsky/.env')));const dir='/tmp/botsky-data/test-'+process.pid;fs.mkdirSync(dir,{recursive:true});process.env.DATA_DIR=dir;}`);
 CONFIG
 # Synthetic configuration was created by root: subprocess UID1002 gets EACCES.
 chmod 0600 .env

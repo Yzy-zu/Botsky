@@ -27,12 +27,17 @@ const fixtureImage = color => sharp({ create: { width: 5, height: 5, channels: 3
 async function createRikolinoFixture(t) {
     const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'botsky-rikolino-antirep-'));
     const prevDir = process.env.RIKOLINO_DIR;
+    const prevFotos = process.env.FOTOS_DIR;
     process.env.RIKOLINO_DIR = rootDir;
+    // This fixture tests the Rikolino branch; FOTOS_DIR selects another source.
+    delete process.env.FOTOS_DIR;
     const library = createLibrary({ rootDir });
     await library.ready;
     t.after(async () => {
         if (prevDir !== undefined) process.env.RIKOLINO_DIR = prevDir;
         else delete process.env.RIKOLINO_DIR;
+        if (prevFotos !== undefined) process.env.FOTOS_DIR = prevFotos;
+        else delete process.env.FOTOS_DIR;
         await library.close();
         await fs.rm(rootDir, { recursive: true, force: true });
     });
