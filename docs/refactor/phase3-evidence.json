@@ -1,0 +1,111 @@
+{
+  "status": "local_verified_operational_shadow_pending",
+  "recordedAt": "2026-10-13T03:02:32.285195+00:00",
+  "verify": {
+    "exitCode": 0,
+    "pass": 219,
+    "fail": 0,
+    "report": "/tmp/botsky-phase3-final-verify.log",
+    "sha256": "027be61fafb68b2d01102e45fb52444d5b7d08bcf47a5ac21d326c75e2f06261"
+  },
+  "refactor": {
+    "pass": 52,
+    "fail": 0,
+    "report": "/tmp/botsky-phase3-final-glue.tap"
+  },
+  "coverage": [
+    {
+      "file": "pipeline/coalescer.js",
+      "lines": 100.0
+    },
+    {
+      "file": "pipeline/composer.js",
+      "lines": 100.0
+    },
+    {
+      "file": "pipeline/context.js",
+      "lines": 100.0
+    },
+    {
+      "file": "pipeline/executor.js",
+      "lines": 100.0
+    },
+    {
+      "file": "pipeline/gate.js",
+      "lines": 100.0
+    },
+    {
+      "file": "pipeline/index.js",
+      "lines": 100.0
+    },
+    {
+      "file": "pipeline/ingest.js",
+      "lines": 100.0
+    },
+    {
+      "file": "pipeline/normalize.js",
+      "lines": 100.0
+    },
+    {
+      "file": "pipeline/router.js",
+      "lines": 100.0
+    },
+    {
+      "file": "policies/access.policy.js",
+      "lines": 100.0
+    },
+    {
+      "file": "policies/addressing.policy.js",
+      "lines": 100.0
+    },
+    {
+      "file": "policies/attachment.policy.js",
+      "lines": 100.0
+    },
+    {
+      "file": "policies/proactive.policy.js",
+      "lines": 100.0
+    },
+    {
+      "file": "policies/response.policy.js",
+      "lines": 100.0
+    }
+  ],
+  "scenarios": {
+    "S01": "pass",
+    "S02": "pass",
+    "S03": "pass",
+    "S04a": "pass",
+    "S04b": "pass",
+    "S05": "pass",
+    "S06": "pass",
+    "S07a": "pass",
+    "S07b": "pass",
+    "S08": "pass",
+    "S09": "pass",
+    "S12": "pass",
+    "S13": "pass",
+    "S14": "pass",
+    "S15": "pass",
+    "S16": "pass"
+  },
+  "architectureReview": {
+    "status": "approved_for_partial_shadow",
+    "document": "docs/refactor/phase3-evidence.md"
+  },
+  "shadow": {
+    "active": false,
+    "clock": "SystemClock",
+    "businessEffects": 0,
+    "exceptions": 0,
+    "sinkErrors": 0,
+    "observed": 0,
+    "diffReviewed": false
+  },
+  "limitations": [
+    "24h reales aún pendientes; no simuladas por FakeClock.",
+    "Sombra inicial compara addressing/decisiones con planes v1 grabados; no consulta historial ni sesiones legacy y marca unknown donde no hay plan/ID correlacionable.",
+    "No activa canario ni ejecuta tools/passivos/migraciones/jobs v2.",
+    "Repo nuevo de hilos probado sólo con SQLite temporal; no migración001 productiva."
+  ]
+}

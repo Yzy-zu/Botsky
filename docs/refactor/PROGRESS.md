@@ -249,3 +249,16 @@ Producción v1 sigue online; no desplegar estos fixes durante la pausa.
 - Conciliación legacy-debt-resolution.json/md159IDs exactos, todos global_verified, ledger histórico SHA00ec1da89032bc5363ddcd453c93f38c241dd30efa9a3ea38ddf8840a7102784 intacto. ExcepciónF2-E001 ya no tiene casos pendientes en entorno enhanced; evidenciaF2 histórica no reescrita. No afirmar159bugs reparados: incluye entorno/harness/contratos obsoletos y defectos confirmados.
 - Producción siguev1 intacta. Suite aislada no acredita disponibilidad de proveedores remotos ni comprensión live. Resumen~/BOTSKY-AVANCE.md se actualiza.
 - InicioFase3: WO031 fixtures5políticaspuras, WO032 contracts_review ingest/normalize/gate/context/coalescer; maestro sharedcontracts/router/executor/composer/orquestación +featuresmínimas. No activación/sombra todavía. Gate3 requiere90%pipelinepolicies+escenarios+revisiónarquitectónica+24h reales; no sustituirsoak portests.
+
+## Fase3 implementación del núcleo
+
+- WO031 cinco políticaspuras12tests,100%líneas; WO032 ingest/normalize/gate/context/coalescer26tests100%; WO033 features help/system-info y repo hilo aditivo15tests100%; WO034 observadorsombra6tests100%. No migración001 productiva ni writesbot.db.
+- Maestro router/executor/composer/index/main y16escenarios requeridos. Primera integración pasó196tests tras extender gate cobertura; revisiones detectaron compatprefijos /! /@, selecciónprivada texto no-numérico, campos tokens incompatibles manifests, context.read errors y repetición tras historyerrors. Corregidos con regresiones y revisión continua; finalverify en curso, NO certificados por snapshotanterior.
+- Gate3 nuevo verificador exige24hreales activasSystemClock, tráfico+sinbusinessIO/excepciones, checkpointreciente y diffs revisados. FakeClock/archivo viejo/cobertura insuficiente no cierran fase. WO035 prepara puenteproductivo OFFdefault con planesv1 grabados yunknown explícito cuando noexisteplan; cero proveedores live adicionales.
+
+## Fase3 checkpoint local verificado
+
+- verifyfinal219pass0fail;69módulos0violaciones,94settings; pipeline/policies100%líneas y16escenarios requeridos verdes. Refactor/telemetría/hooks52/52. Código fuente listo para sombra parcial; Gate3 OPEN (tiempo/diffs/revisión final pendientes).
+- WO036 rateLimiter60por60s porchat+sender/cooldown3s sólotrasreply, config porinyección; rootmain conectado. Identidad domain/jid compartida preservac.us/device/521 y namespacesnumericexact; testsconIDsficticiosprovider-válidos corregidos trasstrictnormalización.
+- Preparado manager sombra additive-only: no copiarfixeslegacy de esta auditoría aproducción ni DB/schema001; NODEpreload captura decisionesv1 reales, unknown explícito, HTTP200antesobservador. Cero llamadasproveedor extra. Guardatelemetríaon,Nodeargsarray,checkpointoperacional; rollbackautoinitfailure.
+- Archivo phase3-evidence.json/md registraresultadoy límites. Activación siguiente trascommit/push; nofake24h niGatePASS.

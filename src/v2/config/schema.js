@@ -97,6 +97,7 @@ define('REFRACTOR_CAPTURE_BOT_JID', 'string', '', 'JID propio para clasificar ci
 define('REFRACTOR_CAPTURE_BOT_ALIASES', 'list', [], 'Identidades alternativas propias durante captura.', { secret: true });
 define('REFRACTOR_CAPTURE_DEDUPE', 'boolean', false, 'Deduplicación de envelopes capturados.');
 define('PIPELINE_MODE', 'enum', 'legacy', 'Dueño del pipeline; sombra nunca ejecuta efectos.', { values: Object.freeze(['legacy', 'shadow', 'canary', 'v2']) });
+define('BOTSKY_SHADOW_OUTPUT', 'string', '', 'Archivo exclusivo por ejecución para diffs de sombra sin datos personales.', { scope: 'operator-only' });
 define('SESSION_GROUP_RELAXED', 'boolean', false, 'Relajar selección de sesión solo por configuración aprobada.');
 define('FEATURE_ADMIN_TERMINAL', 'boolean', false, 'Terminal v2 desactivable; revisar cambio de producto antes de activar.');
 define('FEATURE_ADULT_MEDIA', 'boolean', false, 'Preparación flag v2; disponibilidad final requiere decisión de producto.');

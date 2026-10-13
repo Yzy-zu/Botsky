@@ -67,7 +67,8 @@ test('environment inventory handles aliases, destructuring, static brackets and 
 
 test('coverage fails closed for omitted or subthreshold critical modules', () => {
     const root = path.resolve(__dirname, '../../../src/v2');
-    const files = ['config/schema.js', 'config/index.js', 'platform/ttlStore.js', 'platform/queue.js', 'platform/scheduler.js']
+    const runtimeFiles = ['pipeline', 'policies', 'features'].flatMap(directory => require('../../../scripts/v2/check-architecture.cjs').javascriptFiles(path.join(root, directory))).filter(file => !file.endsWith('/contracts.js')).map(file => path.relative(root, file));
+    const files = [...runtimeFiles, 'config/schema.js', 'config/index.js', 'platform/ttlStore.js', 'platform/queue.js', 'platform/scheduler.js']
         .map(name => ({ path: path.join(root, name), lines: 90 }));
     assert.equal(coverageProblems(files).length, 0);
     files[0].lines = 89.99;

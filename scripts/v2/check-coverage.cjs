@@ -6,14 +6,17 @@ const root = path.resolve(__dirname, '../..');
 const requiredFiles = ['config/schema.js', 'config/index.js', 'platform/ttlStore.js', 'platform/queue.js', 'platform/scheduler.js'];
 function coverageProblems(files) {
     const problems = [];
-    for (const name of requiredFiles) {
+    const phaseThreeFiles = ['pipeline', 'policies'].flatMap(directory => javascriptFiles(path.join(root, 'src/v2', directory))).filter(file => !file.endsWith('/contracts.js')).map(file => path.relative(path.join(root, 'src/v2'), file));
+    const featureFiles = javascriptFiles(path.join(root, 'src/v2/features')).map(file => path.relative(path.join(root, 'src/v2'), file));
+    for (const name of [...requiredFiles, ...phaseThreeFiles, ...featureFiles]) {
         const file = files.find(entry => path.normalize(entry.path) === path.join(root, 'src/v2', name));
-        if (!file || !Number.isFinite(file.lines) || file.lines < 90) problems.push(`${name}: ${file?.lines ?? 'missing'}% lines; need >=90%`);
+        const minimum = name.startsWith('features/') ? 70 : 90;
+        if (!file || !Number.isFinite(file.lines) || file.lines < minimum) problems.push(`${name}: ${file?.lines ?? 'missing'}% lines; need >=${minimum}%`);
     }
     return problems;
 }
 function main() {
-    const tests = ['tests/unit/v2', 'tests/unit/tooling', 'tests/contract'].flatMap(directory => javascriptFiles(path.join(root, directory)))
+    const tests = ['tests/unit/v2', 'tests/unit/tooling', 'tests/contract', 'tests/scenario'].flatMap(directory => javascriptFiles(path.join(root, directory)))
         .filter(file => file.endsWith('.test.js'));
     if (!tests.length) throw new Error('No v2 tests found');
     const environment = { ...process.env };
@@ -35,7 +38,7 @@ function main() {
         console.log(`${path.relative(root, file.path)}: lines ${file.lines}%, branches ${file.branches}%, functions ${file.functions}%`);
     }
     for (const problem of problems) console.error(problem);
-    console.log(`Gate 1 coverage: ${problems.length ? 'OPEN' : 'PASS'}`);
+    console.log(`Coverage gates (foundations and all implemented pipeline/policies): ${problems.length ? 'OPEN' : 'PASS'}`);
     process.exitCode = problems.length ? 1 : 0;
 }
 if (require.main === module) main();

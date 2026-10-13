@@ -16,7 +16,9 @@
         "coverage:v2": "node scripts/v2/check-coverage.cjs",
         "verify": "npm run typecheck && npm run lint && npm run architecture && npm run env:check && npm run coverage:v2",
         "test:contract": "node --test tests/contract/*.test.js",
-        "verify:phase2": "npm run verify && node scripts/v2/check-phase2.cjs"
+        "verify:phase2": "npm run verify && node scripts/v2/check-phase2.cjs",
+        "test:scenario": "node --test tests/scenario/*.test.js",
+        "verify:phase3": "npm run verify && node scripts/v2/check-phase3.cjs"
     },
     "dependencies": {
         "axios": "^1.7.2",
