@@ -23,7 +23,7 @@ Actualizado: 2026-10-13 UTC. Maestro: Codex. Plano: `plan.md`.
 | 0 Baseline y seguridad | Cerrada con excepción autorizada F0-E001 | Gate0 PASS; 21 fixtures reales / 14 categorías; poll diferido por cliente; baseline y trazabilidad completos |
 | 1 Cimientos | Cerrada | Gate1 PASS: verify exit0; 42 tests; 100% líneas config/TTL/queue/scheduler; 90 env documentadas |
 | 2 Adaptadores | Cerrada con excepción F2-E001 | verify:phase2 PASS; 123 tests verdes; legacy636/159, cero nuevos y28resueltos |
-| 3 Pipeline y sombra | En implementación | Deuda159 cerrada con814/814; pipeline/políticas y24h sombra pendientes |
+| 3 Pipeline y sombra | Sombra real activa; gate abierto | verify219/219, hooks52/52, pipeline/policies100%;24h+diffs/revisiónfinal pendientes |
 | 4 Migración A–D | No iniciada | Gate 3 pendiente |
 | 5 IA y duplicados | No iniciada | Gate 4 pendiente |
 | 6 Cutover y retiro | No iniciada | Soaks, rollback probado y aceptación pendientes |
@@ -58,11 +58,12 @@ Actualizado: 2026-10-13 UTC. Maestro: Codex. Plano: `plan.md`.
 
 ## Próximo paso concreto
 
-Trabajo PAUSADO por petición del usuario. Reanudar en refactor/v2, leer WO027–030,
-revisar checkpoint de pausa al final y repetir la suite integral aislada.
-Los subsets y verify están verdes; la corrida general final quedó incompleta.
-No declarar los159 totalmente cerrados ni empezar Fase3 hasta esa evidencia.
-Producción v1 sigue online; no desplegar estos fixes durante la pausa.
+La auditoría de159 cerró con814/814 y está publicada. Fase3 tiene núcleo local
+verificado y sombra real activa desde2026-10-13T03:02:40.938Z; v1 sigue dueño.
+Retomar report-phase3-shadow.cjs --write para comprobar mismoPID/checkpoint/diffs.
+No cerrarGate3 ni avanzarFase4 hasta24h reales y revisiónfinal; earliest2026-10-14
+03:02:40.938UTC, siempreque no haya reinicios/excepciones/pérdida de heartbeat.
+Las comparacionesunknown/historial/sesionesparciales permanecen documentadas.
 
 ## Checkpoint operacional histórico previo a captura
 
@@ -262,3 +263,13 @@ Producción v1 sigue online; no desplegar estos fixes durante la pausa.
 - WO036 rateLimiter60por60s porchat+sender/cooldown3s sólotrasreply, config porinyección; rootmain conectado. Identidad domain/jid compartida preservac.us/device/521 y namespacesnumericexact; testsconIDsficticiosprovider-válidos corregidos trasstrictnormalización.
 - Preparado manager sombra additive-only: no copiarfixeslegacy de esta auditoría aproducción ni DB/schema001; NODEpreload captura decisionesv1 reales, unknown explícito, HTTP200antesobservador. Cero llamadasproveedor extra. Guardatelemetríaon,Nodeargsarray,checkpointoperacional; rollbackautoinitfailure.
 - Archivo phase3-evidence.json/md registraresultadoy límites. Activación siguiente trascommit/push; nofake24h niGatePASS.
+
+## Activación operacional Fase3 — 2026-10-13T03:02:40.938Z
+
+- Commitfuentes3c56f0a publicado enGitHub; auditdebt f928ef5 publicado. ManageractivateEXIT0 ycheckpointrealoperationalClock:true antesafirmararranque. PM2wasaonlinePID2916445; /statusHTTP200 despuésreinicio autorizado. Businessownerlegacy, contadorphase0on, capturaoff; fuentesbusinessv1 no reemplazadas ni bot.db/schema migrados.
+- Nodepreloadagregado despuésdeargumentosoriginales; rollbackprivado /tmp/botsky-phase3-shadow-state.json0600. No copiarstate/env/JSONLprivado alGit. Diffs dedicados /home/petrov/botsky-shadow/run-1791860560562.jsonl0600, checkpointporheartbeat60s. Desactivar: node scripts/refactor/manage-phase3-shadow.cjs disable (restaura modo/nodeargsoriginales, no borrar módulos/cambios ajenos).
+- Usuarioenvía saludoprivado y Botskyayuda engrupo traspregunta opcional. TráficoREAL comprobado:4diffs alprimerreporte, categoríasunknown3/changed1,0excepciones/0sinkErrors/0drops. Ayudacompara v1commandhelpLLM vs v2intenthelpLLM, respondtrue/wake-word: cambioestructural esperado, no una función diferente. Otrosreplysinplanactualgrabado quedanrecorded-plan-unavailableunknown; no se fabrican matches.
+- Statuscontroller checkpoint.active expresa workerBUSY (falsecuandoidle), no estado deobservación. report-phase3-shadow.cjs calcula active por PM2online/mismoPID/modoshadow,operationalClock yheartbeatreciente; no confundiridle con stop. Reinicio cancela continuidad yrequiere nuevaejecución exclusiva.
+- Reporte público sinPII phase3-shadow-status.json yphase3-evidence.json. Countersunmatched incluyennotificaciones/records no correlacionados; no son erroresni matches. Sombra inicialparcial, no importahistorial/sesioneslegacy, sinproveedoresadicionales ni herramientas/ejecuciónpasiva de v2; sóloIOdeobservación dedicado.
+- Gate3OPEN confirmado: falta24h real, revisiónfinalarquitectónica yrevisióncategorías (unknown/v2-more). Earliest2026-10-14T03:02:40.938Z si continuidad yzeroerrors. No crearFase4duranteespera. Observación sigueactiva alfinal delturno, no tarea pausada ni fasecerrada.
+- RETOMAR: leerestecheckpoint; node scripts/refactor/report-phase3-shadow.cjs --write; health ysourcehashes/privatePM2samepid. Si reiniciomodo/stale/error: no acreditartiempoanterior, investigarrecuperarantesnew24h. Agregarcategorías revisarv2-more/unknown, terminarrevisiónarquitectónica conformecontratos actualrate/hilo. npm run verify:phase3 requiereevidenciasfinales, nomanipularGate por unidadeslocales.
