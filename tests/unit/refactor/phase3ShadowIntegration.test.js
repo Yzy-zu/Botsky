@@ -2,9 +2,9 @@
 const test=require('node:test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const vm=require('node:vm');
 const {createShadowBridge}=require('../../../src/v2/shadowBridge');
 const {FakeClock}=require('../../../src/v2/platform/clock');
-function raw(id='m',text='Botsky hola',options={}) {return {event:'messages.upsert',data:{key:{id,remoteJid:'g@g.us',participant:'100@s.whatsapp.net',...options.key},message:options.message||{conversation:text},pushName:'Transient private name',...options.data}};}
-function v1(id='m',options={}) {return {chatId:'g@g.us',messageId:id,kind:'chat',respond:true,reason:'bot-mentioned',...options};}
-function setup(options={}) {const clock=new FakeClock(100);const rows=[];const bridge=createShadowBridge({clock,sink:row=>rows.push(row),config:{PIPELINE_MODE:'shadow'},botJid:'bot@s.whatsapp.net',...options});return{clock,rows,bridge};}
+function raw(id='m',text='Botsky hola',options={}) {return {event:'messages.upsert',data:{key:{id,remoteJid:'19995559999@g.us',participant:'100@s.whatsapp.net',...options.key},message:options.message||{conversation:text},pushName:'Transient private name',...options.data}};}
+function v1(id='m',options={}) {return {chatId:'19995559999@g.us',messageId:id,kind:'chat',respond:true,reason:'bot-mentioned',...options};}
+function setup(options={}) {const clock=new FakeClock(100);const rows=[];const bridge=createShadowBridge({clock,sink:row=>rows.push(row),config:{PIPELINE_MODE:'shadow'},botJid:'19995550000@s.whatsapp.net',...options});return{clock,rows,bridge};}
 function loadRuntime(requireOverride) {const file=path.resolve(__dirname,'../../../src/services/phase3ShadowRuntime.js');const context={module:{exports:{}},require:requireOverride};vm.runInNewContext(fs.readFileSync(file,'utf8'),context,{filename:file});return context.module.exports;}
 test('imports and OFF factories/runtime perform no config, provider, SQLite or filesystem IO',async()=>{
     const source=fs.readFileSync(path.resolve(__dirname,'../../../src/v2/shadowBridge.js'),'utf8');const module={exports:{}};
@@ -37,7 +37,7 @@ test('TTL expires missing v1 evidence, queue is bounded, late/coalesced decision
 });
 test('own webhook seeds exact chat IDs so quote authenticates without sender text heuristics',async()=>{
     const {bridge,rows}=setup();assert.equal(bridge.observeWebhook(raw('sent','answer',{key:{fromMe:true}})),true);assert.equal(bridge.status().echoSeeds,1);assert.equal(bridge.status().awaitingV1,0);
-    const quote=raw('q','2',{message:{extendedTextMessage:{text:'2',contextInfo:{stanzaId:'sent',participant:'opaque@lid',quotedMessage:{conversation:'answer'}}}}});
+    const quote=raw('q','2',{message:{extendedTextMessage:{text:'2',contextInfo:{stanzaId:'sent',participant:'9900000000001@lid',quotedMessage:{conversation:'answer'}}}}});
     bridge.observeWebhook(quote);bridge.recordV1Decision(v1('q',{reason:'bot-quoted'}));await bridge.flush();assert.equal(rows[0].v2_decision.respond,true);assert.equal(rows[0].v2_decision.reason,'bot-quoted');bridge.stop();
 });
 test('default features explicit and private attachment paths remain effect-free',async()=>{
@@ -57,7 +57,7 @@ function fakeFs() {const files=new Map();const calls=[];return{files,calls,mkdir
 test('runtime enabled initialization is explicit and writes exclusive private sidecars/heartbeat only',async()=>{
     const clock=new FakeClock(500);const files=fakeFs();let loaded=0;const runtime=loadRuntime(name=>{if(name==='node:path')return path;if(name==='../v2/shadowBridge'){loaded++;return{createShadowBridge};}throw Error(`unexpected ${name}`);});
     assert.throws(()=>runtime.initialize({config:{PIPELINE_MODE:'shadow'}}),/filename/);
-    runtime.initialize({config:{PIPELINE_MODE:'shadow'},filename:'/synthetic/run.jsonl',clock,fs:files,botJid:'bot@s.whatsapp.net'});assert.equal(loaded,1);assert.equal(runtime.status().operationalClock,false);assert.equal(runtime.initialize().enabled,true);
+    runtime.initialize({config:{PIPELINE_MODE:'shadow'},filename:'/synthetic/run.jsonl',clock,fs:files,botJid:'19995550000@s.whatsapp.net'});assert.equal(loaded,1);assert.equal(runtime.status().operationalClock,false);assert.equal(runtime.initialize().enabled,true);
     runtime.observeWebhook(raw());runtime.recordV1Decision(v1());await runtime.flush();assert.ok(files.files.get('/synthetic/run.jsonl').includes('v2_decision'));assert.equal(JSON.parse(files.files.get('/synthetic/run.jsonl.checkpoint.json')).processed,1);
     await clock.advance(60000);assert.equal(JSON.parse(files.files.get('/synthetic/run.jsonl.checkpoint.json')).observedUntil,60500);runtime.stop();await runtime.flush();assert.equal(clock.pendingTimers,0);assert.equal(runtime.observeWebhook(raw('late')),false);assert.equal(runtime.recordV1Decision(v1('late')),false);
 });

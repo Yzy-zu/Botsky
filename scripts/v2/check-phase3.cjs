@@ -13,7 +13,7 @@ function evidenceProblems(evidence,now=Date.now()) {
     if(evidence.architectureReview?.status!=='approved')problems.push('Architecture review pending.');
     const shadow=evidence.shadow;
     if(!shadow||shadow.clock!=='SystemClock'||shadow.active!==true||!Number.isFinite(shadow.startedAt)||!Number.isFinite(shadow.observedUntil)||shadow.observedUntil-shadow.startedAt<86400000||shadow.observedUntil>now||now-shadow.observedUntil>120000)problems.push('Need 24 continuous real hours of active shadow, with a recent checkpoint.');
-    if(!shadow||shadow.businessEffects!==0||shadow.exceptions!==0||shadow.sinkErrors!==0||shadow.observed<1)problems.push('Shadow must have observed traffic with zero business IO, exceptions and sink errors.');
+    if(!shadow||shadow.businessEffects!==0||shadow.exceptions!==0||shadow.sinkErrors!==0||!Number.isSafeInteger(shadow.observed)||shadow.observed<1)problems.push('Shadow must have observed traffic with zero business IO, exceptions and sink errors.');
     if(!shadow?.diffReport||shadow.diffReviewed!==true)problems.push('Categorized shadow diff report must be reviewed.');
     return problems;
 }

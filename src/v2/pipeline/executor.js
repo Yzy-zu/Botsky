@@ -27,8 +27,12 @@ function validArgs(args, schema) {
 }
 /** @param {{features:import('./contracts').Feature[],queue:import('../platform/queue').TieredQueue,clock:import('../platform/clock').Clock,llm:import('../domain/ports').LLM,timeoutMs?:number}} options */
 function createExecutor({ features, queue, clock, llm, timeoutMs = 30000 }) {
+    let stopped = false;
+    /** @type {Set<AbortController>} */ const active = new Set();
+    function stop() { stopped = true; for (const controller of active) controller.abort(); }
     /** @param {import('./contracts').Ctx} ctx @param {import('../domain/types').Decision} decision @returns {Promise<import('../domain/types').Reply>} */
     async function execute(ctx, decision) {
+        if (stopped) throw new AppError('unknown');
         if (decision.kind === 'ignore') return { parts: [] };
         if (decision.kind === 'chat') {
             const result = await llm.generate({ task: 'chat', budget: { maxOutputTokens: 300, timeoutMs }, messages: [
@@ -46,9 +50,19 @@ function createExecutor({ features, queue, clock, llm, timeoutMs = 30000 }) {
         if (!validArgs(args, entry.command.argsSchema)) throw new AppError('bad_output');
         /** @param {AbortSignal} signal */
         const run = async signal => {
-            const reply = await entry.command.handler(ctx, args, signal);
-            if (!isReply(reply)) throw new AppError('bad_output');
-            return reply;
+            if (stopped) throw new AppError('unknown');
+            const controller = new AbortController();
+            const abort = () => controller.abort();
+            signal.addEventListener('abort', abort, { once: true });
+            active.add(controller);
+            try {
+                if (signal.aborted) controller.abort();
+                controller.signal.throwIfAborted();
+                const reply = await entry.command.handler(ctx, args, controller.signal);
+                controller.signal.throwIfAborted();
+                if (!isReply(reply)) throw new AppError('bad_output');
+                return reply;
+            } finally { signal.removeEventListener('abort', abort); active.delete(controller); }
         };
         if (entry.command.tier !== 'none') return /** @type {Promise<import('../domain/types').Reply>} */ (queue.add(JSON.stringify([ctx.event.chatId, ctx.event.sender.jid]), run, entry.command.tier, entry.command.name, { timeoutMs }));
         // Even unqueued commands have a deadline; abort and prevent a late reply.
@@ -58,6 +72,6 @@ function createExecutor({ features, queue, clock, llm, timeoutMs = 30000 }) {
         try { return /** @type {import('../domain/types').Reply} */ (await Promise.race([run(controller.signal), timeout])); }
         finally { clock.clearTimeout(handle); }
     }
-    return { execute };
+    return { execute, stop };
 }
 module.exports = { createExecutor, validArgs };

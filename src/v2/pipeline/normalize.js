@@ -32,10 +32,14 @@ function textOf(message) {
  * @param {{botJid?:string,isSentId?:(chatId:string,id:string)=>boolean,clock:import('../platform/clock').Clock}} options
  * @returns {InboundEvent|null} */
 function normalize(raw, { botJid = '', isSentId = () => false, clock }) {
+    const botIdentity = normalizeJid(botJid);
     if (isInboundEvent(raw)) {
-        const event = { ...raw, sender: { ...raw.sender, jid: normalizeJid(raw.sender.jid) }, chatId: normalizeJid(raw.chatId), mentions: raw.mentions.map(normalizeJid) };
-        if (raw.quoted) event.quoted = { ...raw.quoted, senderJid: normalizeJid(raw.quoted.senderJid), isFromBot: Boolean((botJid && normalizeJid(raw.quoted.senderJid) === normalizeJid(botJid)) || isSentId(event.chatId, raw.quoted.messageId)) };
-        return event;
+        const senderJid = normalizeJid(raw.sender.jid);
+        const chatId = normalizeJid(raw.chatId);
+        if (!senderJid || !chatId || senderJid.endsWith('@g.us') || raw.isGroup !== chatId.endsWith('@g.us')) return null;
+        const event = { ...raw, sender: { ...raw.sender, jid: senderJid, number: senderJid.split('@')[0] }, chatId, mentions: raw.mentions.map(normalizeJid).filter(Boolean) };
+        if (raw.quoted) event.quoted = { ...raw.quoted, senderJid: normalizeJid(raw.quoted.senderJid), isFromBot: Boolean((botIdentity && normalizeJid(raw.quoted.senderJid) === botIdentity) || isSentId(event.chatId, raw.quoted.messageId)) };
+        return isInboundEvent(event) ? event : null;
     }
     const envelope = object(raw);
     const envelopeType = string(envelope.event).toLowerCase().replace(/[._]/g, '');
@@ -71,7 +75,7 @@ function normalize(raw, { botJid = '', isSentId = () => false, clock }) {
         if (Object.keys(info).length) { context = info; break; }
     }
     const mentioned = context.mentionedJid;
-    const mentions = Array.isArray(mentioned) ? mentioned.filter((jid) => typeof jid === 'string').map(jid => normalizeJid(/** @type {string} */(jid))) : [];
+    const mentions = Array.isArray(mentioned) ? mentioned.filter((jid) => typeof jid === 'string').map(jid => normalizeJid(/** @type {string} */(jid))).filter(Boolean) : [];
     const quoteId = string(context.stanzaId);
     const quotedJid = normalizeJid(string(context.participant));
     /** @type {InboundEvent} */ const event = {
@@ -79,7 +83,7 @@ function normalize(raw, { botJid = '', isSentId = () => false, clock }) {
         text: textOf(message).trim(), kind, mentions, isFromMe: key.fromMe === true, receivedAt: clock.now(), raw: envelope,
         ...(media ? { media } : {})
     };
-    if (quoteId) event.quoted = { messageId: quoteId, senderJid: quotedJid, text: textOf(unwrap(object(context.quotedMessage))), isFromBot: Boolean((botJid && quotedJid === normalizeJid(botJid)) || isSentId(chatId, quoteId)) };
-    return event;
+    if (quoteId) event.quoted = { messageId: quoteId, senderJid: quotedJid, text: textOf(unwrap(object(context.quotedMessage))), isFromBot: Boolean((botIdentity && quotedJid === botIdentity) || isSentId(chatId, quoteId)) };
+    return isInboundEvent(event) ? event : null;
 }
 module.exports = { normalize, normalizeJid };

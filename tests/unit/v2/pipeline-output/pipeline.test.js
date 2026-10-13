@@ -101,3 +101,22 @@ test('Application composition enforces admission/cooldown and natural minimal fe
  let pending=app.pipeline.handle(raw('1','Botsky estado'));await Promise.resolve();await clock.advance(1200);assert.equal((await pending).kind,'reply');assert.equal(sent.length,1);
  assert.equal((await app.pipeline.handle(raw('2','Botsky estado'))).reason,'cooldown');await clock.advance(3000);pending=app.pipeline.handle(raw('3','Botsky estado'));await Promise.resolve();await clock.advance(1200);assert.equal((await pending).kind,'reply');assert.equal(sent.length,2);app.dispose();
 });
+
+test('Composer stops late multipart/chunk sends and generation after shutdown begins',async()=>{
+ let closing=false,release;const sent=[];
+ const gate=new Promise(resolve=>{release=resolve;});
+ const composer=createComposer({messenger:{sendText:async(_chat,text)=>{sent.push(text);await gate;return{};}},llm:{},isClosed:()=>closing,chunkChars:2});
+ const pending=composer.compose(context(),{parts:[{type:'text',text:'abcdef'},{type:'text',text:'second'}]});
+ await Promise.resolve();assert.deepEqual(sent,['ab']);closing=true;release();await pending;assert.deepEqual(sent,['ab']);
+ assert.deepEqual(await composer.compose(context(),{parts:[{type:'text',text:'third'}]}),{parts:[]});
+ let closeAfterRead=false;const afterRead=createComposer({messenger:{sendText:async()=>{throw Error('Must not send');}},llm:{},isClosed:()=>closeAfterRead,recentReplies:async()=>{closeAfterRead=true;return[];}});
+ assert.deepEqual(await afterRead.compose(context(),{parts:[{type:'text',text:'reply'}]}),{parts:[]});
+ let closeAfterVariation=false;const variation=createComposer({messenger:{sendText:async()=>{throw Error('Must not send');}},llm:{generate:async()=>{closeAfterVariation=true;return good('different');}},isClosed:()=>closeAfterVariation,recentReplies:async()=>['same']});
+ assert.deepEqual(await variation.compose(context(),{parts:[{type:'text',text:'same'}]}),{parts:[]});
+});
+test('Pipeline disposal waits for active model replay and blocks new live/shadow ingress',async()=>{
+ let release;const waiting=new Promise(resolve=>{release=resolve;});const f=fixture({generate:async()=>{await waiting;return good('{"kind":"chat"}');}});
+ const pending=f.pipeline.decideOnly(raw('pending-shadow','Botsky'));await Promise.resolve();await Promise.resolve();const disposal=f.pipeline.dispose();assert.equal(f.pipeline.dispose(),disposal);
+ assert.equal((await f.pipeline.handle(raw('new','Botsky'))).reason,'pipeline-closed');assert.equal((await f.pipeline.decideOnly(raw('new-shadow','Botsky'))).reason,'pipeline-closed');
+ let disposed=false;disposal.then(()=>{disposed=true;});await Promise.resolve();assert.equal(disposed,false);release();assert.equal((await pending).reason,'pipeline-closed');await disposal;assert.equal(disposed,true);assert.equal(f.sent.length,0);f.dispose();
+});

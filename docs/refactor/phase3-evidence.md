@@ -31,3 +31,9 @@ Consultar PROGRESS y estado privado /tmp/botsky-phase3-shadow-state.json mediant
 Inicio real:2026-10-13T03:02:40.938Z; mismo proceso PM2wasa2916445, health200. Primertráfico real cuatrodiffs, sinexcepciones/sinkErrors/drops. Ayuda eligióhelp enambas versiones porwake-word; etiqueta changed corresponde command→intent, no función diferente. Tresreplysinplan quedanunknown explícito. Másdatos/duración/revisiónpendientes; earliest24h2026-10-14T03:02:40.938Z.
 
 El reporte usa checkpoint.enabled/PM2samePID/heartbeat para active; checkpoint.active es busyworker. No interpretar falseidle como apagado. Evidencia porrun se congela trasreinicio/stop y no acumula tiempo ficticio.
+
+## Revisión y correcciones del13deoctubre
+
+Verificación local actual229/229, hooks/refactor52/52;100%líneas pipeline/policies. WO037 documenta identidadinválida trascanonicalización y shutdown con lateoutput reproducidos ycorregidos; WO038 documenta9fallos deidentidades ficticias inválidas yfixde5líneas manteniendoaserciones. El snapshot219/52anterior no certificaba laúltimaprueba defixtures canónicos; nuevaejecución lo corrige.
+
+No se modificó producción: observador3c56f0a permanece idéntico en73archivos, mismoPID yunos7h12m de24. El candidato local usa cierreasíncrono yvalidación adicional, aún no desplegados. Gate3 sigueabierto por24h/revisióndiffs/dictamenoperacional. phase3-diff-review.md revisa4filas ylimitaciones, no todoeldía.

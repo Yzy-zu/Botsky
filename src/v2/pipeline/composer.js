@@ -7,14 +7,16 @@ function errorReply(error) {
     const feedback = toUserFeedback(error);
     return { parts: [{ type: 'text', text: `${feedback.message} ${feedback.nextStep}` }] };
 }
-/** @param {{messenger:import('../domain/ports').Messenger,llm:import('../domain/ports').LLM,record?:(ctx:import('./contracts').Ctx,text:string)=>Promise<unknown>,rememberSent?:(chatId:string,messageId:string)=>void,recentReplies?:(chatId:string)=>Promise<string[]>,chunkChars?:number}} options */
-function createComposer({ messenger, llm, record = async () => {}, rememberSent = () => {}, recentReplies = async () => [], chunkChars = 3500 }) {
+/** @param {{messenger:import('../domain/ports').Messenger,llm:import('../domain/ports').LLM,record?:(ctx:import('./contracts').Ctx,text:string)=>Promise<unknown>,rememberSent?:(chatId:string,messageId:string)=>void,recentReplies?:(chatId:string)=>Promise<string[]>,chunkChars?:number,isClosed?:()=>boolean}} options */
+function createComposer({ messenger, llm, record = async () => {}, rememberSent = () => {}, recentReplies = async () => [], chunkChars = 3500, isClosed = () => false }) {
     let observationFailures = 0;
     if (!Number.isSafeInteger(chunkChars) || chunkChars < 1) throw new RangeError('Invalid chunk size');
     /** @param {import('./contracts').Ctx} ctx @param {import('../domain/types').Reply} reply @param {{allowLong?:boolean,detailRequested?:boolean,status?:boolean}} [options] */
     async function compose(ctx, reply, options = {}) {
+        if (isClosed()) return { parts: [] };
         let recent = /** @type {string[]} */ ([]);
         try { recent = await recentReplies(ctx.event.chatId); } catch { observationFailures++; }
+        if (isClosed()) return { parts: [] };
         const textOptions = reply.replyTo ? { quoted: { key: { id: reply.replyTo, remoteJid: ctx.event.chatId } } } : undefined;
         let variationAttempted = false;
         if (responseRepetition(reply, recent) === 'vary-once') {
@@ -29,12 +31,15 @@ function createComposer({ messenger, llm, record = async () => {}, rememberSent 
                 if (varied.ok && varied.data.text?.trim()) reply = { ...reply, parts: [...reply.parts.filter(part => part.type !== 'text'), { type: 'text', text: varied.data.text }] };
             } catch { /* Repetition fallback is bounded even when the provider throws. */ }
         }
+        if (isClosed()) return { parts: [] };
         const composed = responsePolicy(reply, { isGroup: ctx.event.isGroup, ...options, recentReplies: recent, variationAttempted });
         for (const part of composed.parts) {
+            if (isClosed()) break;
             /** @type {unknown} */ let delivery;
             if (part.type === 'text') {
                 const characters = Array.from(part.text);
                 for (let offset = 0; offset < characters.length; offset += chunkChars) {
+                    if (isClosed()) break;
                     delivery = await messenger.sendText(ctx.event.chatId, characters.slice(offset, offset + chunkChars).join(''), textOptions);
                     remember(delivery, ctx.event.chatId);
                 }

@@ -57,3 +57,15 @@ test('synthetic and sanitized real fixtures normalize only messages.upsert', () 
     }
     assert.ok(valid >= 20);
 });
+test('pre-normalized events fail closed after canonical identity validation',()=>{
+    const valid=normalize(raw({conversation:'hello'}),options);
+    for(const changes of [{chatId:'unsupported@example.invalid'},{sender:{...valid.sender,jid:'bogus@s.whatsapp.net'}},{sender:{...valid.sender,jid:'19995559999@g.us'}},{isGroup:false}])assert.equal(normalize({...valid,...changes},options),null);
+    const canonical=normalize({...valid,chatId:'19995559999:2@g.us',sender:{...valid.sender,jid:'5215551234567:2@c.us',number:'spoofed'},mentions:['invalid@domain.invalid','900:3@c.us']},options);
+    assert.ok(isInboundEvent(canonical));assert.equal(canonical.sender.jid,'525551234567@s.whatsapp.net');assert.equal(canonical.sender.number,'525551234567');assert.deepEqual(canonical.mentions,['900@s.whatsapp.net']);
+});
+test('invalid bot identity cannot authenticate invalid quoted participant by empty equality',()=>{
+    const input=raw({extendedTextMessage:{text:'hello',contextInfo:{stanzaId:'q',participant:'invalid@unknown',quotedMessage:{conversation:'bot'}}}});
+    const event=normalize(input,{clock,botJid:'invalid@unknown'});assert.equal(event.quoted.isFromBot,false);
+    const second=normalize({...event,quoted:{...event.quoted,isFromBot:true}},{clock,botJid:'invalid@unknown'});assert.equal(second.quoted.isFromBot,false);
+    assert.equal(normalize(input,{clock:{now:()=>NaN}}),null);
+});

@@ -1,74 +1,75 @@
 {
   "status": "shadow_active_gate_open",
-  "recordedAt": "2026-10-13T03:02:32.285195+00:00",
+  "recordedAt": "2026-10-13T10:18:22.469226+00:00",
   "verify": {
     "exitCode": 0,
-    "pass": 219,
+    "pass": 229,
     "fail": 0,
-    "report": "/tmp/botsky-phase3-final-verify.log",
-    "sha256": "027be61fafb68b2d01102e45fb52444d5b7d08bcf47a5ac21d326c75e2f06261"
+    "report": "/tmp/botsky-phase3-resume-verify.log",
+    "sha256": "f1723292ce7a56f4ba4946e82b094b86b02a59446a2ebb44d5a6cf5d49e24ebb"
   },
   "refactor": {
     "pass": 52,
     "fail": 0,
-    "report": "/tmp/botsky-phase3-final-glue.tap"
+    "report": "/tmp/botsky-phase3-resume-refactor.tap",
+    "sha256": "7d2a42d08cc51dad55eb1e517ef73ec123cf0b48f3c781e3a51c0a5c32d98130"
   },
   "coverage": [
     {
       "file": "pipeline/coalescer.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "pipeline/composer.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "pipeline/context.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "pipeline/executor.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "pipeline/gate.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "pipeline/index.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "pipeline/ingest.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "pipeline/normalize.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "pipeline/router.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "policies/access.policy.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "policies/addressing.policy.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "policies/attachment.policy.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "policies/proactive.policy.js",
-      "lines": 100
+      "lines": 100.0
     },
     {
       "file": "policies/response.policy.js",
-      "lines": 100
+      "lines": 100.0
     }
   ],
   "scenarios": {
@@ -91,15 +92,18 @@
   },
   "architectureReview": {
     "status": "approved_for_partial_shadow",
-    "document": "docs/refactor/phase3-evidence.md"
+    "functionalReview": "favorable_after_verified_local_fixes",
+    "document": "docs/refactor/wo/WO-037.md",
+    "liveDiffReview": "docs/refactor/phase3-diff-review.md",
+    "finalOperationalReview": "pending_24h_and_complete_diff_review"
   },
   "shadow": {
-    "recordedAt": "2026-10-13T03:08:27.706Z",
+    "recordedAt": "2026-10-13T10:15:37.093Z",
     "active": true,
     "clock": "SystemClock",
     "startedAt": 1791860560938,
-    "observedUntil": 1791860860940,
-    "elapsedMs": 300002,
+    "observedUntil": 1791886481170,
+    "elapsedMs": 25920232,
     "observed": 4,
     "processed": 4,
     "exceptions": 0,
@@ -107,7 +111,7 @@
     "dropped": 0,
     "bridgeDropped": 0,
     "v1TimedOut": 0,
-    "unmatchedRecords": 25,
+    "unmatchedRecords": 304,
     "workerBusy": false,
     "actualDiffs": 4,
     "categories": {
@@ -131,5 +135,11 @@
     "Sombra inicial compara addressing/decisiones con planes v1 grabados; no consulta historial ni sesiones legacy y marca unknown donde no hay plan/ID correlacionable.",
     "No activa canario ni ejecuta tools/passivos/migraciones/jobs v2.",
     "Repo nuevo de hilos probado sólo con SQLite temporal; no migración001 productiva."
-  ]
+  ],
+  "deployment": {
+    "installedSourceCommit": "3c56f0a",
+    "installedSourceHashCheck": "73 files, zero mismatches on 2026-10-13T10:15Z",
+    "localCorrectionsDeployed": false,
+    "difference": "Canonical normalized-input validation and asynchronous shutdown/cancellation fixes are local only. No live restart or source overwrite; the shadow never executes its business executor/composer."
+  }
 }

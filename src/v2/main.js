@@ -15,6 +15,21 @@ function createApplication(options) {
     features.push(createHelpFeature({ features: () => features }), createSystemInfoFeature({ getStatus: options.getStatus }), ...(options.extraFeatures || []));
     const limiter = createRateLimiter({ clock: options.clock, store, ...options.rate });
     const pipeline = createPipeline({ ...options, store, queue, features, rateState: event => limiter.snapshot(event), onAccept: event => { limiter.observe(event); }, onReply: event => { limiter.markReply(event); } });
-    return { pipeline, features, store, queue, dispose() { pipeline.dispose(); queue.dispose(); store.dispose(); } };
+    /** @type {Promise<void>|undefined} */ let disposing;
+    /** Stop admissions/output synchronously; resolve only after running work settles. */
+    function dispose() {
+        if (disposing) return disposing;
+        const pipelineDone = pipeline.dispose();
+        const queueDone = queue.dispose();
+        disposing = (async () => {
+            const results = await Promise.allSettled([pipelineDone,queueDone]);
+            limiter.dispose();
+            store.dispose();
+            const failure = results.find(result => result.status === 'rejected');
+            if (failure?.status === 'rejected') throw failure.reason;
+        })();
+        return disposing;
+    }
+    return { pipeline, features, store, queue, dispose };
 }
 module.exports = { createApplication };
