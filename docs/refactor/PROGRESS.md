@@ -23,7 +23,7 @@ Actualizado: 2026-10-13 UTC. Maestro: Codex. Plano: `plan.md`.
 | 0 Baseline y seguridad | Cerrada con excepción autorizada F0-E001 | Gate0 PASS; 21 fixtures reales / 14 categorías; poll diferido por cliente; baseline y trazabilidad completos |
 | 1 Cimientos | Cerrada | Gate1 PASS: verify exit0; 42 tests; 100% líneas config/TTL/queue/scheduler; 90 env documentadas |
 | 2 Adaptadores | Cerrada con excepción F2-E001 | verify:phase2 PASS; 123 tests verdes; legacy636/159, cero nuevos y28resueltos |
-| 3 Pipeline y sombra | Pausada antes de iniciar | Auditoría focal verde; suite integral interrumpida por pausa del usuario, pendiente de repetir |
+| 3 Pipeline y sombra | En implementación | Deuda159 cerrada con814/814; pipeline/políticas y24h sombra pendientes |
 | 4 Migración A–D | No iniciada | Gate 3 pendiente |
 | 5 IA y duplicados | No iniciada | Gate 4 pendiente |
 | 6 Cutover y retiro | No iniciada | Soaks, rollback probado y aceptación pendientes |
@@ -237,3 +237,15 @@ Producción v1 sigue online; no desplegar estos fixes durante la pausa.
 - Integración adicional: registry conserva parsed/flags mutación pública MP3 y defaults de argumentos opcionales; runner configura DATA_DIR por testworker y childserver conserva DB explícita sin NODE_TEST_CONTEXT/NODE_OPTIONS heredados. Tests usan planes canónicos y fakes proveedores; no heurísticas naturales restauradas.
 - Resumen personal /home/petrov/BOTSKY-AVANCE.md actualizado. Checkpoint se guarda en commit/push refactor/v2 sin merge main, .env/DB/logs excluidos.
 - RETOMAR EXACTO: gitstatus/log en /home/petrov/botsky-v2; leer WO027–030 y este checkpoint. Ejecutar BOTSKY_LEGACY_VERIFICATION_OUTPUT=/tmp/botsky-debt-verified-resumed.tap bash scripts/refactor/legacy-verification.sh (sin editar scripts/fuentes mientras esté corriendo). Exigir resumen completo, exit0, cero fallos/cancel/skip; si falla investigar antescerrar. Crear conciliación final por159BF y evidencia hashes separada (ledgerF2histórico intacto), actualizar reportes/PROGRESS y publicar. Sólo después planificar Fase3/pipeline y sombra24h; ninguna sombra activa hoy.
+
+## Reanudación — 2026-10-13T02:26:51.413472+00:00
+
+- Usuario confirma cuota y pide seguir. Rama limpia en5e9bf8d; suite integral reactivada en contenedor aislado /tmp/botsky-debt-verified-resumed.tap. No edición fuente/test/script hasta resultado.
+- Traceability concilia159IDs en reporte separado; contracts_review prepara desglose Fase3 read-only. No cierre deuda ni avance gate antes resultado completo; no sombra ni cambios producción.
+
+## Cierre auditoría159 — reanudación verificada
+
+- Runner final EXIT0, /tmp/botsky-debt-verified-resumed.tap:814tests814pass0fail0cancel0skip0todo,145743.384052ms; SHA13b845f7eaebfbd09e1fc04719a6bf7dfbfaf3da5d564e15e5bc30af4f200a11. Snapshot5e9bf8d Node20.20.2ARM64.
+- Conciliación legacy-debt-resolution.json/md159IDs exactos, todos global_verified, ledger histórico SHA00ec1da89032bc5363ddcd453c93f38c241dd30efa9a3ea38ddf8840a7102784 intacto. ExcepciónF2-E001 ya no tiene casos pendientes en entorno enhanced; evidenciaF2 histórica no reescrita. No afirmar159bugs reparados: incluye entorno/harness/contratos obsoletos y defectos confirmados.
+- Producción siguev1 intacta. Suite aislada no acredita disponibilidad de proveedores remotos ni comprensión live. Resumen~/BOTSKY-AVANCE.md se actualiza.
+- InicioFase3: WO031 fixtures5políticaspuras, WO032 contracts_review ingest/normalize/gate/context/coalescer; maestro sharedcontracts/router/executor/composer/orquestación +featuresmínimas. No activación/sombra todavía. Gate3 requiere90%pipelinepolicies+escenarios+revisiónarquitectónica+24h reales; no sustituirsoak portests.
