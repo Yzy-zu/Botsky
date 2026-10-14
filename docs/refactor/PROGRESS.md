@@ -325,3 +325,13 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - Bootstrap/server preparado para propietario único ANTES de normalización, XP, historial o despacho legacy; errores v2 no reejecutan legacy. Flags V2_CANARY_CHAT_IDS y V2_CANARY_FEATURES. Primer escalón: SOLO privado admin configurado, creaciónQR/ayuda/estado. LecturaQR, adjuntos sin caption, grupos y resto de capacidades siguen en legacy.
 - Preparación no equivale a canario activo. Registrar despliegue/PID/health/evidencia posteriormente. Toda olaA permanece ABIERTA: continuidad de colecciones/adjuntos, contenido web/multimodal, paridad/traza de casos, ElevenLabs/destinos y prueba real privada+grupo. OlasB–D y Fases5–6 pendientes; no retirar v1.
 - Retomar: completar instalación y canario privado mínimo con rollback verificado; pedir al cliente «Botsky qr hola» y «Botsky estado» cuando esté activo; comprobar counters/entrega real sin publicar JIDs/contenido. Después terminar brechas de olaA, no ampliar flags por tener solo wrappers/manifests.
+
+
+## Canario privado mínimo ACTIVO — 2026-10-14 UTC
+
+- Artefacto e8f15df publicado en GitHub;97fuentesv2 instaladas verificadas contraesecommit,0diferencias. Server recibió solo hunks nuevos, preservando modificaciones previas productivas. Backup privado /tmp/botsky-canary-backup-1791972390875; contiene fuentes previas y configuraciónPM2, nunca adjuntarlo aGit.
+- Prueba real de composición productiva sin mensajes: graph construido, SQLite sidecar abierto/migrado y dispuesto;0mensajes externos. Ensayo de flaglegacy en bootstrap nuevo: PID3906457 health200, pipeline.enabledfalse y colasvacías.
+- Activado PIPELINE_MODEcanary con1privado (único admincliente configurado, diferente del bot), V2_CANARY_FEATURESqr/help/system-info, proactivefalse. PID3906724 health200; kill_timeout45000ms; PM2save realizado. Ningún grupo pertenece a v2; ningún job transferido.
+- QRlectura/citado, multimedia y funciones restantes conservanlegacy. Server selecciona propietario antes de normalización/XP/historial; salida/error propio de v2 nunca reenvía porlegacy.
+- Validación humana pendiente: preguntada porherramientaasíncrona, enviar «Botsky qr hola», «Botsky ayuda», «Botsky estado» sin@/prefijo. No contar health ni contratos comoentregaWhatsApp. Contadores seguros /status.pipeline arrancaronen0; consultar sin volcarlogs personales.
+- Trabajo local posterior separado del artefacto instalado: continuidadcolecciones y cableadoElevenLabs/auditoríaparidad en agentes baratos si cuota disponible. No reiniciarni ampliarflags mientras pruebas del nuevoentregable noesténverdes. Fase4 abierta; no afirmarbotv2completo.

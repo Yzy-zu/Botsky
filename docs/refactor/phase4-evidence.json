@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-10-14T10:04:45.889181+00:00",
+  "recordedAt": "2026-10-14T10:10:28.239417+00:00",
   "status": "implementation_and_private_canary_preparation",
   "verify": {
     "exitCode": 0,
@@ -35,14 +35,27 @@
   },
   "environmentSettings": 97,
   "canary": {
-    "deployed": false,
+    "deployed": true,
     "features": [
       "qr",
       "help",
       "system-info"
     ],
     "privateChats": 1,
-    "groups": 0
+    "groups": 0,
+    "sourceCommit": "e8f15df",
+    "pid": 3906724,
+    "health": 200,
+    "proactiveEnabled": false,
+    "pm2Saved": true,
+    "killTimeoutMs": 45000,
+    "productionBotDbModified": false,
+    "sidecar": "data/v2/canary.db",
+    "sourceFilesVerified": 97,
+    "sourceMismatches": 0,
+    "humanValidation": "pending",
+    "runtimeProbe": "real graph startup/SQLite and disposal passed; zero messages",
+    "rollbackFlagRehearsal": "new bootstrap in legacy mode: health200, pipeline disabled, queue empty before canary activation"
   },
   "pending": [
     "Activación y recorrido real QR/ayuda/estado en privado; luego grupo controlado.",
