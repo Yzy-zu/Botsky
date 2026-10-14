@@ -1,6 +1,7 @@
 // @ts-check
 'use strict';
 const { AppError } = require('../../domain/errors');
+const { normalizeJid } = require('../../domain/jid');
 
 const VOICES = Object.freeze(['hombre', 'mujer', 'colombiano', 'colombiana', 'argentino', 'argentina', 'loquendo',
     'chileno', 'venezolano', 'peruano', 'ardilla', 'demonio', 'robot', 'radio', 'dross', 'goku', 'donramon',
@@ -15,13 +16,17 @@ const MAX_VOICE_TEXT_CHARS = 20_000;
 
 /** @typedef {{ref:string,mime:string,durationSeconds?:number}} VoiceMedia */
 /** @typedef {{success?:boolean,text?:string,voice?:string,mode?:string,durationSeconds?:number|null,question?:string,error?:string,needsClarification?:boolean}} VoiceScript */
+/** @typedef {{scope:'current_chat'|'main_group'|'contact',contactQuery?:string}} VoiceDeliveryRequest */
+/** @typedef {{jid:string,name:string,isGroup:boolean,scope:'current_chat'|'main_group'|'contact'}} VoiceReadyTarget */
+/** @typedef {{status:'ready',target:VoiceReadyTarget}|{status:'denied',reason:string}|{status:'needs_clarification',question:string,missingFields?:string[]}} VoiceDeliveryDecision */
+/** @typedef {import('../../domain/types').ReplyPart & {delivery?:{scope:'main_group'|'contact',contactQuery?:string,expectedJid:string}}} VoiceAudioPart */
 /** @typedef {{previousText:string,measuredSeconds:number,wordTarget:number}} VoiceRevision */
 /** @typedef {{extractedText?:string,inlineData?:{mimeType:string,data:string}}} VoiceScriptMediaContext */
 /** @typedef {{request:string,literalText:string,mode:string,voice:string,durationSeconds:number|null,history:ReadonlyArray<{role:string,content:string}>,quotedText:string,userName:string,isGroup:boolean,mediaContext?:VoiceScriptMediaContext,revision?:VoiceRevision}} VoiceScriptInput */
-/** @typedef {{prepareScript:(input:VoiceScriptInput,signal:AbortSignal)=>Promise<VoiceScript>,readScriptContext?:(attachment:import('../../pipeline/contracts').Attachment,signal:AbortSignal)=>Promise<VoiceScriptMediaContext|{question:string}|null>,synthesize:(text:string,options:{voice:string,signal:AbortSignal})=>Promise<VoiceMedia>,fitDuration:(media:VoiceMedia,targetSeconds:number,signal:AbortSignal)=>Promise<VoiceMedia>,release?:(ref:string)=>Promise<unknown>}} VoicePorts */
+/** @typedef {{prepareScript:(input:VoiceScriptInput,signal:AbortSignal)=>Promise<VoiceScript>,readScriptContext?:(attachment:import('../../pipeline/contracts').Attachment,signal:AbortSignal)=>Promise<VoiceScriptMediaContext|{question:string}|null>,resolveDelivery?:(ctx:import('../../pipeline/contracts').Ctx,request:VoiceDeliveryRequest,signal:AbortSignal)=>Promise<VoiceDeliveryDecision>,synthesize:(text:string,options:{voice:string,signal:AbortSignal})=>Promise<VoiceMedia>,fitDuration:(media:VoiceMedia,targetSeconds:number,signal:AbortSignal)=>Promise<VoiceMedia>,release?:(ref:string)=>Promise<unknown>}} VoicePorts */
 
 /** @param {VoicePorts} ports */
-function createVoiceHandler({ prepareScript, readScriptContext, synthesize, fitDuration, release }) {
+function createVoiceHandler({ prepareScript, readScriptContext, resolveDelivery, synthesize, fitDuration, release }) {
     /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal @returns {Promise<import('../../domain/types').Reply>} */
     return async function voice(ctx, args, signal) {
         signal.throwIfAborted();
@@ -29,10 +34,34 @@ function createVoiceHandler({ prepareScript, readScriptContext, synthesize, fitD
         const mode = typeof args.mode === 'string' ? args.mode : 'compose';
         const explicitLiteral = typeof args.literalText === 'string' ? args.literalText.trim() : '';
         const request = typeof args.instruction === 'string' ? args.instruction.trim() : '';
+        const requestedScope = typeof args.destinationScope === 'string' ? args.destinationScope : 'current_chat';
+        const contactQuery = typeof args.contactQuery === 'string' ? args.contactQuery.trim() : '';
         const rawDuration = args.durationSeconds;
         const durationSeconds = typeof rawDuration === 'number' && Number.isFinite(rawDuration) ? rawDuration : null;
         if (!VOICES.includes(voice) || !MODES.includes(mode) || (durationSeconds !== null && (durationSeconds < 1 || durationSeconds > MAX_VOICE_DURATION_SECONDS)) || explicitLiteral.length > MAX_VOICE_TEXT_CHARS) {
             return textReply(ctx, 'No pude interpretar la voz, el texto o la duración. Indica una voz conocida, hasta 20,000 caracteres de texto y una duración de 1 a 600 segundos.');
+        }
+        if (!['current_chat', 'main_group', 'contact'].includes(requestedScope) || (requestedScope === 'contact' && !contactQuery)) {
+            return textReply(ctx, requestedScope === 'contact' ? '¿A qué contacto se lo mando?' : '¿A qué chat lo mando?');
+        }
+        /** @type {{scope:'main_group'|'contact',contactQuery?:string}|undefined} */
+        const externalRequest = requestedScope === 'current_chat' ? undefined : {
+            scope: /** @type {'main_group'|'contact'} */ (requestedScope), ...(contactQuery ? { contactQuery } : {})
+        };
+        /** @type {VoiceDeliveryDecision|undefined} */ let deliveryDecision;
+        if (externalRequest) {
+            if (!resolveDelivery) return textReply(ctx, 'No puedo confirmar ese destino todavía. No preparé ni envié el audio.');
+            try {
+                deliveryDecision = await resolveDelivery(ctx, externalRequest, signal);
+                signal.throwIfAborted();
+            } catch (error) {
+                signal.throwIfAborted();
+                return textReply(ctx, 'No pude validar ese destino. No preparé ni envié el audio.');
+            }
+            if (!deliveryDecision || deliveryDecision.status !== 'ready' || !validExternalTarget(deliveryDecision.target, externalRequest.scope)) {
+                if (deliveryDecision?.status === 'needs_clarification' && typeof deliveryDecision.question === 'string' && deliveryDecision.question.trim()) return textReply(ctx, `${deliveryDecision.question.trim()} No preparé ni envié el audio.`);
+                return textReply(ctx, 'Solo el creador y los administradores autorizados pueden enviar audio a otros chats. No preparé ni envié el audio.');
+            }
         }
         const quotedText = ctx.event.quoted?.text || '';
         const literalText = explicitLiteral || (mode === 'verbatim' ? quotedText.trim() : '');
@@ -128,9 +157,15 @@ function createVoiceHandler({ prepareScript, readScriptContext, synthesize, fitD
                 }
             }
             const actualDuration = typeof media.durationSeconds === 'number' && Number.isFinite(media.durationSeconds) ? media.durationSeconds : undefined;
-            /** @type {import('../../domain/types').ReplyPart[]} */
-            const parts = [{ type:'audio',ref:media.ref,mime:media.mime,transcript,
-                ...(actualDuration === undefined ? {} : {durationSeconds:actualDuration}) }];
+            /** @type {VoiceAudioPart} */
+            const audioPart = { type:'audio',ref:media.ref,mime:media.mime,transcript,
+                ...(externalRequest && deliveryDecision?.status === 'ready' ? { delivery: {
+                    scope: externalRequest.scope, ...(externalRequest.contactQuery ? { contactQuery: externalRequest.contactQuery } : {}),
+                    expectedJid: deliveryDecision.target.jid
+                } } : {}),
+                ...(actualDuration === undefined ? {} : {durationSeconds:actualDuration}) };
+            /** @type {Array<import('../../domain/types').ReplyPart|VoiceAudioPart>} */
+            const parts = [audioPart];
             if (measuredTarget !== null && actualDuration !== undefined && mismatchLimit !== null && Math.abs(actualDuration-measuredTarget)>mismatchLimit) {
                 parts.push({type:'text',text:`La nota quedó en ${actualDuration.toFixed(1)} s; buscábamos ${measuredTarget} s.`});
             }
@@ -149,6 +184,14 @@ function validVoiceMedia(value) {
     return Boolean(value && typeof value === 'object' && typeof /** @type {VoiceMedia} */(value).ref === 'string' &&
         /** @type {VoiceMedia} */(value).ref.trim() && typeof /** @type {VoiceMedia} */(value).mime === 'string' &&
         /** @type {VoiceMedia} */(value).mime.toLowerCase().startsWith('audio/'));
+}
+
+/** @param {VoiceReadyTarget} target @param {'main_group'|'contact'} requestedScope */
+function validExternalTarget(target, requestedScope) {
+    if (!target || typeof target.jid !== 'string') return false;
+    const jid = normalizeJid(target.jid);
+    return jid === target.jid && (jid.endsWith('@s.whatsapp.net') || jid.endsWith('@g.us')) &&
+        target.scope === requestedScope && target.isGroup === jid.endsWith('@g.us');
 }
 
 /** @param {import('../../pipeline/contracts').Ctx} ctx @param {string} text @returns {import('../../domain/types').Reply} */

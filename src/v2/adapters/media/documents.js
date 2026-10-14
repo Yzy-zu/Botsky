@@ -242,6 +242,7 @@ function createDocumentsMedia({download,downloadUrl,run=createExecFileRunner(),o
             if (isAborted(error)||signal.aborted) throw error;
             const cleanupFailure=await cleanupWorkspace(directory);
             if (cleanupFailure) throw new AggregateError([new Error('Document operation failed'),cleanupFailure],'Document operation and workspace cleanup failed');
+            if (error instanceof PageSelectionError) throw error;
             throw new Error('Document operation failed');
         } finally {
             if (!retained&&active.has(path.resolve(directory))) await cleanupWorkspace(directory);
@@ -357,7 +358,14 @@ function createDocumentsMedia({download,downloadUrl,run=createExecFileRunner(),o
     async function cropPdf(directory,request,signal) {
         const {input,downloaded}=await requirePdf(directory,request.source,signal); const pages=await pageCount(input,signal);
         const raw=request.args.pages;
-        if (typeof raw!=='string'||!raw.trim()) throw new Error(`Page selection required (document has ${pages} pages)`);
+        if (typeof raw!=='string'||!raw.trim()) throw new PageSelectionError('required',pages);
+        const value=raw.trim().toLowerCase();
+        if (value!=='ultima'&&!value.split(',').every(part=>/^\d+(?:-\d*)?$/.test(part))) throw new PageSelectionError('format',pages);
+        if(value!=='ultima')for(const part of value.split(',')){
+            if(part.endsWith('-')){const start=Number(part.slice(0,-1));if(start<1)throw new PageSelectionError('positive',pages);if(start>pages)throw new PageSelectionError('range',pages);}
+            else if(part.includes('-')){let[start,end]=part.split('-').map(Number);if(start>end)[start,end]=[end,start];if(start>pages)throw new PageSelectionError('range',pages);}
+            else{const page=Number(part);if(page<1)throw new PageSelectionError('positive',pages);if(page>pages)throw new PageSelectionError('range',pages);}
+        }
         const normalized=normalizePages(raw,pages); const output=path.join(directory,'cropped.pdf');
         await execute('gs',['-sDEVICE=pdfwrite','-dCompatibilityLevel=1.4','-dNOPAUSE','-dQUIET','-dBATCH','-dSAFER',`-sPageList=${normalized}`,`-sOutputFile=${output}`,input],60_000,signal);
         await assertOutput(directory,output); const name=safeOutputName(`${path.parse(downloaded.originalFileName||'documento').name}-p${normalized.replace(/,/g,'_')}`,'pdf');
@@ -510,10 +518,14 @@ function normalizePages(raw,total) {
     const normalized=[];
     for (const part of value.split(',')) {
         if (part.endsWith('-')) { const start=Number(part.slice(0,-1)); if (start<1||start>total) throw new RangeError('PDF page selection outside document'); normalized.push(`${start}-${total}`); }
-        else if (part.includes('-')) { let [start,end]=part.split('-').map(Number); if (start<1||end<1) throw new RangeError('PDF page selection outside document'); if (start>end)[start,end]=[end,start]; if (start>total) throw new RangeError('PDF page selection outside document'); end=Math.min(end,total); normalized.push(start===end?String(start):`${start}-${end}`); }
+        else if (part.includes('-')) { let [start,end]=part.split('-').map(Number); if (start>end)[start,end]=[end,start]; if (start>total) throw new RangeError('PDF page selection outside document'); start=Math.max(1,start); end=Math.min(end,total); normalized.push(start===end?String(start):`${start}-${end}`); }
         else { const page=Number(part); if (page<1||page>total) throw new RangeError('PDF page selection outside document'); normalized.push(String(page)); }
     }
     return normalized.join(',');
+}
+class PageSelectionError extends Error {
+    /** @param {'required'|'format'|'positive'|'range'} reason @param {number} totalPages */
+    constructor(reason,totalPages) { super('Invalid PDF page selection'); this.name='PageSelectionError'; this.code='INVALID_PDF_PAGES'; this.reason=reason; this.totalPages=totalPages; }
 }
 /** @param {string} value @param {number} total */
 function expandPages(value,total) { /** @type {number[]} */ const output=[]; for(const part of value.split(',')){ if(part.includes('-')){const [start,endRaw]=part.split('-'); const end=endRaw?Number(endRaw):total; for(let page=Number(start);page<=end;page++)output.push(page);} else output.push(Number(part)); } return output; }

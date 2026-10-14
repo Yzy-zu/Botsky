@@ -99,6 +99,7 @@ define('REFRACTOR_CAPTURE_BOT_ALIASES', 'list', [], 'Identidades alternativas pr
 define('REFRACTOR_CAPTURE_DEDUPE', 'boolean', false, 'Deduplicación de envelopes capturados.');
 define('PIPELINE_MODE', 'enum', 'legacy', 'Dueño del pipeline; sombra nunca ejecuta efectos.', { values: Object.freeze(['legacy', 'shadow', 'canary', 'v2']) });
 define('V2_CANARY_CHAT_IDS', 'list', [], 'Chats explícitos del canario; primer escalón solo privado del cliente.', { secret: true, scope: 'operator-only' });
+define('MAIN_GROUP_JID', 'string', '', 'Grupo principal explícito para entregas autorizadas; vacío pide aclaración.', {secret:true,scope:'operator-only'});
 define('V2_CANARY_FEATURES', 'list', ['qr','help','system-info'], 'Features habilitadas en el canario; ampliar únicamente tras sus pruebas de migración.', { scope: 'operator-only' });
 define('BOTSKY_SHADOW_OUTPUT', 'string', '', 'Archivo exclusivo por ejecución para diffs de sombra sin datos personales.', { scope: 'operator-only' });
 define('SESSION_GROUP_RELAXED', 'boolean', false, 'Relajar selección de sesión solo por configuración aprobada.');

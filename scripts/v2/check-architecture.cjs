@@ -18,7 +18,11 @@ function imports(source, filename) {
         if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
             if (node.moduleSpecifier) found.push(ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : null);
         }
+        if (ts.isVariableDeclaration(node) && node.initializer && ((ts.isIdentifier(node.initializer) && node.initializer.text === 'require')
+            || (ts.isPropertyAccessExpression(node.initializer) && node.initializer.name.text === 'require'))) found.push(null);
         if (ts.isCallExpression(node) && ((ts.isIdentifier(node.expression) && node.expression.text === 'require')
+            || (ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === 'require')
+            || (ts.isElementAccessExpression(node.expression) && ts.isStringLiteralLike(node.expression.argumentExpression) && node.expression.argumentExpression.text === 'require')
             || node.expression.kind === ts.SyntaxKind.ImportKeyword)) {
             const argument = node.arguments[0];
             found.push(argument && ts.isStringLiteralLike(argument) ? argument.text : null);

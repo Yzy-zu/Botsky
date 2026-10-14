@@ -24,6 +24,15 @@ function fixture(files, operation) {
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
 
+test('architecture detects property require escapes and loader aliases',()=>{
+    for(const statement of ["module.require('../../legacy')","loader.require('../../legacy')","module['require']('../../legacy')","const loader=require;loader('../../legacy')"]){
+        fixture({'legacy.js':'module.exports={};','v2/composition/main.js':statement},root=>{
+            const result=auditArchitecture(path.join(root,'v2'));
+            assert.ok(result.problems.some(problem=>/legacy|dynamic import/.test(problem)),statement);
+        });
+    }
+});
+
 test('architecture rejects cross-layer dependencies, cycles and dynamic requires', () => {
     const result = fixture({
         'features/a/handler.js': "require('../../adapters/ai/client'); require(name);",

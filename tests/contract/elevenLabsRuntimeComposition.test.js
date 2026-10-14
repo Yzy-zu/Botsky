@@ -13,7 +13,7 @@ test('default graph constructs ElevenLabs without network I/O and supplies its b
  // Valid synthetic silence keeps the provider fake compatible with actual duration probing.
  const originalGet=axios.get,originalPost=axios.post;const calls=[];
  axios.get=async(url,options)=>{calls.push({method:'get',url,options});return{status:200,data:{voices:[]}};};
- axios.post=async(url,data,options)=>{calls.push({method:'post',url,data,options});return{status:200,data:Buffer.from('SUQzBAAAAAAAIlRTU0UAAAAOAAADTGF2ZjYyLjMuMTAwAAAAAAAAAAAAAAD/4xjEAAAAA0gAAAAATEFNRTMuMTAxIChiZXRhIDMpVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjEOwAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjEdgAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/4xjEsQAAA0gAAAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=','base64')};};
+ axios.post=async(url,data,options)=>{calls.push({method:'post',url,data,options});return{status:200,data:require('../helpers/syntheticMp3')()};};
  let runtime;
  try{
   const clock=new FakeClock(1000);

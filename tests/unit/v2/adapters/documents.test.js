@@ -98,7 +98,10 @@ test('image PDF creation and PDF operations preserve source order and validate p
         const crop=await h.adapter.process(request('crop-pdf',new AbortController().signal,{source:source('media://pdf-a','application/pdf'),args:{pages:'3-1'}}));
         assert.ok(h.commands.filter(item=>item.command==='gs').at(-1).args.includes('-sPageList=1-3'));
         assert.equal(crop.parts[0].mime,'application/pdf');
-        await assert.rejects(h.adapter.process(request('crop-pdf',new AbortController().signal,{source:source('media://pdf-a','application/pdf'),args:{pages:'1;rm -rf /'}})),/Document operation failed/);
+        await assert.rejects(h.adapter.process(request('crop-pdf',new AbortController().signal,{source:source('media://pdf-a','application/pdf'),args:{pages:'1;rm -rf /'}})),error=>{
+            assert.equal(error.code,'INVALID_PDF_PAGES');assert.equal(error.reason,'format');assert.equal(error.totalPages,3);
+            assert.doesNotMatch(error.message,/rm -rf|\/tmp|pdf-a/);return true;
+        });
         assert.deepEqual(normalizePages('2,3-',3),'2,3-3');assert.deepEqual(toRanges([1,2,4]),[[1,2],[4,4]]);
     } finally { await h.dispose(); }
 });
@@ -133,7 +136,10 @@ test('readContent delegates PDF, text, Office, HTML and OCR through injected rea
 test('invalid pages, fake signatures, command failure and abort never retain output or leak diagnostics',async()=>{
     const errors=[];const h=await harness({onCleanupError:error=>errors.push(error)});
     try {
-        await assert.rejects(h.adapter.process(request('crop-pdf',new AbortController().signal,{source:source('media://pdf-a','application/pdf'),args:{pages:'999-'}})),/Document operation failed/);
+        await assert.rejects(h.adapter.process(request('crop-pdf',new AbortController().signal,{source:source('media://pdf-a','application/pdf'),args:{pages:'999-'}})),error=>{
+            assert.equal(error.code,'INVALID_PDF_PAGES');assert.equal(error.reason,'range');assert.equal(error.totalPages,3);
+            assert.doesNotMatch(error.message,/999|\/tmp|pdf-a/);return true;
+        });
         await assert.rejects(h.adapter.process(request('convert-document',new AbortController().signal,{source:source('media://fake-office','application/vnd.openxmlformats-officedocument.wordprocessingml.document'),args:{format:'pdf'}})),/Document operation failed/);
         const controller=new AbortController();controller.abort();await assert.rejects(h.adapter.process(request('convert-media',controller.signal,{source:source('media://clip','video/mp4'),args:{format:'mp3'}})),{name:'AbortError'});
         assert.deepEqual(await fs.readdir(h.tempDirectory),[]);assert.equal(errors.length,0);

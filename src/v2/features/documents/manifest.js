@@ -21,7 +21,7 @@ function createDocumentsFeature(ports) {
         command('recortarpdf', ['recortar','cortar','cortarpdf','extraerpdf'], handlers.crop, 'Extrae páginas de un PDF.', ['recortar 1-5 (responde a un PDF)', 'recortar ultima']),
         command('unirpdf', ['unir','unirpdfs'], handlers.collectPdfs, 'Une varios PDF adjuntos.', ['unir (responde a un PDF)', 'unir terminar', 'unir cancelar']),
         command('pdf2img', ['extraer'], handlers.pdfImages, 'Extrae páginas de un PDF como imágenes.', ['pdf2img (responde a un PDF)', 'pdf2img --zip']),
-        command('leer', ['ocr'], handlers.read, 'Extrae texto de una imagen o documento adjunto.', ['leer (responde a una imagen)', 'ocr (responde a un PDF)'])
+        command('leer', ['ocr'], handlers.read, 'Extrae texto de una imagen, documento o página web.', ['leer (responde a una imagen)', 'ocr (responde a un PDF)'])
     ].map(item => ({ ...item, argsSchema, parseExplicit: tokens => parseExplicit(item.name, tokens) }));
     return { id: 'documents', commands, attachmentContinuation: handlers.attachmentContinuation, intents: [
         intent('documents.convert-media', 'Convertir audio, video o imagen a otro formato; acepta formato, calidad, velocidad, bitrate, recorte y nombre.', 'convertir'),
@@ -30,7 +30,7 @@ function createDocumentsFeature(ports) {
         intent('documents.crop-pdf', 'Extraer páginas específicas de un PDF adjunto.', 'recortarpdf'),
         intent('documents.merge-pdfs', 'Unir varios PDF adjuntos; terminar o cancelar la lista.', 'unirpdf'),
         intent('documents.pdf-to-images', 'Extraer páginas de un PDF adjunto como imágenes, opcionalmente en ZIP.', 'pdf2img'),
-        intent('documents.read', 'Leer el texto de una imagen o documento adjunto.', 'leer')
+        intent('documents.read', 'Leer el texto de una imagen o documento adjunto, o una página web indicada mediante url.', 'leer')
     ] };
 
     /** @param {string} name @param {string[]} aliases @param {import('./handler').Handler} handler @param {string} short @param {string[]} examples @returns {import('../../pipeline/contracts').Command} */
@@ -73,12 +73,13 @@ function parseExplicit(commandName, tokens) {
         if (token.startsWith('-')) throw new TypeError('Invalid explicit document arguments');
         positional.push(token);
     }
-    if (commandName === 'convertir' && positional.length) {
+    if (['convertir','leer'].includes(commandName) && positional.length) {
         const joined = positional.join(' ');
         if (!validUrl(joined)) throw new TypeError('Invalid explicit document arguments');
         args.url = joined;
     } else if (commandName === 'recortarpdf' && positional.length) args.pages=positional.join(' ');
     else if (commandName === 'pdf2img' && positional.length) args.pages=positional.join(' ');
+    else if (commandName === 'doc' && positional.length && String(args.format || '').toLowerCase() === 'pdf' && args.pages === undefined) args.pages=positional.join(' ');
     else if (positional.length) throw new TypeError('Invalid explicit document arguments');
     return args;
 }

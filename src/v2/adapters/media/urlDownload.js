@@ -16,13 +16,15 @@ const TYPES = Object.freeze(Object.fromEntries([
     ['video/mp4', 'mp4'], ['video/webm', 'webm'], ['video/quicktime', 'mov'], ['video/x-msvideo', 'avi'], ['video/x-matroska', 'mkv'],
     ['application/pdf', 'pdf'], ['text/plain', 'txt'], ['text/markdown', 'md'], ['text/csv', 'csv'], ['application/json', 'json'],
 ]));
+const OPT_IN_TEXT_TYPES = Object.freeze({'text/html':'html','application/xhtml+xml':'xhtml'});
+const ALL_TYPES = /** @type {Readonly<Record<string,string>>} */(Object.freeze({...TYPES,...OPT_IN_TEXT_TYPES}));
 
 /** @typedef {{address:string,family:4|6}} Address */
 /** @typedef {{statusCode:number,headers:Record<string,string|string[]|undefined>,stream:import('node:stream').Readable}} HttpResponse */
 /**
  * Build a direct URL downloader. `transport` must connect to the supplied resolved address,
  * rather than resolving the hostname again.
- * @param {{resolve?:(hostname:string,signal:AbortSignal)=>Promise<Address[]>,transport?:(request:{url:URL,address:string,family:4|6,signal:AbortSignal,timeoutMs:number})=>Promise<HttpResponse>,clock?:import('../../platform/clock').Clock,maxBytes?:number,timeoutMs?:number,maxRedirects?:number}} [options]
+ * @param {{resolve?:(hostname:string,signal:AbortSignal)=>Promise<Address[]>,transport?:(request:{url:URL,address:string,family:4|6,signal:AbortSignal,timeoutMs:number})=>Promise<HttpResponse>,clock?:import('../../platform/clock').Clock,maxBytes?:number,timeoutMs?:number,maxRedirects?:number,allowedContentTypes?:string[]}} [options]
  */
 function createUrlDownload(options = {}) {
     const resolve = options.resolve || defaultResolve;
@@ -31,6 +33,11 @@ function createUrlDownload(options = {}) {
     const maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
     const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     const maxRedirects = options.maxRedirects ?? 3;
+    const allowedTypes=new Set(Object.keys(TYPES));
+    if(options.allowedContentTypes!==undefined) {
+        if(!Array.isArray(options.allowedContentTypes)||options.allowedContentTypes.some(type=>typeof type!=='string'||!Object.hasOwn(ALL_TYPES,type)))throw new TypeError('Unsupported opt-in content type');
+        for(const type of options.allowedContentTypes)allowedTypes.add(type);
+    }
     if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) throw new RangeError('maxBytes must be a positive safe integer');
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new RangeError('timeoutMs must be positive');
     if (!Number.isInteger(maxRedirects) || maxRedirects < 0 || maxRedirects > 3) throw new RangeError('maxRedirects must be between zero and three');
@@ -91,8 +98,8 @@ function createUrlDownload(options = {}) {
                     controller.signal.removeEventListener('abort', stopStream);
                 }
                 throwIfAborted(controller.signal);
-                const mime = normalizeMime(header(response.headers, 'content-type'));
-                const extension = extensionFor(mime, url);
+                const mime = normalizeMime(header(response.headers, 'content-type'),allowedTypes);
+                const extension = extensionFor(mime, url,allowedTypes);
                 return { buffer: Buffer.concat(chunks, size), extension, mime };
             }
         } finally {
@@ -170,18 +177,18 @@ function header(headers, name) {
 }
 
 /** @param {string|undefined} input */
-function normalizeMime(input) {
+function normalizeMime(input,allowedTypes=new Set(Object.keys(TYPES))) {
     const mime = (input || '').split(';', 1)[0].trim().toLowerCase();
-    if (Object.hasOwn(TYPES,mime)) return mime;
+    if (Object.hasOwn(ALL_TYPES,mime)&&allowedTypes.has(mime)) return mime;
     if (!mime || mime === 'application/octet-stream' || mime === 'binary/octet-stream') return '';
     throw new Error('Unsupported download content type');
 }
 
 /** @param {string} mime @param {URL} url */
-function extensionFor(mime, url) {
-    if (mime) return TYPES[mime];
+function extensionFor(mime, url,allowedTypes=new Set(Object.keys(TYPES))) {
+    if (mime) return ALL_TYPES[mime];
     const candidate = url.pathname.split('/').pop()?.split('.').pop()?.toLowerCase() || '';
-    const match = Object.entries(TYPES).find(([, extension]) => extension === candidate);
+    const match = Object.entries(ALL_TYPES).find(([type,extension]) => allowedTypes.has(type)&&extension === candidate);
     if (!match) throw new Error('Unsupported download content type');
     return match[1];
 }

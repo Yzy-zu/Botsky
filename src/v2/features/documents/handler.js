@@ -9,12 +9,12 @@ const PDF_FORMATS = Object.freeze(['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 
 const MEDIA_FORMATS = Object.freeze(['mp3', 'm4a', 'ogg', 'wav', 'opus', 'mp4', 'webm', 'avi', 'gif', 'webp', 'pdf']);
 
 /** @typedef {{attachment:import('../../pipeline/contracts').Attachment,raw:object}} DocumentSource */
-/** @typedef {{process:(request:{operation:string,source?:DocumentSource,sources?:DocumentSource[],args:Record<string,unknown>,signal:AbortSignal})=>Promise<import('../../domain/types').Reply>,readContent:(source:DocumentSource,options:{signal:AbortSignal})=>Promise<string|null|undefined>,clock:import('../../platform/clock').Clock,store:import('../../platform/ttlStore').TtlStore}} DocumentPorts */
+/** @typedef {{process:(request:{operation:string,source?:DocumentSource,sources?:DocumentSource[],args:Record<string,unknown>,signal:AbortSignal})=>Promise<import('../../domain/types').Reply>,readContent:(source:DocumentSource,options:{signal:AbortSignal})=>Promise<string|null|undefined>,readWeb?:(url:string,options:{signal:AbortSignal})=>Promise<string|null>,clock:import('../../platform/clock').Clock,store:import('../../platform/ttlStore').TtlStore}} DocumentPorts */
 /** @typedef {ReturnType<typeof createDocumentHandlers>['convert']} Handler */
 
 /** @param {DocumentPorts} ports */
 function createDocumentHandlers(ports) {
-    const { process, readContent, clock, store } = ports;
+    const { process, readContent, readWeb, clock, store } = ports;
     if (typeof process !== 'function' || typeof readContent !== 'function' || !clock || !store) throw new TypeError('Document feature requires process, readContent, clock and store ports');
 
     /** @param {import('../../pipeline/contracts').Ctx} ctx @param {string} operation @param {Record<string,unknown>} args @param {AbortSignal} signal @param {DocumentSource[]} [sources]
@@ -29,6 +29,8 @@ function createDocumentHandlers(ports) {
             return validReply(reply) ? { ...reply, replyTo: ctx.event.id } : text(ctx, 'No pude procesar el archivo. Revisa que abra correctamente y prueba de nuevo.');
         } catch (error) {
             signal.throwIfAborted();
+            const pageSelection = safePageSelection(error);
+            if (pageSelection) return text(ctx, pageSelection);
             if (error instanceof AppError) throw error;
             return text(ctx, safeFailure(operation));
         }
@@ -61,6 +63,10 @@ function createDocumentHandlers(ports) {
         if (intent === 'cancel' || args.cancel === true) return cancel(ctx, stateKey, current);
         if (intent === 'finish' || args.finish === true) return finish(ctx, stateKey, current, signal);
         const attachment = ctx.attachment;
+        if (attachment && isPdf(attachment) && args.pages !== undefined) {
+            if (typeof args.pages !== 'string' || !args.pages.trim()) return text(ctx, 'Indica qué páginas recortar. Ejemplos: `2-4`, `3-` o `1,3`.');
+            return run(ctx, 'crop-pdf', { pages: args.pages }, signal);
+        }
         if (attachment && isImage(attachment) && format === 'pdf') {
             const source = sourceOf(ctx);
             const items = current?.kind === 'images' ? [...current.items, source] : [source];
@@ -108,17 +114,22 @@ function createDocumentHandlers(ports) {
     /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
     async function compress(ctx, args, signal) { return run(ctx, 'compress-pdf', args, signal); }
     /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
-    async function crop(ctx, args, signal) { return run(ctx, 'crop-pdf', args, signal); }
+    async function crop(ctx, args, signal) {
+        if (typeof args.pages !== 'string' || !args.pages.trim()) return text(ctx, 'Indica qué páginas recortar. Ejemplos: `2-4`, `3-` o `1,3`.');
+        return run(ctx, 'crop-pdf', args, signal);
+    }
     /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
     async function pdfImages(ctx, args, signal) { return run(ctx, 'pdf-to-images', args, signal); }
 
-    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} _args @param {AbortSignal} signal */
-    async function read(ctx, _args, signal) {
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
+    async function read(ctx, args, signal) {
         signal.throwIfAborted();
         const attachment = ctx.attachment;
-        if (!attachment || !isReadable(attachment)) return text(ctx, 'Responde al archivo con `leer` y saco el texto de imágenes, PDF, texto u Office.');
+        const url=typeof args.url==='string'?args.url.trim():'';
+        if(url&&(!validHttpUrl(url)||!readWeb))return text(ctx,'Mándame un enlace HTTP o HTTPS válido para leerlo.');
+        if (!url&&(!attachment || !isReadable(attachment))) return text(ctx, 'Responde al archivo con `leer` y saco el texto de imágenes, PDF, texto u Office.');
         try {
-            const value = await readContent(sourceOf(ctx), { signal });
+            const value = url&&readWeb?await readWeb(url,{signal}):await readContent(sourceOf(ctx), { signal });
             signal.throwIfAborted();
             const extracted = typeof value === 'string' ? value.trim() : '';
             return text(ctx, extracted ? `Esto alcancé a leer:\n\n${extracted}` : 'No alcancé a leer texto. Prueba con una foto más nítida, de frente y con buena luz.');
@@ -182,4 +193,15 @@ function validReply(value) { return Boolean(value && typeof value === 'object' &
 function missingAttachment(operation) { return operation === 'convert-media' ? 'Mándame el archivo o su enlace y dime a qué formato lo quieres.' : 'Responde al archivo con el comando que quieres usar.'; }
 /** @param {string} operation */
 function safeFailure(operation) { return operation === 'convert-media' ? 'No pude convertirlo. Prueba con otro archivo o formato.' : 'No pude procesar el archivo. Revisa que abra correctamente y prueba de nuevo.'; }
+/** @param {unknown} error @returns {string|undefined} */
+function safePageSelection(error) {
+    if (!error || typeof error !== 'object') return undefined;
+    const value=/** @type {{name?:unknown,code?:unknown,reason?:unknown,totalPages?:unknown}} */(error);
+    if(value.name!=='PageSelectionError'||value.code!=='INVALID_PDF_PAGES'||!Number.isSafeInteger(value.totalPages)||/** @type {number} */(value.totalPages)<1||/** @type {number} */(value.totalPages)>100_000) return undefined;
+    if(value.reason==='required')return 'Indica qué páginas recortar. Ejemplos: `2-4`, `3-` o `1,3`.';
+    if(value.reason==='positive')return 'Las páginas deben ser mayores a 0. Ejemplo: `2-4`.';
+    if(value.reason==='format')return 'Formato de páginas inválido. Ejemplo: `1-5`, `3-` o `1,3`.';
+    if(value.reason==='range')return `La selección supera el total de páginas (${value.totalPages}).`;
+    return undefined;
+}
 module.exports = { createDocumentHandlers, SESSION_NS, SESSION_TTL_MS, MAX_COLLECTED_FILES, parseBitrate, validHttpUrl };

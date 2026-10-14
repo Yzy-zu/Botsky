@@ -5,6 +5,7 @@ const { normalizeJid } = require('../domain/jid');
 const { AppError } = require('../domain/errors');
 const { isReply } = require('../domain/types');
 const { TtlStore } = require('../platform/ttlStore');
+const { createVoiceHandler } = require('../features/voice/handler');
 const { createWaveAFeatures } = require('../features');
 const { createQrOcrMedia, createExecFileRunner } = require('../adapters/media/qrOcr');
 const { createDocumentsMedia } = require('../adapters/media/documents');
@@ -15,10 +16,8 @@ const { createUrlDownload } = require('../adapters/media/urlDownload');
 const { createImageTools } = require('../adapters/media/imageTools');
 const { sniffMime } = require('../adapters/media/contentReader');
 const { MAX_INLINE_BYTES } = require('../adapters/media/contentReader');
-// This pure shared policy is the only legacy module loaded at composition time.
-const localModule = /** @type {{require:(id:string)=>any}} */ (/** @type {unknown} */ (module));
-const buildConversationStyle = /** @type {(input:{userMessage:string,userName:string,isGroup:boolean,history:Array<{role:string,content:string}>})=>string} */
-    (localModule.require('../../services/conversationStyle').buildConversationStyle);
+const { buildConversationStyle } = require('../adapters/ai/conversationStyle');
+const { createWebContent } = require('../adapters/media/webContent');
 
 const MIB = 1024 * 1024;
 const DEFAULT_FILE_LIMIT_MB = 64;
@@ -65,8 +64,8 @@ function createAttachmentDownload(evolution) {
 }
 
 /** Explicit assembly performs no IO until a feature is invoked or cleanup runs.
- * @param {{config:Record<string,unknown>,clock:import('../platform/clock').Clock,llm:import('../domain/ports').LLM,evolution:DownloadPort,http:Parameters<typeof createTranscriptionMedia>[0]['http'],formData:Parameters<typeof createTranscriptionMedia>[0]['formData'],urlDownload?:{download:(url:string,signal:AbortSignal)=>Promise<{buffer:Buffer,extension:string,mime:string}>},elevenLabs?:Parameters<typeof createVoiceMedia>[0]['elevenLabs']}} options */
-function createMediaServices({config,clock,llm,evolution,http,formData,urlDownload,elevenLabs}) {
+ * @param {{config:Record<string,unknown>,clock:import('../platform/clock').Clock,llm:import('../domain/ports').LLM,evolution:DownloadPort,http:Parameters<typeof createTranscriptionMedia>[0]['http'],formData:Parameters<typeof createTranscriptionMedia>[0]['formData'],urlDownload?:{download:(url:string,signal:AbortSignal)=>Promise<{buffer:Buffer,extension:string,mime:string}>},resolveDelivery?:Parameters<typeof createVoiceHandler>[0]['resolveDelivery'],elevenLabs?:Parameters<typeof createVoiceMedia>[0]['elevenLabs']}} options */
+function createMediaServices({config,clock,llm,evolution,http,formData,urlDownload,elevenLabs,resolveDelivery}) {
     const tempDirectory = path.join(String(config.TMP_DIR || '/tmp/whatsapp-bot'),'botsky-v2-media');
     const fileBytes=configuredMegabytes(config.MAX_FILE_SIZE_MB,DEFAULT_FILE_LIMIT_MB,'MAX_FILE_SIZE_MB');
     const documentBytes=configuredMegabytes(config.MAX_DOCUMENT_SIZE_MB,DEFAULT_DOCUMENT_LIMIT_MB,'MAX_DOCUMENT_SIZE_MB');
@@ -74,6 +73,8 @@ function createMediaServices({config,clock,llm,evolution,http,formData,urlDownlo
     const store = new TtlStore({clock,maxEntries:1000});
     const attachment = createAttachmentDownload(evolution);
     const urls = urlDownload || createUrlDownload({clock,maxBytes:maximumInputBytes});
+    const webUrls=createUrlDownload({clock,maxBytes:1024*1024,allowedContentTypes:['text/html','application/xhtml+xml']});
+    const web=createWebContent({downloadUrl:webUrls.download,maxBytes:1024*1024});
     /** @param {string} url @param {{maxBytes:number,signal:AbortSignal}} options */
     async function downloadUrl(url,options) {
         const result = await urls.download(url,options.signal);
@@ -152,8 +153,8 @@ function createMediaServices({config,clock,llm,evolution,http,formData,urlDownlo
         const data=await generate(media?'vision':'agent',input.system,input.user,Math.min(input.maxOutputTokens,4096),input.signal,media);
         return {text:data.text,finishReason:data.finishReason || undefined};
     }});
-    const features = createWaveAFeatures({qr,documents:{clock,store,readContent,
-        process:async request=>{const reply=await documents.process(request);if(!isReply(reply))throw new AppError('bad_output');return reply;}},sticker,voice:{...voice,readScriptContext},
+    const features = createWaveAFeatures({qr,documents:{clock,store,readContent,readWeb:web.read,
+        process:async request=>{const reply=await documents.process(request);if(!isReply(reply))throw new AppError('bad_output');return reply;}},sticker,voice:{...voice,readScriptContext,resolveDelivery},
         transcription:{...transcription,defaultLanguage:String(config.WHISPER_LANGUAGE || 'auto')}});
     const releasers = [qr,documents,sticker,voice,imageTools];
     /** @param {string} ref */

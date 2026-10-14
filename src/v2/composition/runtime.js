@@ -14,6 +14,9 @@ const { createThreadConversationRepo } = require('../adapters/store/repos/thread
 const { TtlStore } = require('../platform/ttlStore');
 const { EchoGuard } = require('../adapters/evolution/echoGuard');
 const { createEvolutionAdapter } = require('../adapters/evolution');
+const { resolveDeliveryTarget } = require('../policies/delivery.policy');
+const { createContactDirectory } = require('./contacts');
+const { createContactsRepo } = require('../adapters/store/repos/contacts');
 const { createMediaServices } = require('./media');
 const { createApplication } = require('../main');
 
@@ -120,13 +123,18 @@ async function createRuntime({config,clock,evolutionHttp,llm,http,formData,eleve
             maxFileSizeMb:Number(config.MAX_FILE_SIZE_MB || 64),maxDocumentSizeMb:Number(config.MAX_DOCUMENT_SIZE_MB || 200),
             maxDownloadBytes:Number(config.MAX_FILE_SIZE_MB || 64)*1024*1024});
 
-        media = createMediaServices({config,clock,llm,evolution,http,formData,elevenLabs});
+        const contacts=createContactDirectory({repo:createContactsRepo(db),mainGroupJid:String(config.MAIN_GROUP_JID||''),clock,
+            fetchGroup:(groupJid,signal)=>evolutionHttp.get(`/group/findGroupInfos/${String(config.EVOLUTION_INSTANCE||'')}?groupJid=${encodeURIComponent(groupJid)}`,{signal,maxContentLength:1024*1024})});
+        const resolveDelivery=async (/** @type {import('../pipeline/contracts').Ctx} */ ctx,/** @type {import('../domain/types').DeliveryRequest} */ request,/** @type {AbortSignal|undefined} */ signal=undefined)=>resolveDeliveryTarget({
+            scope:request.scope,contactQuery:request.contactQuery,currentChatId:ctx.event.chatId,senderJid:ctx.event.sender.jid,
+            isGroup:ctx.event.isGroup,roles:ctx.roles,mainGroupJid:String(config.MAIN_GROUP_JID||''),contacts:{resolve:query=>contacts.resolve(query,signal)}});
+        media = createMediaServices({config,clock,llm,evolution,http,formData,elevenLabs,resolveDelivery});
         const roles = {admins:normalizeConfiguredJids(config.ALLOWED_NUMBERS_ADMIN || [],'s.whatsapp.net'),owners:[],
             members:normalizeConfiguredJids([...(config.ALLOWED_NUMBERS_NORMAL || []),...(config.ALLOWED_NUMBERS_TASKS || [])],'s.whatsapp.net'),groups:allowedGroups};
         const startedAt = clock.now();
         app = createApplication({clock,botJid,conversation:{recent:conversation.recent,
             recentThread:(chatId,senderJid,quotedId,limit)=>threads.recentThread(chatId,senderJid,quotedId,limit)},
-            messenger:evolution,llm,roles,accessSnapshot:{privateNumbers,groups:allowedGroups},sessionGroupRelaxed:config.SESSION_GROUP_RELAXED === true,
+            messenger:evolution,llm,roles,resolveDelivery,accessSnapshot:{privateNumbers,groups:allowedGroups},sessionGroupRelaxed:config.SESSION_GROUP_RELAXED === true,
             config:{RESPONSE_PRIVATE_MAX_CHARS:Number(config.RESPONSE_PRIVATE_MAX_CHARS ?? 600),
                 RESPONSE_GROUP_MAX_CHARS:Number(config.RESPONSE_GROUP_MAX_CHARS ?? 350),
                 LLM_CHAT_MAX_OUTPUT_TOKENS:Number(config.LLM_CHAT_MAX_OUTPUT_TOKENS ?? 300),
@@ -142,7 +150,7 @@ async function createRuntime({config,clock,evolutionHttp,llm,http,formData,eleve
             record:async(ctx,text)=>{
                 try {
                     await conversation.append(ctx.event.chatId,'assistant',text,'Botsky');
-                    if (ctx.event.isGroup) await threads.append(ctx.event,'assistant',text,{senderJid:botJid,replyTo:ctx.event.id});
+                    if (ctx.event.isGroup) await threads.append(ctx.event,'assistant',text,{senderJid:botJid,...(!ctx.delivery?{replyTo:ctx.event.id}:{})});
                 } catch { /* Transcript storage cannot turn an acknowledged reply into a failure. */ }
             },
             recentReplies:async chatId=>(await conversation.recent(chatId,12)).filter(row=>row.role==='assistant').map(row=>row.content),
@@ -160,9 +168,19 @@ async function createRuntime({config,clock,evolutionHttp,llm,http,formData,eleve
             if (disposed) return;
             cleanupTimer=clock.setTimeout(()=>{
                 cleanupTimer=undefined;
+                // A timer can already be queued when clearTimeout races with shutdown.
+                if (disposed) return;
                 const run=Promise.resolve(media?.cleanupExpired()).then(()=>undefined,()=>undefined);
                 cleanupPromise=run;
-                void run.finally(()=>{if(cleanupPromise===run)cleanupPromise=undefined;scheduleCleanup();});
+                const finish=()=>{
+                    if(cleanupPromise===run)cleanupPromise=undefined;
+                    if(disposed)return;
+                    try { scheduleCleanup(); }
+                    catch { logger.warn('Runtime media cleanup timer could not be rescheduled.'); }
+                };
+                // Use both branches instead of finally: a failed timer re-arm must not
+                // create an unobserved rejected promise.
+                void run.then(finish,finish);
             },MEDIA_CLEANUP_INTERVAL_MS);
         };
         scheduleCleanup();
@@ -170,11 +188,21 @@ async function createRuntime({config,clock,evolutionHttp,llm,http,formData,eleve
         function dispose() {
             if (disposal) return disposal;
             disposed=true;
-            if (cleanupTimer !== undefined) { clock.clearTimeout(cleanupTimer); cleanupTimer=undefined; }
             // app.dispose closes pipeline admissions synchronously before awaiting work.
             const appDrained=app?.dispose() || Promise.resolve();
             disposal=(async()=>{
                 /** @type {unknown[]} */ const failures=[];
+                if (cleanupTimer !== undefined) {
+                    const timer=cleanupTimer;
+                    cleanupTimer=undefined;
+                    try { clock.clearTimeout(timer); }
+                    catch {
+                        // Some injected clocks fail transiently. Retry once; if it still
+                        // fails, disposed guards prevent late janitor IO.
+                        try { clock.clearTimeout(timer); }
+                        catch(error) { failures.push(error); logger.warn('Runtime media cleanup timer could not be cleared.'); }
+                    }
+                }
                 try { await appDrained; } catch(error) { failures.push(error); }
                 try { await cleanupPromise; } catch(error) { failures.push(error); }
                 try { await media?.dispose(); } catch(error) { failures.push(error); }

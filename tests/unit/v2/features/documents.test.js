@@ -156,3 +156,16 @@ test('leer accepts supported text and Office document attachments',async()=>{
         assert.equal(f.calls.length,0);
     } finally { f.dispose(); }
 });
+
+
+test('leer accepts an explicit web URL and keeps downloaded web text separate from attachment reads',async()=>{
+ const clock=new FakeClock(),store=new TtlStore({clock});let reads=0;const urls=[];
+ const feature=createDocumentsFeature({clock,store,process:async()=>assert.fail('No conversion'),readContent:async()=>{reads++;return 'wrong file';},readWeb:async(url,options)=>{urls.push(url);assert.equal(options.signal,abort);return 'Texto de la página';}});
+ try {
+  assert.deepEqual(parseExplicit('leer',['https://example.test/page']),{url:'https://example.test/page'});
+  const handler=feature.commands.find(command=>command.name==='leer').handler;
+  const ctx={event:{id:'web-read',chatId:CHAT,sender:{jid:USER}},attachment:image,history:[],roles:{admins:[],owners:[]}};
+  const reply=await handler(ctx,{url:'https://example.test/page'},abort);assert.match(reply.parts[0].text,/Texto de la página/);assert.equal(reads,0);assert.deepEqual(urls,['https://example.test/page']);
+  await handler(ctx,{url:'http://user:pass@example.test'},abort);assert.equal(urls.length,1);
+ }finally{store.dispose();}
+});

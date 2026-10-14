@@ -2,7 +2,7 @@
 'use strict';
 /** @typedef {import('../../platform/clock').Clock} Clock */
 /** @typedef {{data:unknown,status:number}} HttpResponse */
-/** @typedef {{post:(path:string,body:unknown,options?:{maxContentLength?:number,signal?:AbortSignal})=>Promise<HttpResponse>,get:(path:string)=>Promise<HttpResponse>,put:(path:string,body:unknown)=>Promise<HttpResponse>}} HttpClient */
+/** @typedef {{post:(path:string,body:unknown,options?:{maxContentLength?:number,signal?:AbortSignal})=>Promise<HttpResponse>,get:(path:string,options?:{maxContentLength?:number,signal?:AbortSignal})=>Promise<HttpResponse>,put:(path:string,body:unknown)=>Promise<HttpResponse>}} HttpClient */
 /** Extract public protocol classifications without retaining a raw provider body.
  * @param {unknown} data */
 function sanitizedFailure(data) {
@@ -84,8 +84,8 @@ function createClient({ baseUrl, apiKey, clock, timeoutMs = 60000, maxResponseBy
     return {
         /** @param {string} route @param {unknown} body @param {{maxContentLength?:number,signal?:AbortSignal}} [options] */
         post: (route, body, options) => request('POST', route, body, options),
-        /** @param {string} route */
-        get: route => request('GET', route),
+        /** @param {string} route @param {{maxContentLength?:number,signal?:AbortSignal}} [options] */
+        get: (route, options) => request('GET', route, undefined, options),
         /** @param {string} route @param {unknown} body */
         put: (route, body) => request('PUT', route, body)
     };

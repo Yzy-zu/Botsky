@@ -6,6 +6,14 @@ const {createMedia}=require('../../src/v2/adapters/evolution/media');
 const {createOutbound}=require('../../src/v2/adapters/evolution/outbound');
 const {createClient,withRetry}=require('../../src/v2/adapters/evolution/client');
 const clock=new FakeClock();
+test('group metadata GET preserves caller cancellation and never starts an already cancelled request',async()=>{
+ const localClock=new FakeClock();let calls=0;
+ const client=createClient({baseUrl:'https://fake.invalid',apiKey:'fake',clock:localClock,fetch:async(_url,options)=>{
+  calls++;return new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(options.signal.reason),{once:true}));
+ }});
+ const stopped=new AbortController();stopped.abort();await assert.rejects(client.get('/group/test',{signal:stopped.signal}),{name:'AbortError'});assert.equal(calls,0);
+ const controller=new AbortController();const pending=client.get('/group/test',{signal:controller.signal,maxContentLength:1024});assert.equal(calls,1);controller.abort();await assert.rejects(pending,{name:'AbortError'});assert.equal(localClock.pendingTimers,0);
+});
 function guard(){return new EchoGuard({clock,store:new TtlStore({clock})})}
 function media(encoded){return createMedia({clock,instance:'test',client:{post:async()=>({status:200,data:{base64:encoded}})}})}
 test('Download rejects invalid padding, whitespace-only data and noncanonical trailing bits',async()=>{

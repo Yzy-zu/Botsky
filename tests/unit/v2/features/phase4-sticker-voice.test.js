@@ -112,6 +112,10 @@ test('voice manifest keeps command aliases and explicit voice, duration, gender,
     assert.deepEqual(parseVoice(['-t', 'Hola']), { mode: 'verbatim', voice: 'hombre', literalText: 'Hola' });
     assert.deepEqual(parseVoice(['--voice', 'humana', 'Hola']).voice,'humana');
     assert.deepEqual(parseVoice(['--voice', 'paisa', 'Hola']).voice,'paisa');
+    assert.deepEqual(parseVoice(['--scope', 'main_group', 'Hola']), { mode:'verbatim', voice:'hombre', literalText:'Hola', destinationScope:'main_group' });
+    assert.deepEqual(parseVoice(['--to', 'Fer', 'Hola']), { mode:'verbatim', voice:'hombre', literalText:'Hola', destinationScope:'contact', contactQuery:'Fer' });
+    assert.deepEqual(parseVoice(['--to=Ana López', '--voice=goku', 'Hola']), { mode:'verbatim', voice:'goku', literalText:'Hola', destinationScope:'contact', contactQuery:'Ana López' });
+    assert.throws(() => parseVoice(['--scope', 'main_group', '--to', 'Fer', 'Hola']), /Invalid explicit/);
     assert.equal(parseVoice(['--duration', '600', 'hola']).durationSeconds, 600);
     assert.equal(parseVoice(['x'.repeat(20000)]).literalText.length, 20000);
     assert.throws(() => parseVoice(['--duration', '999']), /Invalid explicit/);
@@ -157,6 +161,40 @@ test('voice handler uses injected script, synthesis, and duration ports and retu
     assert.deepEqual(calls[2], ['fit', 8, 12]);
     assert.equal(reply.replyTo, 'in-media');
     assert.deepEqual(reply.parts[0], { type: 'audio', ref: 'media://voice', mime: 'audio/ogg', transcript:'Hola, aquí va.', durationSeconds:12 });
+});
+
+test('voice validates an external destination before context, script preparation, or synthesis', async () => {
+    const calls = [];
+    const feature = createVoiceFeature({
+        resolveDelivery: async (_ctx, request) => { calls.push(['resolve', request]); return { status:'denied', reason:'admin_required' }; },
+        readScriptContext: async () => { calls.push(['read-context']); return { extractedText:'secret' }; },
+        prepareScript: async () => { calls.push(['script']); return { success:true, text:'hello' }; },
+        synthesize: async () => { calls.push(['synthesize']); return { ref:'voice', mime:'audio/ogg' }; },
+        fitDuration: async media => media
+    }).commands[0];
+    const reply = await feature.handler(context({ attachment:image }), { destinationScope:'contact', contactQuery:'Fer', instruction:'say hello' }, signal());
+    assert.match(reply.parts[0].text, /Solo el creador y los administradores/);
+    assert.deepEqual(calls, [['resolve',{scope:'contact',contactQuery:'Fer'}]]);
+});
+
+test('voice fails closed for external targets without resolver and on clarification, while ready targets are attached to audio', async () => {
+    let scripts=0,syntheses=0;
+    const basePorts={prepareScript:async()=>{scripts++;return{success:true,text:'audio text'};},
+        synthesize:async()=>{syntheses++;return{ref:'voice-target',mime:'audio/ogg'};},fitDuration:async media=>media};
+    const noResolver=createVoiceFeature(basePorts).commands[0];
+    const unavailable=await noResolver.handler(context(),{destinationScope:'main_group'},signal());
+    assert.match(unavailable.parts[0].text,/No puedo confirmar ese destino/);
+    assert.equal(scripts,0);assert.equal(syntheses,0);
+
+    const clarify=createVoiceFeature({...basePorts,resolveDelivery:async()=>({status:'needs_clarification',question:'¿A cuál Fer?'})}).commands[0];
+    const ambiguous=await clarify.handler(context(),{destinationScope:'contact',contactQuery:'Fer'},signal());
+    assert.match(ambiguous.parts[0].text,/¿A cuál Fer\?/);assert.equal(scripts,0);assert.equal(syntheses,0);
+
+    const allowed=createVoiceFeature({...basePorts,resolveDelivery:async(_ctx,request)=>({status:'ready',target:{jid:'120363315296139888@g.us',name:'grupo',isGroup:true,scope:request.scope}})}).commands[0];
+    const sent=await allowed.handler(context(),{destinationScope:'main_group'},signal());
+    assert.equal(sent.parts[0].delivery.scope,'main_group');
+    assert.equal(sent.parts[0].delivery.expectedJid,'120363315296139888@g.us');
+    assert.equal(scripts,1);assert.equal(syntheses,1);
 });
 
 test('verbatim voice uses quoted text when literal text is absent and never rewrites it', async () => {
