@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-10-14T14:55:13.706754+00:00",
+  "recordedAt": "2026-10-14T15:14:23.153359+00:00",
   "status": "private_minimal_canary_active_full_wave_a_open",
   "verify": {
     "exitCode": 0,
@@ -44,7 +44,7 @@
     "privateChats": 1,
     "groups": 0,
     "sourceCommit": "753b24a",
-    "pid": 4066967,
+    "pid": 4081372,
     "health": 200,
     "proactiveEnabled": false,
     "pm2Saved": true,
@@ -159,12 +159,27 @@
     "activation": "Only qr/help/system-info enabled; media selector prepared but media flags unchanged"
   },
   "happyHourFix": {
-    "status": "verified_awaiting_deployment",
+    "status": "deployed",
     "repeatPolicy": "Random draw without replacement within each Happy Hour event; reset on new event/process restart",
     "source": "src/services/happyHour.js",
     "tests": "test/happyHourRainRandomness.test.js",
-    "publication": "Petrovsky autoPublish independently verified 38/38; production activation pending",
+    "publication": {
+      "status": "active",
+      "petrovskyLocalCommit": "a6f7aab",
+      "backendPid": 4080831,
+      "catalogHealth": 200,
+      "activeMedia": 246,
+      "publishedMedia": 246,
+      "accessibleMedia": 246,
+      "defaultForNewUploads": true,
+      "databaseBackup": "/tmp/rikolino-publication-backup-1791990255",
+      "independentTestsPassed": 38
+    },
     "additionalFocus": "/tmp/botsky-rain-final-focus.tap: 10/10",
-    "messagesSentByTests": 0
+    "messagesSentByTests": 0,
+    "commit": "0eb2765",
+    "pid": 4081372,
+    "health": 200,
+    "backup": "/tmp/botsky-happy-rain-backup-1791990787373"
   }
 }
