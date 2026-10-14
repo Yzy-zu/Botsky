@@ -17,12 +17,15 @@ const state = {
     discountPercent: 50,
     messagesSinceLastRain: 0,
     lastRainAt: 0,
-    activeAirdrop: null
+    activeAirdrop: null,
+    rainPhotoIds: new Set()
 };
 
 /**
  * Registro de temporizadores activos (.unref() para compatibilidad con Node test runner).
  */
+let rainInFlight = null;
+
 const timers = {
     expire: null,
     rain: null,
@@ -62,6 +65,7 @@ function resetInMemoryState() {
     state.messagesSinceLastRain = 0;
     state.lastRainAt = 0;
     state.activeAirdrop = null;
+    state.rainPhotoIds = new Set();
 }
 
 /**
@@ -84,6 +88,7 @@ async function initHappyHourRecovery() {
                 state.discountPercent = row.discount_percent || 50;
                 state.messagesSinceLastRain = 0;
                 state.lastRainAt = now;
+                state.rainPhotoIds = new Set();
 
                 if (row.airdrop_active === 1 && !row.airdrop_claimed) {
                     state.activeAirdrop = {
@@ -164,6 +169,7 @@ async function startHappyHour({ durationMinutes = 60, groupJid = null, adminJid 
     state.messagesSinceLastRain = 0;
     state.lastRainAt = now;
     state.activeAirdrop = null;
+    state.rainPhotoIds = new Set();
 
     await db.saveHappyHourState({
         is_active: 1,
@@ -358,6 +364,16 @@ async function triggerRainDrop(groupJid = null, options = {}) {
         return { sent: 0, items: [] };
     }
 
+    const deck = state.rainPhotoIds;
+    if (rainInFlight === deck) return { sent: 0, items: [] };
+    rainInFlight = deck;
+    try { return await sendRainDrop(targetGroup, options); }
+    finally { if (rainInFlight === deck) rainInFlight = null; }
+}
+
+async function sendRainDrop(targetGroup, options) {
+    // Capture this event's deck so a late send cannot pollute a new event.
+    const seen = state.rainPhotoIds;
     // Protección contra saturación durante períodos de inactividad
     if (!options.force && state.messagesSinceLastRain === 0) {
         logger.info(`[HappyHour-Rain] Omitiendo lluvia en ${targetGroup} por inactividad de chat.`);
@@ -373,7 +389,7 @@ async function triggerRainDrop(groupJid = null, options = {}) {
     try {
         const { createRikolinoReader } = require('./rikolinoLibrary');
         const reader = createRikolinoReader();
-        items = await reader.getImages(null, { count, randomize: true });
+        items = await reader.getImages(null, { count, randomize: true, excludePhotoIds: [...seen] });
     } catch (rikErr) {
         logger.warn(`[HappyHour-Rain] Rikolino reader no disponible: ${rikErr.message}. Usando proveedor de packs.`);
     }
@@ -381,7 +397,7 @@ async function triggerRainDrop(groupJid = null, options = {}) {
     if (!items || items.length === 0) {
         try {
             const packImages = require('./packImages');
-            items = await packImages.getPackImages(null, { count });
+            items = await packImages.getPackImages(null, { count, excludePhotoIds: [...seen] });
         } catch (packErr) {
             logger.warn(`[HappyHour-Rain] Proveedor de fotos alternativo falló: ${packErr.message}`);
         }
@@ -392,6 +408,19 @@ async function triggerRainDrop(groupJid = null, options = {}) {
         return { sent: 0, items: [] };
     }
 
+    const identity = item => item?.id || item?.path;
+    const unique = new Set();
+    items = items.filter(item => {
+        const id = identity(item);
+        if (!item?.path || !id || unique.has(id)) return false;
+        unique.add(id); return true;
+    });
+    // A provider may fill the last partial batch with already-seen photos.
+    // Finish the unseen tail first; start another cycle only when it is empty.
+    const unseen = items.filter(item => !seen.has(identity(item)));
+    let restartDeck = items.length > 0 && unseen.length === 0;
+    if (unseen.length) items = unseen;
+
     const RAIN_CAPTIONS = [
         '🌧️ ¡LLUVIA DE MEDIA! 🌧️\nDisfruten la cortesía de la Hora Feliz, compas. 🔥',
         '🍻 ¡Cortesía de la Hora Feliz! 🍻\nUn regalito para alegrar el cotorreo.',
@@ -401,10 +430,13 @@ async function triggerRainDrop(groupJid = null, options = {}) {
 
     let sentCount = 0;
     for (const item of items) {
+        if (state.rainPhotoIds !== seen || !isHappyHourActive(targetGroup)) break;
         if (item?.path) {
             const caption = RAIN_CAPTIONS[Math.floor(Math.random() * RAIN_CAPTIONS.length)];
             try {
                 await evolution.sendMedia(targetGroup, item.path, caption);
+                if (restartDeck) { seen.clear(); restartDeck = false; }
+                seen.add(identity(item));
                 sentCount++;
             } catch (err) {
                 logger.error(`[HappyHour-Rain] Error enviando medio a ${targetGroup}:`, err.message);

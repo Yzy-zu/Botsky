@@ -15,7 +15,7 @@ const fixtureImage = color => sharp({ create: { width: 5, height: 5, channels: 3
 const sha = buffer => crypto.createHash('sha256').update(buffer).digest('hex');
 async function fixture(t) {
     const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'botsky-rikolino-'));
-    const library = createLibrary({ rootDir }); await library.ready;
+    const library = createLibrary({ rootDir, autoPublish: false }); await library.ready;
     t.after(async () => { await library.close(); await fs.rm(rootDir, { recursive: true, force: true }); });
     return { library, rootDir, reader: createRikolinoReader({ rootDir, random: () => 0.999 }) };
 }

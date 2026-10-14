@@ -17,10 +17,10 @@
   },
   "legacy": {
     "exitCode": 0,
-    "passCount": 820,
+    "passCount": 823,
     "fail": 0,
-    "report": "/tmp/botsky-wave-a-legacy-final.tap",
-    "sha256": "540c6a38ae8ca390cb8944e29c581697dfb63baa0e9aef0da26ba5b4a6fd6c6f"
+    "report": "/tmp/botsky-happy-rain-verified.tap",
+    "sha256": "d57d753d9a04daf8f7c9c51dd97d381b32bc5dc276957aeb24d7bbd14eecac5a"
   },
   "nativeSmoke": {
     "exitCode": 0,
@@ -157,5 +157,14 @@
     ],
     "selectorMedia": "Prepared: requires all five media consumers before owning bare uploads; flags unchanged",
     "activation": "Only qr/help/system-info enabled; media selector prepared but media flags unchanged"
+  },
+  "happyHourFix": {
+    "status": "verified_awaiting_deployment",
+    "repeatPolicy": "Random draw without replacement within each Happy Hour event; reset on new event/process restart",
+    "source": "src/services/happyHour.js",
+    "tests": "test/happyHourRainRandomness.test.js",
+    "publication": "Petrovsky autoPublish independently verified 38/38; production activation pending",
+    "additionalFocus": "/tmp/botsky-rain-final-focus.tap: 10/10",
+    "messagesSentByTests": 0
   }
 }
