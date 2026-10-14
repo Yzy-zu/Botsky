@@ -135,6 +135,8 @@ function createDocumentHandlers(ports) {
             return text(ctx, extracted ? `Esto alcancé a leer:\n\n${extracted}` : 'No alcancé a leer texto. Prueba con una foto más nítida, de frente y con buena luz.');
         } catch (error) {
             signal.throwIfAborted();
+            const specific=safeReadFeedback(error);
+            if(specific)return text(ctx,specific);
             if (error instanceof AppError) throw error;
             return text(ctx, 'No pude leer ese archivo. Prueba con una copia legible o una foto más nítida.');
         }
@@ -202,6 +204,17 @@ function safePageSelection(error) {
     if(value.reason==='positive')return 'Las páginas deben ser mayores a 0. Ejemplo: `2-4`.';
     if(value.reason==='format')return 'Formato de páginas inválido. Ejemplo: `1-5`, `3-` o `1,3`.';
     if(value.reason==='range')return `La selección supera el total de páginas (${value.totalPages}).`;
+    return undefined;
+}
+/** @param {unknown} error @returns {string|undefined} */
+function safeReadFeedback(error) {
+    if(!(error instanceof AppError))return undefined;
+    if(error.reason==='media_unavailable')return 'WhatsApp ya no tiene disponible ese archivo. Reenvíalo directamente y dime qué necesitas leer.';
+    if(error.reason==='media_download_failed')return 'No pude descargar el archivo. Reenvíalo directamente y vuelve a pedir que lo lea.';
+    if(error.reason==='media_too_large')return 'Ese archivo supera el límite de tamaño para lectura. Envíame uno más pequeño o solo las páginas que necesitas.';
+    if(error.reason==='pdf_no_pages')return 'No encontré páginas legibles en ese PDF. Reenvíame una copia que abra correctamente.';
+    if(error.reason==='pdf_page_limit')return 'Ese PDF supera el límite de páginas para lectura. Envíame solo las páginas o ejercicios que necesitas.';
+    if(error.reason==='gif_requires_still_image')return 'No puedo leer un GIF animado. Envíame una foto fija, legible y de frente.';
     return undefined;
 }
 module.exports = { createDocumentHandlers, SESSION_NS, SESSION_TTL_MS, MAX_COLLECTED_FILES, parseBitrate, validHttpUrl };

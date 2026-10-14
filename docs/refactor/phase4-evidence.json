@@ -129,5 +129,14 @@
       "atomic best-effort attachment caching",
       "PDF signature precedence"
     ]
+  },
+  "workInProgress": {
+    "status": "paused_by_user",
+    "recordedAt": "2026-10-14T14:32:26.790548+00:00",
+    "instruction": "ya se me acabaron los tokens",
+    "deployed": false,
+    "globalVerification": "pending; last verified snapshot remains 446 v2 / 63 refactor",
+    "traceabilitySummary": "Needs reconciliation: contentReader rows updated; voice and attachment rows not integrated",
+    "nextStep": "Review WIP diff, reconcile matrix, run verify and refactor before deployment"
   }
 }

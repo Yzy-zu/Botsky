@@ -48,12 +48,17 @@ function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromis
         const sourceExtension=path.extname(source.attachment.ref.split(/[?#]/,1)[0]).slice(1).toLowerCase();
         const inferredKind=sourceMime.startsWith('image/')||['jpg','jpeg','png','webp','gif','tif','tiff','bmp'].includes(sourceExtension)?'image':'document';
         if(!['image','document'].includes(source.attachment.kind||inferredKind))throw new AppError('unsupported_media');
+        const declaredSize=declaredAttachmentSize(source.raw);
+        if(declaredSize!==undefined&&declaredSize>BigInt(maxInputBytes))throw new AppError('too_large',{reason:'media_too_large'});
         /** @type {string|undefined} */ let workspace;
         try {
-            const downloaded=await downloadMedia(source,{maxBytes:maxInputBytes,signal});
+            let downloaded;
+            try{downloaded=await downloadMedia(source,{maxBytes:maxInputBytes,signal});}
+            catch(error){if(signal.aborted)signal.throwIfAborted();throw mapDownloadFailure(error);}
             signal.throwIfAborted();
-            if(!downloaded||!Buffer.isBuffer(downloaded.buffer)||downloaded.buffer.length===0)throw new AppError('bad_output');
-            if(downloaded.buffer.length>maxInputBytes)throw new AppError('too_large');
+            if(!downloaded||!Buffer.isBuffer(downloaded.buffer))throw new AppError('bad_output');
+            if(downloaded.buffer.length===0)return null;
+            if(downloaded.buffer.length>maxInputBytes)throw new AppError('too_large',{reason:'media_too_large'});
             const buffer=downloaded.buffer;
             const fileName=path.basename(String(downloaded.originalFileName||''));
             let extension=path.extname(fileName).slice(1).toLowerCase()||String(downloaded.extension||'').replace(/^\./,'').toLowerCase();
@@ -81,7 +86,8 @@ function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromis
             }
             const mime=signature||declaredMime;
             if(isImage(extension,mime)) {
-                if(extension==='gif'||mime==='image/gif'||!ocr)throw new AppError('unsupported_media');
+                if(extension==='gif'||mime==='image/gif')throw new AppError('unsupported_media',{reason:'gif_requires_still_image'});
+                if(!ocr)throw new AppError('unsupported_media');
                 validateImage(extension,mime,buffer);
                 workspace=await createWorkspace();
                 const input=path.join(workspace,`input.${safeExtension(extension)}`);
@@ -141,8 +147,8 @@ function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromis
             const meta=asText(info.stdout);
             if(/^Encrypted:\s+yes/im.test(meta))throw new AppError('unsupported_media');
             const pages=Number(meta.match(/^Pages:\s+(\d+)/im)?.[1]);
-            if(!Number.isSafeInteger(pages)||pages<1)throw new AppError('bad_output');
-            if(pages>maxPdfPages)throw new AppError('too_large');
+            if(!Number.isSafeInteger(pages)||pages<1)throw new AppError('bad_output',{reason:'pdf_no_pages'});
+            if(pages>maxPdfPages)throw new AppError('too_large',{reason:'pdf_page_limit'});
             const output=await run('pdftotext',['-layout',input,'-'],{timeoutMs:PDFTEXT_TIMEOUT_MS,signal,maxBuffer:MAX_COMMAND_OUTPUT});
             signal.throwIfAborted();
             return validateContentText(asText(output.stdout));
@@ -209,10 +215,56 @@ function safeExtension(extension) { return /^[a-z0-9]{1,8}$/.test(extension)?ext
 function asText(value) { return typeof value==='string'?value:Buffer.isBuffer(value)?value.toString('utf8'):''; }
 /** @param {unknown} error */
 function mapFailure(error) {
-    const item=/** @type {{name?:string,code?:string,killed?:boolean}} */(error||{});
+    const item=/** @type {{name?:string,code?:string,killed?:boolean,message?:string}} */(error||{});
+    if(item.code==='MEDIA_TOO_LARGE'||/maxContentLength|larger than|max.*size.*exceed/i.test(String(item.message||'')))return new AppError('too_large',{cause:error});
     if(item.name==='TimeoutError'||item.code==='ETIMEDOUT'||item.killed)return new AppError('timeout',{cause:error});
     if(item.code==='ENOENT')return new AppError('unsupported_media',{cause:error});
     return new AppError('bad_output',{cause:error});
 }
 
-module.exports={createContentReader,sniffMime,htmlToText,MAX_INLINE_BYTES,MAX_TEXT_CHARACTERS,MAX_PDF_PAGES};
+/** @param {unknown} error */
+function mapDownloadFailure(error) {
+    if(error instanceof AppError)return error;
+    const value=/** @type {{code?:unknown,message?:unknown}} */(error&&typeof error==='object'?error:{});
+    if(value.code==='MEDIA_TOO_LARGE')return new AppError('too_large',{cause:error,reason:'media_too_large'});
+    if(value.code==='MEDIA_UNAVAILABLE')return new AppError('network',{cause:error,reason:'media_unavailable'});
+    return new AppError('network',{cause:error,reason:'media_download_failed'});
+}
+
+/** Read provider-declared image/document length without coercing large Longs through Number.
+ * @param {object} raw @returns {bigint|undefined} */
+function declaredAttachmentSize(raw) {
+    /** @param {unknown} value */ const record=value=>value&&typeof value==='object'&&!Array.isArray(value)?/** @type {Record<string,unknown>} */(value):{};
+    const envelope=record(raw),data=record(envelope.data||envelope);let message=record(data.message);
+    for(let depth=0;depth<8;depth++){
+        const wrapper=record(message.ephemeralMessage||message.viewOnceMessage||message.viewOnceMessageV2||message.viewOnceMessageV2Extension||message.documentWithCaptionMessage);
+        if(!wrapper.message)break;message=record(wrapper.message);
+    }
+    const payload=record(message.documentMessage||message.imageMessage),size=payload.fileLength;
+    if(typeof size==='bigint')return size>=0n?size:undefined;
+    if(typeof size==='number')return Number.isFinite(size)&&size>=0?BigInt(Math.trunc(size)):undefined;
+    if(typeof size==='string'){
+        if(size.length>20)return /^\d{21}/.test(size.slice(0,21))?BigInt(MAX_INLINE_BYTES+1):undefined;
+        if(/^\d+$/.test(size)){try{return BigInt(size);}catch{return undefined;}}
+        return undefined;
+    }
+    if(!size||typeof size!=='object')return undefined;
+    const value=record(size);
+    if(Number.isInteger(value.low)&&Number.isInteger(value.high)){
+        const lowNumber=/** @type {number} */(value.low),highNumber=/** @type {number} */(value.high);
+        if(lowNumber< -0x80000000||lowNumber>0x7fffffff||highNumber< -0x80000000||highNumber>0x7fffffff)return undefined;
+        if(value.unsigned===true){
+            const low=BigInt(lowNumber>>>0),high=BigInt(highNumber>>>0);
+            return (high<<32n)|low;
+        }
+        // A negative signed component is not reinterpreted as a huge uint64.
+        if(lowNumber<0||highNumber<0)return undefined;
+        return (BigInt(highNumber)<<32n)|BigInt(lowNumber);
+    }
+    if(typeof value.toNumber==='function'){
+        try{const number=Reflect.apply(/** @type {(...args:unknown[])=>unknown} */(value.toNumber),size,[]);if(typeof number==='number'&&Number.isFinite(number)&&number>=0)return BigInt(Math.trunc(number));}catch{}
+    }
+    return undefined;
+}
+
+module.exports={createContentReader,sniffMime,htmlToText,MAX_INLINE_BYTES,MAX_TEXT_CHARACTERS,MAX_PDF_PAGES,declaredAttachmentSize,mapDownloadFailure};

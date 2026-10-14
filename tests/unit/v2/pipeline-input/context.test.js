@@ -53,3 +53,32 @@ test('group thread port receives sender/quote/limit and roles/history are copied
 test('invalid history bounds fail without reading a port',()=>{
     for(const historyLimit of [0,101,1.5]) assert.throws(()=>setup({historyLimit}),/history limit/);
 });
+
+test('provider lookup preserves original device/LID identities for direct and wrapped Evolution media',async()=>{
+    for(const wrapped of [false,true]) {
+        const {context,clock}=setup();
+        const provider={id:'lid-media',remoteJid:'123456:4@lid',participant:'987654:2@lid',fromMe:false};
+        const data={key:provider,message:{imageMessage:{mediaKey:'private-key',base64:'private-bytes',jpegThumbnail:'private-thumb'}}};
+        const media=event({id:provider.id,chatId:'123456@lid',isGroup:false,raw:wrapped?{event:'messages.upsert',data}:data});
+        assert.equal(context.observe(media),true);
+        const recent=context.addressingMetadata(media).attachment;
+        const quoted=context.addressingMetadata({...media,id:'followup',media:undefined,quoted:{messageId:media.id}}).attachment;
+        assert.deepEqual(recent.providerKey,provider);assert.deepEqual(quoted.providerKey,provider);
+        assert.ok(!JSON.stringify(recent).includes('private-'));
+        const ctx=await context.build(media,{respond:true,reason:'private-chat'});
+        assert.deepEqual(ctx.attachment.providerKey,provider);
+        await clock.advance(600000);assert.equal(context.addressingMetadata(media).attachment,undefined);
+    }
+});
+test('uncached current attachment uses the same original key and mismatched raw identities are never reused',async()=>{
+    const {context,store}=setup();store.maxEntries=1;store.set('unrelated','full',true,10000);
+    const key={id:'full-current',remoteJid:'19995559999@g.us',participant:'100:2@s.whatsapp.net'};
+    const media=event({id:key.id,chatId:key.remoteJid,raw:{event:'messages.upsert',data:{key}}});
+    assert.equal(context.observe(media),false);
+    assert.deepEqual((await context.build(media,{respond:true,reason:'wake-word'},{allowCurrentMediaFallback:true})).attachment.providerKey,{...key,fromMe:false});
+    for(const wrong of [{...key,id:'other-message'},{...key,remoteJid:'other@g.us'},null]){
+        const bad={...media,raw:{data:{key:wrong}}};
+        const ctx=await context.build(bad,{respond:true,reason:'wake-word'},{allowCurrentMediaFallback:true});
+        assert.equal(ctx.attachment.providerKey,undefined);
+    }
+});

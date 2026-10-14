@@ -149,6 +149,22 @@ test('professional/persona voices prefer optional ElevenLabs; failures fall back
     assert.equal(backup.mime, 'audio/mpeg');
 });
 
+test('ElevenLabs fallback preserves legacy female, demon and regional preset selection', async t => {
+    for (const [voice, expected] of [['mujer','alice'],['colombiana','alice'],['argentina','alice'],['anime','alice'],['demonio','adam'],['colombiano','daniel'],['paisa','daniel']]) {
+        const selected=[];
+        const f=await fixture({elevenLabs:async(_text,name)=>{selected.push(name);return Buffer.from('synthetic ElevenLabs audio');},
+            run:async(command,args)=>{
+                if(command==='edge-tts')throw Error('synthetic Edge failure');
+                if(command==='ffprobe')return{stdout:'8.0'};
+                await fs.writeFile(args.at(-1),Buffer.from('synthetic filtered audio'));return{stdout:''};
+            }});
+        t.after(()=>fs.rm(f.root,{recursive:true,force:true}));
+        const media=await f.adapter.synthesize('Audio de prueba',{voice,signal:new AbortController().signal});
+        assert.deepEqual(selected,[expected],voice);
+        await f.adapter.release(media.ref);
+    }
+});
+
 test('synthesis reports measured duration and fitting uses bounded ffprobe/ffmpeg filters and honors adjustment bounds', async t => {
     const f = await fixture({ durations: ['10.8', '10.8', '10.1', '10.1'] }); t.after(() => fs.rm(f.root, { recursive: true, force: true }));
     const media = await f.adapter.synthesize('Hola', { voice: 'hombre', signal: new AbortController().signal });

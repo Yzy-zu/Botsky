@@ -41,6 +41,14 @@ const VOICE_ALIASES = Object.freeze({
 const ELEVEN_TRIGGERS = Object.freeze(['elevenlabs','realista','humana','daniel','narrador','adam','charlie','george','harry','liam','alice','lily','jessica','bill','goku','donramon','dross','luisito']);
 const PROFESSIONAL_VOICES = Object.freeze(['daniel','narrador','adam','charlie','george','harry','liam','alice','lily','jessica','bill','elevenlabs','realista','humana','luisito']);
 
+/** Preserve the legacy ElevenLabs fallback voice mapping after Edge-TTS fails. @param {string} key */
+function fallbackElevenLabsVoice(key) {
+    if(['hombre','colombiano','argentino','chileno','venezolano','peruano','loquendo'].includes(key))return 'daniel';
+    if(['mujer','colombiana','argentina','anime'].includes(key))return 'alice';
+    if(key==='demonio')return 'adam';
+    return key;
+}
+
 /** @typedef {{text:string,voice:string,mode?:string,durationSeconds?:number|null,success?:boolean,needsClarification?:boolean,question?:string,error?:string}} ScriptResult */
 /** @typedef {{request?:string,literalText?:string,mode?:string,voice?:string,durationSeconds?:number|null,history?:ReadonlyArray<{role:string,content:string}>,quotedText?:string,userName?:string,isGroup?:boolean,mediaContext?:{extractedText?:string,inlineData?:{mimeType:string,data:string}},revision?:{previousText:string,measuredSeconds:number,wordTarget:number}|null}} ScriptInput */
 /** @typedef {{run?:(command:string,args:string[],options:{timeoutMs:number,signal:AbortSignal,maxBuffer:number})=>Promise<{stdout?:string|Buffer,stderr?:string|Buffer}>,callLLM?:(input:{system:string,user:string,maxOutputTokens:number,signal:AbortSignal,media?:{mimeType:string,data:string}})=>Promise<string|{text?:string,finishReason?:string}>,buildStyle?:(input:ScriptInput)=>string,elevenLabs?:(text:string,voice:string,signal:AbortSignal)=>Promise<Buffer>,tempDirectory:string,files?:typeof fsPromises,clock?:{now:()=>number},randomId?:()=>string,maxTextChars?:number,maxMediaBytes?:number,outputTtlMs?:number,edgeTtsCommand?:string,gttsCommand?:string,ffmpegCommand?:string,ffprobeCommand?:string}} VoiceMediaOptions */
@@ -175,7 +183,7 @@ Prepara únicamente el texto que se pronunciará. Interpreta el encargo actual u
                 } catch(error) { if(error&&typeof error==='object'&&/** @type {{name?:string}} */(error).name==='AbortError') throw error; }
             }
             if(!generated&&elevenLabs) {
-                try { const audio=await elevenLabs(cleaned,key,signal); check(signal); await writePrivate(raw,audio); generated=true; }
+                try { const audio=await elevenLabs(cleaned,fallbackElevenLabsVoice(key),signal); check(signal); await writePrivate(raw,audio); generated=true; }
                 catch(error) { if(error&&typeof error==='object'&&/** @type {{name?:string}} */(error).name==='AbortError') throw error; }
             }
             if(!generated) {
@@ -224,4 +232,4 @@ Prepara únicamente el texto que se pronunciará. Interpreta el encargo actual u
     return {prepareScript,synthesize,fitDuration,measureDuration:measure,cleanTextForSpeech,resolveVoice,release,cleanupExpired};
 }
 
-module.exports={createVoiceMedia,createExecFileRunner,cleanTextForSpeech,resolveVoice,EDGE_PROFILES,VOICE_ALIASES,ELEVEN_TRIGGERS};
+module.exports={createVoiceMedia,createExecFileRunner,cleanTextForSpeech,resolveVoice,EDGE_PROFILES,VOICE_ALIASES,ELEVEN_TRIGGERS,fallbackElevenLabsVoice};

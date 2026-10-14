@@ -1,6 +1,7 @@
 // @ts-check
 'use strict';
 /** @typedef {'quota'|'auth_key'|'timeout'|'safety_block'|'bad_output'|'unsupported_media'|'too_large'|'network'|'unknown'} ErrorKind */
+/** @typedef {'media_unavailable'|'media_download_failed'|'media_too_large'|'pdf_no_pages'|'pdf_page_limit'|'gif_requires_still_image'} ErrorReason */
 /** @type {Record<ErrorKind,{message:string,nextStep:string,retryable:boolean}>} */
 const feedback = {
     quota: {message:'Se agotó la cuota de IA.',nextStep:'Pídeme otra acción o pide al administrador revisar la cuota.',retryable:true},
@@ -14,11 +15,12 @@ const feedback = {
     unknown: {message:'No pude completar la operación.',nextStep:'Reintenta o consulta al administrador.',retryable:false}
 };
 class AppError extends Error {
-    /** @param {ErrorKind} kind @param {{cause?:unknown}} [options] */
+    /** @param {ErrorKind} kind @param {{cause?:unknown,reason?:ErrorReason}} [options] */
     constructor(kind, options = {}) {
         const safeKind = Object.hasOwn(feedback, kind) ? kind : 'unknown';
         super(feedback[safeKind].message, options);
         this.name = 'AppError'; this.kind = safeKind;
+        if(options.reason)this.reason=options.reason;
     }
 }
 /** @param {unknown} error */

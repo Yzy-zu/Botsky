@@ -17,13 +17,8 @@ function createContext({ clock, store, conversation, roles = { admins: [], owner
     function observe(event) {
         if (!event.media || event.isFromMe) return true;
         /** @type {Attachment} */ const attachment = { id:event.id,ownerJid:event.sender.jid,chatId:event.chatId,expiresAt:clock.now()+600000,ref:event.media.ref,mime:event.media.mime,kind:event.kind };
-        const raw = /** @type {Record<string,unknown>} */ (event.raw || {});
-        const key = /** @type {{id?:unknown,remoteJid?:unknown,participant?:unknown,participantAlt?:unknown,fromMe?:unknown}|undefined} */ (raw.key);
-        if (key?.id === event.id && typeof key.remoteJid === 'string' && normalizeJid(key.remoteJid) === event.chatId) {
-            // Canonical IDs address policies; the provider needs its original lookup key.
-            attachment.providerKey = { id:event.id,remoteJid:key.remoteJid,fromMe:Boolean(key.fromMe),
-                ...(typeof key.participant === 'string' ? {participant:key.participant} : {}) };
-        }
+        const providerKey=originalMediaKey(event);
+        if(providerKey)attachment.providerKey=providerKey;
         const ownerKey=contextKey(event.chatId,event.sender.jid);
         const idKey=contextKey(event.chatId,event.id);
         const hasOwner=!!store.get('pipeline.attachment.owner',ownerKey);
@@ -67,18 +62,25 @@ function createContext({ clock, store, conversation, roles = { admins: [], owner
         if(options.allowCurrentMediaFallback&&event.media&&!event.quoted) {
             metadata.attachment={id:event.id,ownerJid:event.sender.jid,chatId:event.chatId,expiresAt:clock.now()+600000,
                 ref:event.media.ref,mime:event.media.mime,kind:event.kind};
-            const raw=/** @type {Record<string,unknown>} */(event.raw||{});
-            const key=/** @type {{id?:unknown,remoteJid?:unknown,participant?:unknown,fromMe?:unknown}|undefined} */(raw.key);
-            if(key?.id===event.id&&typeof key.remoteJid==='string'&&normalizeJid(key.remoteJid)===event.chatId) {
-                metadata.attachment.providerKey={id:event.id,remoteJid:key.remoteJid,fromMe:Boolean(key.fromMe),
-                    ...(typeof key.participant==='string'?{participant:key.participant}:{})};
-            }
+            const providerKey=originalMediaKey(event);
+            if(providerKey)metadata.attachment.providerKey=providerKey;
         }
         /** @type {HistoryMessage[]} */ let history = [];
         if (addressing.respond) history = event.isGroup ? conversation.recentThread ? await conversation.recentThread(event.chatId,event.sender.jid,event.quoted?.messageId,historyLimit) : [] : await conversation.recent(event.chatId,historyLimit);
         return { event,addressing,history:history.slice(-historyLimit).map(row => ({role:row.role,content:row.content})),attachment:metadata.attachment,session:metadata.session,correlationId:event.id,roles:{admins:[...roles.admins],owners:[...roles.owners],...(roles.members ? { members:[...roles.members] } : {}),...(roles.groups ? { groups:[...roles.groups] } : {})} };
     }
     return { observe,addressingMetadata,build };
+}
+/** Preserve the provider lookup identity for both Evolution envelope shapes.
+ * Only copy the key fields; never retain raw message/media bytes in TTL state.
+ * @param {InboundEvent} event @returns {import('../domain/ports').MessageKey|undefined} */
+function originalMediaKey(event) {
+    const raw=/** @type {{data?:unknown,key?:unknown}|undefined} */(event.raw);
+    const source=raw?.data&&typeof raw.data==='object'?raw.data:raw;
+    const key=/** @type {{id?:unknown,remoteJid?:unknown,participant?:unknown,fromMe?:unknown}|undefined} */(/** @type {{key?:unknown}|undefined} */(source)?.key);
+    if(key?.id!==event.id||typeof key.remoteJid!=='string'||normalizeJid(key.remoteJid)!==event.chatId)return undefined;
+    return{id:event.id,remoteJid:key.remoteJid,fromMe:Boolean(key.fromMe),
+        ...(typeof key.participant==='string'?{participant:key.participant}:{})};
 }
 /** @param {import('../platform/ttlStore').TtlStore} store @param {string} namespace @param {string} key @param {unknown} previous @param {number} now */
 function restoreRef(store,namespace,key,previous,now) {
