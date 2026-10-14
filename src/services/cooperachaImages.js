@@ -163,6 +163,7 @@ async function getWebImage(category = null) {
 async function getCooperachaImage(category = null, options = {}) {
     const customDir = options.customDir || process.env.FOTOS_DIR;
     const excludePhotoIds = options.excludePhotoIds || [];
+    const imagesOnly = options.imagesOnly === true;
 
     if (customDir) {
         const local = getLocalImage(customDir, excludePhotoIds);
@@ -181,7 +182,8 @@ async function getCooperachaImage(category = null, options = {}) {
         const rikolinoImages = await createRikolinoReader().getImages(cleanCat, {
             count: 1,
             randomize: true,
-            excludePhotoIds
+            excludePhotoIds,
+            imagesOnly
         });
         if (rikolinoImages && rikolinoImages.length > 0) {
             return rikolinoImages[0];

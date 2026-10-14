@@ -473,3 +473,12 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - Desde el último arranque de Botsky: 14 eventos AI-PROVIDER con503 y2 errores AI-ROUTER con503; rotación de claves no evitó el fallo en esas rutas legacy. Sin uncaught/UnhandledRejection nuevos; sin errores de HoraFeliz y un despacho de lluvia registrado. No inferir caída global de Gemini, sólo respuestas503 observadas en estas solicitudes.
 - Petrovsky no registra errores nuevos desde su último arranque. Publicación246/246 fue comprobada en el checkpoint anterior. Canary v2 sigue counters0 y alcance mínimo; no atribuir estos errores a v2 ni al cambio de fotos.
 - Pendiente concreto de estabilidad a revisar junto a migración IA: reducir intentos redundantes ante503/overload y verificar fallback disponible para el router legacy, manteniendo mismos permisos y sin reenviar comandos ya ejecutados. En este chequeo no se alteró configuración, código ni se enviaron mensajes.
+
+
+## Despliegue urgente solicitado: Cooperacha y lluvia de 5 medios — 2026-10-14 UTC
+
+- Cliente: «apresura, deja las pruebas para después» y «quiero q mande5fotosenminutos, entre más mande mejor». Se adopta frecuencia explícita de 5 medios por minuto durante Hora Feliz (arranque y recuperación); no se ejecuta nueva suite por su instrucción. Checks de sintaxis y scope del despliegue se conservan.
+- Cooperacha: lock por grupo durante inicio evita dos búsquedas/avisos simultáneos; una categoría sin imágenes recibe aclaración específica sin mostrar texto privado. Reader añade imagesOnly para excluir vídeos antes de sort/count; pack y lluvia mantienen media mixta. Estos arreglos ya tuvieron24/24 focales antes de la orden de aplazar pruebas. La causa exacta del aviso de la captura no quedó demostrada; defaultprovider productivo sí tiene imagen disponible.
+- HappyHour: lote5 y timer60s, mantiene historial por evento y protección de generación/repetición. Último lote de ciclo puede tener menos de5 para no repetir la cola pendiente; envío fallido tampoco se cuenta como éxito. No activar proactividad ni iniciar evento nuevo manualmente.
+- PENDIENTE al retomar pruebas: actualizar expectativas happyHourRainRandomness del antiguo lote2 al lote5 y agregar frecuencia arranque/recovery; ejecutar suitelegacycompleta. No afirmar823como resultado de esta versión nueva: ese resultado corresponde al checkpoint anterior.
+- Instalar4archivoslegacy trascommit con backup privado y PM2 health; registrar resultado luego. Canaryv2 sigue QR/ayuda/estado en1privado; publicación246activos defaultautoPublish intacta.

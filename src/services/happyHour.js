@@ -116,7 +116,7 @@ async function initHappyHourRecovery() {
                     triggerRainDrop(state.groupJid, { force: true }).catch(err => {
                         logger.error('[HappyHour] Error en lluvia periódica:', err.message);
                     });
-                }, 4 * 60 * 1000);
+                }, 60 * 1000);
                 timers.rain.unref();
 
                 if (!state.activeAirdrop && remainingMs > 30_000) {
@@ -195,7 +195,7 @@ async function startHappyHour({ durationMinutes = 60, groupJid = null, adminJid 
         triggerRainDrop(state.groupJid, { force: true }).catch(err => {
             logger.error('[HappyHour] Error al disparar lluvia periódica:', err.message);
         });
-    }, 4 * 60 * 1000);
+    }, 60 * 1000);
     timers.rain.unref();
 
     // Drop inicial de bienvenida a los 10 segundos
@@ -351,7 +351,7 @@ async function onIncomingGroupMessage(norm) {
 }
 
 /**
- * Despacha una lluvia de medios (1-2 fotos/vídeos) con copys festivos al grupo (R2).
+ * Despacha una lluvia de medios (5 fotos/vídeos) con copys festivos al grupo (R2).
  * Protege contra saturación omitiendo el envío si no ha habido mensajes nuevos en el chat (salvo options.force).
  *
  * @param {string} [groupJid=null]
@@ -383,7 +383,7 @@ async function sendRainDrop(targetGroup, options) {
     state.messagesSinceLastRain = 0;
     state.lastRainAt = Date.now();
 
-    const count = Math.floor(Math.random() * 2) + 1; // 1 o 2 elementos
+    const count = 5; // Cinco medios por minuto durante Hora Feliz.
     let items = [];
 
     try {

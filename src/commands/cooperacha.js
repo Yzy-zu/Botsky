@@ -12,6 +12,9 @@ const { cleanCategory } = require('../services/packImages');
 // ─── Sesiones Activas en Memoria ──────────────────────────────────────────────
 // Clave: groupJid -> CooperachaSession
 const activeSessions = new Map();
+// Reserve each group synchronously before the first await so duplicate start
+// requests cannot both fetch an image and announce the same failed start.
+const startsInFlight = new Set();
 
 const DEFAULT_TARGET_XP = 500;
 const MIN_TARGET_XP = 50;
@@ -321,7 +324,7 @@ async function cancelCooperacha(groupJid) {
  * @param {object} [options] - Opciones (targetXp, category, durationMs, customDir)
  * @returns {Promise<object|null>}
  */
-async function startCooperacha(from, messageData = {}, options = {}) {
+async function startCooperachaImpl(from, messageData = {}, options = {}) {
     if (!isGroupAuthorized(from, options)) {
         if (!from || !from.endsWith('@g.us')) {
             await sendText(from, '> 🪙 La Cooperacha de XP solo se puede jugar en grupos de WhatsApp.');
@@ -367,11 +370,15 @@ async function startCooperacha(from, messageData = {}, options = {}) {
 
     const imgResult = await getCooperachaImage(category, {
         customDir: options.customDir,
-        excludePhotoIds: options.excludePhotoIds !== undefined ? options.excludePhotoIds : excludePhotoIds
+        excludePhotoIds: options.excludePhotoIds !== undefined ? options.excludePhotoIds : excludePhotoIds,
+        imagesOnly: true
     });
 
     if (!imgResult || !imgResult.path) {
-        await sendText(from, '> ⚠️ No pude conseguir una imagen para el reto en este momento, compa. Intenta más al rato.');
+        const message = cleanCat
+            ? '> ⚠️ No encontré una imagen disponible para esa categoría. Pide el reto sin categoría para usar las fotos publicadas.'
+            : '> ⚠️ No pude conseguir una imagen para el reto en este momento, compa. Intenta más al rato.';
+        await sendText(from, message);
         return null;
     }
 
@@ -441,6 +448,21 @@ async function startCooperacha(from, messageData = {}, options = {}) {
     }
 
     return session;
+}
+
+async function startCooperacha(from, messageData = {}, options = {}) {
+    // Keep the original authorization response for private/unauthorized chats.
+    if (!isGroupAuthorized(from, options)) {
+        return startCooperachaImpl(from, messageData, options);
+    }
+    if (startsInFlight.has(from)) return null;
+
+    startsInFlight.add(from);
+    try {
+        return await startCooperachaImpl(from, messageData, options);
+    } finally {
+        startsInFlight.delete(from);
+    }
 }
 
 /**

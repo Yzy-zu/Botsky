@@ -223,4 +223,16 @@ test('reader entrega vídeos MP4 y WebM con isVideo: true, mime correcto y sopor
     assert.equal(webmItem.mime, 'video/webm');
     assert.equal(webmItem.isVideo, true);
     assert.equal(webmItem.path, path.join(rootDir, webmPath));
+
+    const imageItems = await reader.getImages('mix', { count: 3, imagesOnly: true });
+    assert.deepEqual(imageItems.map(item => item.id), [p1.id], 'imagesOnly debe filtrar videos antes de seleccionar');
+    assert.ok(imageItems.every(item => item.mime.startsWith('image/')));
+
+    const coopImages = await isolatedModule(path.join(__dirname, '../src/services/cooperachaImages.js'), {
+        axios: { get: async () => { throw new Error('Red prohibida'); } }, './logger': logger,
+        './rikolinoLibrary': { createRikolinoReader: () => reader },
+        './packImages': { cleanCategory: value => value }
+    });
+    const coopImage = await coopImages.getCooperachaImage('mix', { imagesOnly: true });
+    assert.equal(coopImage.id, p1.id, 'cooperacha debe solicitar solo imágenes censurables');
 });

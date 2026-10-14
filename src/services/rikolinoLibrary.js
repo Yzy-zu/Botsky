@@ -21,7 +21,7 @@ function normalizeCategory(value) {
 /** Opens a fresh read-only snapshot per request; never initializes Petrovsky data. */
 function createRikolinoReader({ rootDir = process.env.RIKOLINO_DIR || DEFAULT_ROOT, random = Math.random } = {}) {
     const root = path.resolve(rootDir);
-    async function getImages(category = null, { count = 5, excludePhotoIds = [], randomize = false } = {}) {
+    async function getImages(category = null, { count = 5, excludePhotoIds = [], randomize = false, imagesOnly = false } = {}) {
         if (!Number.isInteger(count) || count < 1 || count > 1000) return [];
         let db;
         let opened = false;
@@ -51,8 +51,9 @@ function createRikolinoReader({ rootDir = process.env.RIKOLINO_DIR || DEFAULT_RO
                 if (matching.length) {
                     const placeholders = matching.map(() => '?').join(',');
                     const rawRows = await all(`SELECT p.id,p.mime,p.originalPath,ap.position FROM photos p JOIN album_photos ap ON ap.photoId=p.id WHERE p.deletedAt IS NULL AND ap.albumId IN (${placeholders}) ORDER BY ap.position, p.id`, matching.map(album => album.id));
+                    const eligibleRows = imagesOnly ? rawRows.filter(r => typeof r.mime === 'string' && r.mime.startsWith('image/')) : rawRows;
                     const seen = new Set();
-                    rows = rawRows.filter(r => {
+                    rows = eligibleRows.filter(r => {
                         if (seen.has(r.id)) return false;
                         seen.add(r.id);
                         return true;
