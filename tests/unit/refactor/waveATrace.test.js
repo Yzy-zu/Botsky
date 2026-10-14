@@ -147,3 +147,25 @@ test('duplicate trace IDs fail validation even when the duplicate rows are outsi
     temp.cleanup();
   }
 });
+
+test('real-inventory baseline detects dropped original IDs without requiring all IDs to be ported', () => {
+  const temp = makeRoot('// unused');
+  try {
+    const report = auditWaveATrace({
+      inventoryText: [
+        '## test/content_reader.test.js',
+        '| TR-0001 | 1 | One | features/help | none | pending: todo |',
+        '| TR-0003 | 2 | Three | features/help | none | pending: todo |',
+        '| TR-9000 | 3 | Newly added | features/help | none | pending: todo |',
+      ].join('\n'),
+      root: temp.root,
+      baselineCount: 3,
+    });
+    assert.deepEqual(report.baseline.missingIds, ['TR-0002']);
+    assert.deepEqual(report.baseline.idsOutsideBaseline, ['TR-9000']);
+    assert.equal(report.totals.pending, 3);
+    assert.ok(report.errors.some(error => /missing 1 baseline IDs: TR-0002/.test(error)));
+  } finally {
+    temp.cleanup();
+  }
+});

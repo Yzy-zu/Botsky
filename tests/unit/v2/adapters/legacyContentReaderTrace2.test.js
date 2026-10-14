@@ -9,14 +9,14 @@ const {createDocumentsFeature}=require('../../../../src/v2/features/documents/ma
 
 const PNG=Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),Buffer.alloc(24)]);
 function source(ref,mime,raw={}){return{attachment:{id:'trace-content',ownerJid:'user@s.whatsapp.net',chatId:'user@s.whatsapp.net',ref,mime,kind:mime.startsWith('image/')?'image':'document'},raw};}
-async function setup(t,{download,run,ocr}={}){
+async function setup(t,{download,run,ocr,maxInputBytes}={}){
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'botsky-content-trace-'));t.after(()=>fs.rm(root,{recursive:true,force:true}));
  const reader=createContentReader({tempDirectory:root,downloadMedia:download|| (async()=>({buffer:Buffer.from('ok'),extension:'txt'})),
-  run:run|| (async()=>({stdout:''})),...(ocr?{ocr}:{})});
+  run:run|| (async()=>({stdout:''})),...(ocr?{ocr}:{}),...(maxInputBytes?{maxInputBytes}:{})});
  return{reader,root};
 }
 function pdfInfo(pages){return async command=>command==='pdfinfo'?{stdout:`Pages: ${pages}\nEncrypted: no\n`}:command==='pdftotext'?{stdout:'contenido PDF'}:{stdout:''};}
-function envelope(message){return{event:'messages.upsert',data:{key:{id:'id',remoteJid:'user@s.whatsapp.net'},message}};}
+function envelope(message,{id='id',remoteJid='user@s.whatsapp.net'}={}){return{event:'messages.upsert',data:{key:{id,remoteJid},message}};}
 async function readViaFeature(reader,document){
  const feature=createDocumentsFeature({process:async()=>({parts:[]}),readContent:reader.readContent,clock:{now:()=>0},store:{get:()=>undefined,set(){},delete(){}}});
  const leer=feature.commands.find(command=>command.name==='leer');
@@ -40,7 +40,7 @@ test('TR-0169: UTF-8 document text is returned complete and never as encoded ima
 test('TR-0171: declared file length above the inline limit is rejected before download',async t=>{
  let downloads=0;
  const {reader}=await setup(t,{download:async()=>{downloads++;return{buffer:Buffer.from('x'),extension:'txt'};}});
- const raw=envelope({documentMessage:{fileLength:MAX_INLINE_BYTES+1}});
+ const raw=envelope({documentMessage:{fileLength:MAX_INLINE_BYTES+1}},{id:'trace-content'});
  await assert.rejects(reader.readContent(source('media://large.txt','text/plain',raw),{signal:new AbortController().signal}),error=>error.kind==='too_large');
  assert.equal(downloads,0);
 });
@@ -58,9 +58,45 @@ test('TR-0173: downloader receives the byte limit and oversized transport errors
 test('TR-0174: serialized uint64 fileLength is compared without signed-low overflow',async t=>{
  let downloads=0;
  const {reader}=await setup(t,{download:async()=>{downloads++;throw Error('should not download');}});
- const raw=envelope({documentMessage:{fileLength:{low:-1,high:0}}});
+ // Low is signed int32 in the serialized Long, but its bits are unsigned.
+ const raw=envelope({documentMessage:{fileLength:{low:-1,high:0}}},{id:'trace-content'});
  await assert.rejects(reader.readContent(source('media://huge.pdf','application/pdf',raw),{signal:new AbortController().signal}),error=>error.kind==='too_large');
  assert.equal(downloads,0);
+});
+
+test('TR-0174: oversized decimal metadata fails closed for configured limits without parsing arbitrary integers',async t=>{
+ let downloads=0;
+ const {reader}=await setup(t,{maxInputBytes:1024,download:async()=>{downloads++;throw Error('should not download');}});
+ for(const value of ['999999999999999999999999999999999999999999999','18446744073709551616']){
+  const raw=envelope({documentMessage:{fileLength:value}},{id:'trace-content'});
+  await assert.rejects(reader.readContent(source('media://huge.txt','text/plain',raw),{signal:new AbortController().signal}),error=>error.kind==='too_large');
+ }
+ assert.equal(downloads,0);
+});
+
+test('TR-0174: malformed Long words and unsafe toNumber values are ignored rather than coerced',async t=>{
+ let downloads=0;
+ const {reader}=await setup(t,{download:async()=>{downloads++;return{buffer:Buffer.from('texto breve'),extension:'txt'};}});
+ const malformed=[{low:4294967295,high:0,unsigned:true},{low:1,high:2147483648,unsigned:false},{toNumber(){return Number.MAX_SAFE_INTEGER+1;}}];
+ for(const fileLength of malformed){
+  const raw=envelope({documentMessage:{fileLength}},{id:'trace-content'});
+  assert.equal(await reader.readContent(source('media://small.txt','text/plain',raw),{signal:new AbortController().signal}),'texto breve');
+ }
+ assert.equal(downloads,malformed.length);
+});
+
+test('declared size preflight only applies to the attachment identified by the current or exact quoted stanza',async t=>{
+ let downloads=0;
+ const {reader}=await setup(t,{download:async()=>{downloads++;return{buffer:Buffer.from('ok'),extension:'txt'};}});
+ const attachment=source('media://small.txt','text/plain').attachment;
+ const oversized={documentMessage:{fileLength:MAX_INLINE_BYTES+1}};
+ const unrelated=envelope(oversized,{id:'different-message'});
+ assert.equal(await reader.readContent({...source(attachment.ref,attachment.mime,unrelated),attachment},{signal:new AbortController().signal}),'ok');
+ const quoted=envelope({extendedTextMessage:{contextInfo:{stanzaId:attachment.id,participant:attachment.ownerJid,quotedMessage:oversized}}});
+ await assert.rejects(reader.readContent({...source(attachment.ref,attachment.mime,quoted),attachment},{signal:new AbortController().signal}),error=>error.kind==='too_large');
+ const wrongChat=envelope(oversized,{id:attachment.id,remoteJid:'other@s.whatsapp.net'});
+ assert.equal(await reader.readContent({...source(attachment.ref,attachment.mime,wrongChat),attachment},{signal:new AbortController().signal}),'ok');
+ assert.equal(downloads,2);
 });
 
 test('TR-0170: expired and unknown media downloads ask for a re-send without exposing provider diagnostics',async t=>{

@@ -11,14 +11,14 @@ function response() {
 }
 const bundle = 'prefix.post(this.routerPath("sendText"),...guards,async(request,response)=>{let result=await this.dataValidate({request:request,schema:Schema,ClassRef:Dto,execute:(instance,data)=>controller.sendText(instance,data)});return response.status(201).json(result)}).post(this.routerPath("sendMedia"),...guards,mediaHandler);async sendMessage(e,t,o,i,n,r,a,c){r&&(l.messageId=r),t.viewOnceMessage){let u=generate(e,t),m=await this.client.relayMessage(e,t,{messageId:r});return u}return this.client.sendMessage(e,t)}async nextMethod(){return 1}';
 
-test('native-table validation accepts bounded tables and normalizes mentions', () => {
+test('TR-0372: native-table validation accepts bounded tables and normalizes mentions', () => {
     const input = validateNativeTableRequest({ ...body(), delay: 20000, mentions: ['5215555550100'] });
     assert.equal(input.delay, 20000);
     assert.deepEqual(input.mentions, ['5215555550100@s.whatsapp.net']);
     assert.equal(validateNativeTableRequest({ ...body(), number: '123456789-123456789@g.us' }).number, '123456789-123456789@g.us');
 });
 
-test('native-table validation rejects malformed, arbitrary and excessive payloads', () => {
+test('TR-0373: native-table validation rejects malformed, arbitrary and excessive payloads', () => {
     const invalid = [
         { ...body(), number: 'status@broadcast' },
         { ...body(), number: 'someone@example.org' },
@@ -39,14 +39,14 @@ test('native-table validation rejects malformed, arbitrary and excessive payload
     for (const input of invalid) assert.throws(() => validateNativeTableRequest(input), TypeError);
 });
 
-test('handler rejects invalid requests before accessing any service', async () => {
+test('TR-0374: handler rejects invalid requests before accessing any service', async () => {
     const res = response();
     await createNativeTableHandler(() => { throw new Error('Must not access monitor'); })({ body: { ...body(), number: 'bad' } }, res, assert.fail);
     assert.equal(res.statusCode, 400);
     assert.equal(res.body.code, 'NATIVE_TABLE_INVALID');
 });
 
-test('handler reports absent and disconnected instances without transmission', async () => {
+test('TR-0375: handler reports absent and disconnected instances without transmission', async () => {
     for (const [instances, status, code] of [
         [{}, 404, 'INSTANCE_NOT_FOUND'],
         [{ main: { connectionStatus: { state: 'close' } } }, 409, 'INSTANCE_DISCONNECTED']
@@ -58,7 +58,7 @@ test('handler reports absent and disconnected instances without transmission', a
     }
 });
 
-test('handler resolves only Evolution routerPath instanceName parameter', async () => {
+test('TR-0376: handler resolves only Evolution routerPath instanceName parameter', async () => {
     let sends = 0;
     const service = {
         connectionStatus: 'open', client: { relayMessage() {} },
@@ -75,7 +75,7 @@ test('handler resolves only Evolution routerPath instanceName parameter', async 
     assert.equal(sends, 1);
 });
 
-test('handler builds only the table message and uses existing typing and persistence service', async () => {
+test('TR-0377: handler builds only the table message and uses existing typing and persistence service', async () => {
     const calls = [];
     const service = {
         connectionStatus: { state: 'open' }, client: { relayMessage() {} },
@@ -91,7 +91,7 @@ test('handler builds only the table message and uses existing typing and persist
     assert.deepEqual(calls[0][2], { delay: 100, presence: 'composing', mentioned: ['5215555550100@s.whatsapp.net'] });
 });
 
-test('handler passes send failures onward without a retry marker or second send', async () => {
+test('TR-0378: handler passes send failures onward without a retry marker or second send', async () => {
     let calls = 0;
     const failure = new Error('Persistence failed after relay');
     const service = {
@@ -106,7 +106,7 @@ test('handler passes send failures onward without a retry marker or second send'
     assert.equal(res.statusCode, null);
 });
 
-test('bundle patch preserves authenticated guards and original endpoints and is idempotent', () => {
+test('TR-0379: bundle patch preserves authenticated guards and original endpoints and is idempotent', () => {
     const patched = patchEvolutionBundle(bundle);
     assert.ok(patched.includes('.post(this.routerPath("sendNativeTable"),...guards,'));
     assert.ok(patched.includes('createNativeTableHandler(()=>controller.waMonitor)'));
@@ -115,7 +115,7 @@ test('bundle patch preserves authenticated guards and original endpoints and is 
     assert.equal(patchEvolutionBundle(patched), patched);
 });
 
-test('bundle patch fails closed on changed or partial integration', () => {
+test('TR-0380: bundle patch fails closed on changed or partial integration', () => {
     assert.throws(() => patchEvolutionBundle(bundle.replace('...guards,async', 'async')), /guarded sendText/);
     assert.throws(() => patchEvolutionBundle(bundle.replace('this.client.relayMessage', 'this.client.changedRelay')), /raw relay/);
     assert.throws(() => patchEvolutionBundle(bundle.replace('t.viewOnceMessage', 't.changedMessage')), /raw relay/);

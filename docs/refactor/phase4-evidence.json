@@ -1,19 +1,19 @@
 {
-  "recordedAt": "2026-10-14T11:43:57.451032+00:00",
+  "recordedAt": "2026-10-14T14:41:08.959015+00:00",
   "status": "private_minimal_canary_active_full_wave_a_open",
   "verify": {
     "exitCode": 0,
+    "pass": 498,
     "fail": 0,
-    "report": "/tmp/botsky-wave-a-ownership-final-verify.log",
-    "sha256": "0c11fb3c85644c1362068513fcf3762031171c2cbc69871f77cc7bf229fa797b",
-    "pass": 446
+    "report": "/tmp/botsky-resume-final-verify.log",
+    "sha256": "831efb84f29bc10b0bc958c05d5d1aac48a3274e70ebf07f9af2a0d1ea197033"
   },
   "refactor": {
     "exitCode": 0,
+    "pass": 70,
     "fail": 0,
-    "report": "/tmp/botsky-wave-a-ownership-final-refactor.tap",
-    "sha256": "e22262308e2b0a6143fb3bff6fc1062a7c8a48933bedd0f78aa58e6165425ed2",
-    "pass": 63
+    "report": "/tmp/botsky-resume-final-refactor.tap",
+    "sha256": "0c1b0c90d7898e28c65b58868107fa51748f09cad66fd9a3b338e94fea4e4c8e"
   },
   "legacy": {
     "exitCode": 0,
@@ -67,7 +67,7 @@
   },
   "pending": [
     "Human QR/help/status walk deferred by user, then one controlled group.",
-    "Remaining WaveA per-case trace ports: 20 implemented / 784 pending across full legacy inventory.",
+    "Remaining WaveA per-case trace ports: 77 implemented / 727 pending across full legacy inventory.",
     "Canary media eligibility/collection and retained legacy attachment references.",
     "Media extraction from hosted platforms/yt-dlp; guarded web text reader does not implement video/audio extraction.",
     "Custom persona/affinity data in Phase5.",
@@ -82,10 +82,10 @@
     "deployed": true,
     "verify": {
       "exitCode": 0,
+      "pass": 498,
       "fail": 0,
-      "report": "/tmp/botsky-wave-a-ownership-final-verify.log",
-      "sha256": "0c11fb3c85644c1362068513fcf3762031171c2cbc69871f77cc7bf229fa797b",
-      "pass": 446
+      "report": "/tmp/botsky-resume-final-verify.log",
+      "sha256": "831efb84f29bc10b0bc958c05d5d1aac48a3274e70ebf07f9af2a0d1ea197033"
     },
     "tracePorts": [
       "TR-0214",
@@ -131,12 +131,25 @@
     ]
   },
   "workInProgress": {
-    "status": "paused_by_user",
-    "recordedAt": "2026-10-14T14:32:26.790548+00:00",
-    "instruction": "ya se me acabaron los tokens",
+    "status": "verified_awaiting_installation",
     "deployed": false,
-    "globalVerification": "pending; last verified snapshot remains 446 v2 / 63 refactor",
-    "traceabilitySummary": "Needs reconciliation: contentReader rows updated; voice and attachment rows not integrated",
-    "nextStep": "Review WIP diff, reconcile matrix, run verify and refactor before deployment"
+    "globalVerification": {
+      "exitCode": 0,
+      "pass": 498,
+      "fail": 0,
+      "report": "/tmp/botsky-resume-final-verify.log",
+      "sha256": "831efb84f29bc10b0bc958c05d5d1aac48a3274e70ebf07f9af2a0d1ea197033"
+    },
+    "inventory": {
+      "original": 804,
+      "ported": 77,
+      "remaining": 727,
+      "waveACuratedRows": 92,
+      "waveACuratedPorted": 64,
+      "waveACuratedPending": 28
+    },
+    "partial": [
+      "TR-0763: standalone voice tool remains Phase5 work"
+    ]
   }
 }

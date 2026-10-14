@@ -48,7 +48,7 @@ function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromis
         const sourceExtension=path.extname(source.attachment.ref.split(/[?#]/,1)[0]).slice(1).toLowerCase();
         const inferredKind=sourceMime.startsWith('image/')||['jpg','jpeg','png','webp','gif','tif','tiff','bmp'].includes(sourceExtension)?'image':'document';
         if(!['image','document'].includes(source.attachment.kind||inferredKind))throw new AppError('unsupported_media');
-        const declaredSize=declaredAttachmentSize(source.raw);
+        const declaredSize=declaredAttachmentSize(source.raw,source.attachment);
         if(declaredSize!==undefined&&declaredSize>BigInt(maxInputBytes))throw new AppError('too_large',{reason:'media_too_large'});
         /** @type {string|undefined} */ let workspace;
         try {
@@ -231,11 +231,22 @@ function mapDownloadFailure(error) {
     return new AppError('network',{cause:error,reason:'media_download_failed'});
 }
 
-/** Read provider-declared image/document length without coercing large Longs through Number.
- * @param {object} raw @returns {bigint|undefined} */
-function declaredAttachmentSize(raw) {
+/** Read provider-declared image/document length only when raw identifies this attachment.
+ * @param {object} raw @param {ReaderSource['attachment']} attachment @returns {bigint|undefined} */
+function declaredAttachmentSize(raw,attachment) {
     /** @param {unknown} value */ const record=value=>value&&typeof value==='object'&&!Array.isArray(value)?/** @type {Record<string,unknown>} */(value):{};
-    const envelope=record(raw),data=record(envelope.data||envelope);let message=record(data.message);
+    const envelope=record(raw),data=record(envelope.data||envelope),key=record(data.key);
+    if(key.remoteJid!==attachment.chatId)return undefined;
+    let message;
+    if(key.id===attachment.id)message=record(data.message);
+    else {
+        const current=record(data.message);
+        const contexts=[current.contextInfo,record(current.extendedTextMessage).contextInfo,record(current.imageMessage).contextInfo,record(current.documentMessage).contextInfo].map(record);
+        const quote=contexts.find(context=>context.stanzaId===attachment.id&&context.quotedMessage&&
+            (!attachment.ownerJid||!context.participant||context.participant===attachment.ownerJid));
+        if(!quote)return undefined;
+        message=record(quote.quotedMessage);
+    }
     for(let depth=0;depth<8;depth++){
         const wrapper=record(message.ephemeralMessage||message.viewOnceMessage||message.viewOnceMessageV2||message.viewOnceMessageV2Extension||message.documentWithCaptionMessage);
         if(!wrapper.message)break;message=record(wrapper.message);
@@ -244,7 +255,9 @@ function declaredAttachmentSize(raw) {
     if(typeof size==='bigint')return size>=0n?size:undefined;
     if(typeof size==='number')return Number.isFinite(size)&&size>=0?BigInt(Math.trunc(size)):undefined;
     if(typeof size==='string'){
-        if(size.length>20)return /^\d{21}/.test(size.slice(0,21))?BigInt(MAX_INLINE_BYTES+1):undefined;
+        // Metadata is a uint64. Any all-decimal value wider than uint64 is
+        // malformed, but fail closed without constructing a huge BigInt.
+        if(size.length>20)return /^\d+$/.test(size)?BigInt(MAX_INLINE_BYTES+1):undefined;
         if(/^\d+$/.test(size)){try{return BigInt(size);}catch{return undefined;}}
         return undefined;
     }
@@ -257,12 +270,13 @@ function declaredAttachmentSize(raw) {
             const low=BigInt(lowNumber>>>0),high=BigInt(highNumber>>>0);
             return (high<<32n)|low;
         }
-        // A negative signed component is not reinterpreted as a huge uint64.
-        if(lowNumber<0||highNumber<0)return undefined;
-        return (BigInt(highNumber)<<32n)|BigInt(lowNumber);
+        // Protobuf Longs commonly expose low as a signed int32 even when the
+        // value is unsigned. With a nonnegative high word, preserve low's bits.
+        if(highNumber<0)return undefined;
+        return (BigInt(highNumber)<<32n)|BigInt(lowNumber>>>0);
     }
     if(typeof value.toNumber==='function'){
-        try{const number=Reflect.apply(/** @type {(...args:unknown[])=>unknown} */(value.toNumber),size,[]);if(typeof number==='number'&&Number.isFinite(number)&&number>=0)return BigInt(Math.trunc(number));}catch{}
+        try{const number=Reflect.apply(/** @type {(...args:unknown[])=>unknown} */(value.toNumber),size,[]);if(typeof number==='number'&&Number.isSafeInteger(number)&&number>=0)return BigInt(number);}catch{}
     }
     return undefined;
 }
