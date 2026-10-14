@@ -6,7 +6,7 @@ Cada fila identifica un caso por archivo + línea + título; los tres bucles que
 
 **Todas las rutas de destino son propuestas**, bajo `tests/{unit,contract,scenario}/legacy/` para mantener identificabilidad durante la migración; las etapas v2 indicadas son relativas a `src/v2/`. El ID `TR-xxxx` debe figurar en el nombre/comentario del nuevo caso. No existe todavía un equivalente implementado: ninguna fila autoriza eliminar el original. Una WO posterior puede dividir o fusionar archivos, pero debe reemplazar cada propuesta con el archivo y nombre de test reales antes de marcar `ported`.
 
-`pending`: conservar el efecto protegido y adaptar dependencias a puertos/fakes. `intencional-pending`: hay una expectativa legacy que cambia por §6; la nota define la expectativa v2. Tampoco está implementada. Los escenarios anotados como “relación” solo conectan requisitos: no afirman que el legacy cubra todo Sxx. “No aplica directamente” es una justificación explícita, no una celda pendiente de completar.
+`pending`: conservar el efecto protegido y adaptar dependencias a puertos/fakes. `intencional-pending`: hay una expectativa legacy que cambia por §6; la nota define la expectativa v2. Tampoco está implementada. Los escenarios anotados como “relación” solo conectan requisitos: no afirman que el legacy cubra todo Sxx. “No aplica directamente” es una justificación explícita, no una celda pendiente de completar. Checkpoint actual: 8 de 804 casos están portados con pruebas identificadas (TR-0214/0215, TR-0726–0729, TR-0803/0804); los otros 796 siguen pendientes o intencional-pending. Esto no cierra Ola A.
 
 Limitaciones: los títulos son el comportamiento declarado por el autor; no se certifica que todas sus aserciones lo cubran. Se revisaron cuerpos de activación grupal, selecciones, multimedia, proactivo y límites contradictorios; durante cada portado se revisarán todas las aserciones del caso. Los tests live se deben convertir en contratos con fakes para verificación local. Tests acoplados a usuario/UID, fuentes de código, Maps o APIs legacy requieren adaptar la implementación protegida sin eliminar cobertura. No se presupone ningún DROP.
 
@@ -448,8 +448,8 @@ Destino de tests propuesto: `tests/unit/legacy/convertir_documentos.test.js`. Ca
 
 | ID | Línea legacy | Comportamiento protegido (título) | Etapa/feature v2 propuesta | Escenario | Estado y nota |
 |---|---:|---|---|---|---|
-| TR-0214 | 10 | Convertir: Rechaza formato desconocido amigablemente | features/convertir + features/documentos + features/contentReader | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0215 | 27 | Convertir: Rechaza si no se adjunta archivo ni url | features/convertir + features/documentos + features/contentReader | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
+| TR-0214 | 10 | Convertir: Rechaza formato desconocido amigablemente | features/convertir + features/documentos + features/contentReader | `tests/unit/v2/features/legacyTrace0214-0215.test.js` — `TR-0214: convertir rejects an unknown output format with user-facing guidance before processing` | implemented: respuesta de formato inválido y cero llamadas al puerto de proceso. |
+| TR-0215 | 27 | Convertir: Rechaza si no se adjunta archivo ni url | features/convertir + features/documentos + features/contentReader | `tests/unit/v2/features/legacyTrace0214-0215.test.js` — `TR-0215: convertir without attachment or URL asks for a file/link and does not expose a stack` | implemented: solicita archivo/enlace, evita stack y no invoca el puerto. |
 
 ## test/cooperacha.test.js
 
@@ -1282,10 +1282,10 @@ Destino de tests propuesto: `tests/unit/legacy/tts.test.js`. Cada ID representa 
 
 | ID | Línea legacy | Comportamiento protegido (título) | Etapa/feature v2 propuesta | Escenario | Estado y nota |
 |---|---:|---|---|---|---|
-| TR-0726 | 8 | TTS: limpia emojis y markdown para síntesis de voz | features/voice | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0727 | 14 | TTS: resuelve perfiles regionales y de efectos correctamente | features/voice | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0728 | 28 | TTS: genera archivo de audio mp3 con fallback resiliente y ejecuta cleanup | features/voice | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0729 | 38 | TTS: genera archivo de audio con ElevenLabs cuando se solicita daniel | features/voice | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
+| TR-0726 | 8 | TTS: limpia emojis y markdown para síntesis de voz | features/voice | `tests/unit/v2/adapters/legacyTrace0726-0729.test.js` — `TR-0726: speech cleanup removes emoji, markdown, URL and keeps the spoken question` | implemented: misma transformación de limpieza antes de síntesis. |
+| TR-0727 | 14 | TTS: resuelve perfiles regionales y de efectos correctamente | features/voice | `tests/unit/v2/adapters/legacyTrace0726-0729.test.js` — `TR-0727: regional and character voice requests resolve to their supported synthesis profiles` | implemented: perfiles regionales/personaje y efectos contrastados con voces/filtros del adaptador. |
+| TR-0728 | 28 | TTS: genera archivo de audio mp3 con fallback resiliente y ejecuta cleanup | features/voice | `tests/unit/v2/adapters/legacyTrace0726-0729.test.js` — `TR-0728: failed primary TTS falls back to synthetic local gTTS output and release removes the measured MP3` | implemented: fallo primario, fallback, MP3 sintético medible, perfil Colombiano y borrado. |
+| TR-0729 | 38 | TTS: genera archivo de audio con ElevenLabs cuando se solicita daniel | features/voice | `tests/unit/v2/adapters/legacyTrace0726-0729.test.js` — `TR-0729: the optional ElevenLabs contract receives daniel and its synthetic MP3 is released` | implemented: contrato ElevenLabs fixture recibe daniel/texto, genera MP3 medible y libera archivo; sin llamada a proveedor real. |
 
 ## test/unification_json_cli.test.js
 
@@ -1394,5 +1394,5 @@ Destino de tests propuesto: `tests/unit/legacy/whisper.test.js`. Cada ID represe
 
 | ID | Línea legacy | Comportamiento protegido (título) | Etapa/feature v2 propuesta | Escenario | Estado y nota |
 |---|---:|---|---|---|---|
-| TR-0803 | 11 | Whisper: transcribeAudio transcribe archivo de audio con Groq | features/transcripcion | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
-| TR-0804 | 25 | Whisper: summarizeTranscription genera resumen conciso para audios extensos | features/transcripcion | No aplica directamente; regresión legacy. | pending: Portar; equivalente aún no implementado. |
+| TR-0803 | 11 | Whisper: transcribeAudio transcribe archivo de audio con Groq | features/transcripcion | `tests/unit/v2/adapters/legacyTrace0803-0804.test.js` — `TR-0803: a synthetic OGG is multipart-submitted to the Groq transcription port and returns its transcript` | implemented: OGG sintético, formulario multipart Groq fixture, texto/duración/idioma, sin fallback y límite temporal; sin red externa. |
+| TR-0804 | 25 | Whisper: summarizeTranscription genera resumen conciso para audios extensos | features/transcripcion | `tests/unit/v2/adapters/legacyTrace0803-0804.test.js` — `TR-0804: long-audio summary receives the complete transcript once and returns concise text` | implemented: transcript completo llega una vez al puerto de resumen y se devuelve texto conciso. |

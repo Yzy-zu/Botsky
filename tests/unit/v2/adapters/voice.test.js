@@ -6,6 +6,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { createVoiceMedia, cleanTextForSpeech, resolveVoice } = require('../../../../src/v2/adapters/media/voice');
+const { AppError } = require('../../../../src/v2/domain/errors');
 
 async function fixture(options = {}) {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'voice-media-test-'));
@@ -53,6 +54,21 @@ test('verbatim preparation bypasses the LLM and preserves literal wording', asyn
     assert.equal(overText.success, false);
     const overDuration = await f.adapter.prepareScript({ literalText: 'exact', mode: 'verbatim', durationSeconds: 601 }, new AbortController().signal);
     assert.equal(overDuration.needsClarification, true);
+});
+
+test('verbatim preparation can use quoted text directly and still enforces the text cap', async t => {
+    const f=await fixture();t.after(()=>fs.rm(f.root,{recursive:true,force:true}));
+    const quoted=await f.adapter.prepareScript({mode:'verbatim',quotedText:'  Texto citado exacto  '},new AbortController().signal);
+    assert.equal(quoted.text,'Texto citado exacto');
+    const over=await f.adapter.prepareScript({mode:'verbatim',quotedText:'x'.repeat(20001)},new AbortController().signal);
+    assert.equal(over.success,false);assert.match(over.error,/demasiado largo/);
+    assert.equal(f.calls.length,0,'quoted verbatim stays off the provider');
+});
+
+test('typed provider errors from script preparation survive for the pipeline feedback mapper', async t => {
+    const quota=new AppError('quota');
+    const f=await fixture({callLLM:async()=>{throw quota;}});t.after(()=>fs.rm(f.root,{recursive:true,force:true}));
+    await assert.rejects(f.adapter.prepareScript({request:'resume',mode:'compose'},new AbortController().signal),error=>error===quota);
 });
 
 test('compose script sends bounded semantic context to the injected LLM and validates response', async t => {
@@ -103,6 +119,7 @@ test('TTS keeps option-looking user text inside the text argument for Edge and g
     assert.ok(edge.calls.some(call => call.command === 'edge-tts' && call.args.includes(`--text=${payload}`)));
 
     const fallback = await fixture({ run: async (command, args) => {
+        if (command === 'ffprobe') return { stdout:'8.0' };
         if (command === 'edge-tts') throw Error('synthetic edge failure');
         await fs.writeFile(args[args.indexOf('--output') + 1], Buffer.from('fallback')); return {};
     } });
@@ -121,6 +138,7 @@ test('professional/persona voices prefer optional ElevenLabs; failures fall back
     assert.equal(result.mime, 'audio/mpeg');
 
     const fallback = await fixture({ run: async (command, args) => {
+        if (command === 'ffprobe') return { stdout:'8.0' };
         if (command === 'edge-tts') throw new Error('offline edge');
         await fs.writeFile(args[args.indexOf('--output') + 1], Buffer.from('fallback')); return {};
     } });
@@ -131,9 +149,10 @@ test('professional/persona voices prefer optional ElevenLabs; failures fall back
     assert.equal(backup.mime, 'audio/mpeg');
 });
 
-test('duration measurement and fitting use bounded ffprobe/ffmpeg filters and honor adjustment bounds', async t => {
-    const f = await fixture({ durations: ['10.8', '10.1', '10.1'] }); t.after(() => fs.rm(f.root, { recursive: true, force: true }));
+test('synthesis reports measured duration and fitting uses bounded ffprobe/ffmpeg filters and honors adjustment bounds', async t => {
+    const f = await fixture({ durations: ['10.8', '10.8', '10.1', '10.1'] }); t.after(() => fs.rm(f.root, { recursive: true, force: true }));
     const media = await f.adapter.synthesize('Hola', { voice: 'hombre', signal: new AbortController().signal });
+    assert.equal(media.durationSeconds,10.8);
     const fitted = await f.adapter.fitDuration(media, 10, new AbortController().signal);
     assert.equal(fitted.durationSeconds, 10.1);
     assert.match(fitted.ref, /voice-timed\.mp3$/);

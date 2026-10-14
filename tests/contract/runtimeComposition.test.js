@@ -102,6 +102,8 @@ test('acknowledged returned media caches only opaque provider identity for exact
  assert.equal(attachment.ref,'provider-media:provider-id-1');assert.equal(attachment.ownerJid,botJid);
  assert.deepEqual(attachment.providerKey,{id:'provider-id-1',remoteJid:chatId,fromMe:true});
  assert.equal(attachment.expiresAt,5000+10*60*1000);
+ assert.equal(rememberDeliveredMedia(store,clock,botJid,ctx,{type:'audio',ref:'/private/audio.mp3',mime:'audio/mpeg',transcript:'Hola',durationSeconds:2},{messageId:'voice-meta'}),true);
+ const voice=store.get('pipeline.attachment.id',JSON.stringify([chatId,'voice-meta']));assert.equal(voice.transcript,'Hola');assert.equal(voice.durationSeconds,2);assert.equal(voice.ref,'provider-media:voice-meta');
  assert.equal(rememberDeliveredMedia(store,clock,botJid,ctx,{type:'image',ref:'/private/path.png',mime:'image/png'},{}),false);
  let hydrated;
  const download=createAttachmentDownload({downloadMedia:async message=>{hydrated=message;return{buffer:Buffer.from('x'),extension:'webp'};}});

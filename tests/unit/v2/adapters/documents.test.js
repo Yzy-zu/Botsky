@@ -23,7 +23,8 @@ async function harness(options={}) {
         ['media://pdf-a',{buffer:PDF,extension:'pdf',originalFileName:'a.pdf'}],
         ['media://pdf-b',{buffer:PDF,extension:'pdf',originalFileName:'b.pdf'}],
         ['media://image',{buffer:PNG,extension:'png',originalFileName:'image.png'}],
-        ['media://text',{buffer:Buffer.from('Línea uno\nLínea dos'),extension:'txt',originalFileName:'notes.txt'}]
+        ['media://text',{buffer:Buffer.from('Línea uno\nLínea dos'),extension:'txt',originalFileName:'notes.txt'}],
+        ['media://html',{buffer:Buffer.from('<p>Hola <b>mundo</b></p><script>secreto</script>'),extension:'html',originalFileName:'page.html'}]
     ]);
     const run=async(command,args,options)=>{
         commands.push({command,args:[...args],options});
@@ -114,12 +115,17 @@ test('PDF raster extraction supports ordered pages and ZIP while keeping only de
     } finally { await h.dispose(); }
 });
 
-test('readContent uses pdftotext, UTF-8 text decoding and only injected OCR for images',async()=>{
+test('readContent delegates PDF, text, Office, HTML and OCR through injected reader ports',async()=>{
     const h=await harness({ocr:async(file,{mime,language,signal})=>{assert.equal(mime,'image/png');assert.equal(language,'spa+eng');signal.throwIfAborted();assert.ok(file.endsWith('.png'));return '  texto OCR  ';}});
     try {
         assert.equal(await h.adapter.readContent(source('media://pdf-a','application/pdf'),{signal:new AbortController().signal}),'Extraído del PDF');
         assert.equal(await h.adapter.readContent(source('media://text','text/plain'),{signal:new AbortController().signal}),'Línea uno\nLínea dos');
+        const optionalKind=source('media://text','text/plain');delete optionalKind.attachment.kind;
+        assert.equal(await h.adapter.readContent(optionalKind,{signal:new AbortController().signal}),'Línea uno\nLínea dos');
+        assert.equal(await h.adapter.readContent(source('media://html','text/html'),{signal:new AbortController().signal}),'Hola mundo');
+        assert.equal(await h.adapter.readContent(source('media://office','application/vnd.openxmlformats-officedocument.wordprocessingml.document'),{signal:new AbortController().signal}),'Extraído del PDF');
         assert.equal(await h.adapter.readContent(source('media://image','image/png','image'),{signal:new AbortController().signal}),'texto OCR');
+        assert.ok(h.commands.some(item=>item.command==='libreoffice'));
         assert.ok(h.commands.some(item=>item.command==='pdftotext'&&item.args.includes('-layout')));
     } finally { await h.dispose(); }
 });

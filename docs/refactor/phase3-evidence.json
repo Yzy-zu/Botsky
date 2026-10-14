@@ -1,19 +1,19 @@
 {
   "status": "closed_with_exception_F3-E001",
-  "recordedAt": "2026-10-14T10:04:45.889181+00:00",
+  "recordedAt": "2026-10-14T10:37:01.343422+00:00",
   "verify": {
     "exitCode": 0,
+    "pass": 390,
     "fail": 0,
-    "report": "/tmp/botsky-wave-a-runtime-verify.log",
-    "sha256": "57aeefd6aed68d9bf6523a8f15a4c5012acdc2cd8cfd2afc75d68318c708e49c",
-    "pass": 353
+    "report": "/tmp/botsky-wave-a-parity-checkpoint-verify.log",
+    "sha256": "f6275c97a47b1c8d6a618cdc3a86f7bfee41b08918ca8cfda4221d221668959d"
   },
   "refactor": {
     "exitCode": 0,
+    "pass": 59,
     "fail": 0,
-    "report": "/tmp/botsky-wave-a-runtime-refactor.tap",
-    "sha256": "1aa1fd757a40f3d02552dd0c19442f908eea363f4bd681b8750539224361532a",
-    "pass": 59
+    "report": "/tmp/botsky-wave-a-parity-checkpoint-refactor.tap",
+    "sha256": "4f19fc89b0f7c9298a868af5ccf09bf8df670b2131f6e32ca509f905d5ec1855"
   },
   "coverage": [
     {
@@ -145,7 +145,8 @@
     "installedSourceCommit": "3c56f0a",
     "installedSourceHashCheck": "73 files, zero mismatches on 2026-10-13T10:15Z",
     "localCorrectionsDeployed": false,
-    "difference": "Canonical normalized-input validation and asynchronous shutdown/cancellation fixes are local only. No live restart or source overwrite; the shadow never executes its business executor/composer."
+    "difference": "Canonical normalized-input validation and asynchronous shutdown/cancellation fixes are local only. No live restart or source overwrite; the shadow never executes its business executor/composer.",
+    "snapshot": "Historical initial shadow deployment; observer cancelled F3-E001. Current deployment is recorded in phase4-evidence.json."
   },
   "exceptions": [
     {

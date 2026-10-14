@@ -58,10 +58,15 @@ function createComposer({ messenger, llm, record = async () => {}, rememberSent 
             }
             if (part.type === 'reaction') delivery = await messenger.react(ctx.event.chatId, part.emoji, part.messageId);
             else if (part.type === 'sticker') delivery = await messenger.sendSticker(ctx.event.chatId, part.ref);
-            else if (part.type === 'audio') delivery = await messenger.sendVoice(ctx.event.chatId, part.ref);
+            else if (part.type === 'audio') delivery = part.transcript !== undefined || part.durationSeconds !== undefined
+                ? await messenger.sendVoice(ctx.event.chatId, part.ref, {transcript:part.transcript,durationSeconds:part.durationSeconds})
+                : await messenger.sendVoice(ctx.event.chatId, part.ref);
             else if (part.type === 'poll') throw new Error('Poll delivery port is not enabled before the poll migration.');
             else delivery = await messenger.sendMedia(ctx.event.chatId, part.ref, part.caption || '', part.type === 'document', false, null, null, textOptions);
-            remember(delivery, ctx.event.chatId);
+            const acknowledgedId = remember(delivery, ctx.event.chatId);
+            if (part.type === 'audio' && acknowledgedId && part.transcript) {
+                try { await record(ctx, `[Nota de voz: ${part.transcript}]`); } catch { observationFailures++; }
+            }
             if (part.type === 'image' || part.type === 'video' || part.type === 'audio' || part.type === 'document' || part.type === 'sticker') {
                 try { await rememberMedia(ctx, part, delivery); } catch { observationFailures++; }
             }
@@ -73,6 +78,7 @@ function createComposer({ messenger, llm, record = async () => {}, rememberSent 
         const value = /** @type {{messageId?:string,data?:{key?:{id?:string}}}} */ (delivery);
         const id = value?.messageId || value?.data?.key?.id;
         if (typeof id === 'string' && id) { try { rememberSent(chatId, id); } catch { observationFailures++; } }
+        return typeof id === 'string' && id ? id : undefined;
     }
     return { compose, get observationFailures() { return observationFailures; } };
 }

@@ -92,6 +92,30 @@ test('PDF collection cancellation, unsupported merge files and document conversi
     } finally { f.dispose(); }
 });
 
+test('bare matching media continues only the active same-chat, same-owner PDF collection until its TTL expires',async()=>{
+    const f=setup();
+    try {
+        const doc=f.feature.commands.find(item=>item.name==='doc').handler;
+        const merge=f.feature.commands.find(item=>item.name==='unirpdf').handler;
+        await doc(context(),{format:'pdf'},abort);
+        const firstImage={...image,chatId:CHAT};
+        assert.deepEqual(f.feature.attachmentContinuation(context(firstImage)),{name:'doc',args:{format:'pdf'}});
+        assert.equal(f.feature.attachmentContinuation(context(image)),undefined,'missing chat identity fails closed');
+        assert.equal(f.feature.attachmentContinuation(context({...image,ownerJid:OTHER,chatId:CHAT})),undefined);
+        const otherChat=context(firstImage);otherChat.event.chatId='19995558888@g.us';
+        assert.equal(f.feature.attachmentContinuation(otherChat),undefined);
+        assert.equal(f.feature.attachmentContinuation(context({...image,kind:'audio',mime:'audio/ogg',chatId:CHAT})),undefined);
+        const captioned=context(firstImage);captioned.event.text='convert this';
+        assert.equal(f.feature.attachmentContinuation(captioned),undefined);
+
+        await merge(context(pdf),{},abort);
+        assert.deepEqual(f.feature.attachmentContinuation(context({...pdf,chatId:CHAT})),{name:'unirpdf',args:{}});
+        assert.equal(f.feature.attachmentContinuation(context(firstImage)),undefined,'image cannot enter an active PDF merge');
+        await f.clock.advance(SESSION_TTL_MS);
+        assert.equal(f.feature.attachmentContinuation(context({...pdf,chatId:CHAT})),undefined,'expired collection is inert');
+    } finally { f.dispose(); }
+});
+
 test('PDF tools dispatch named operations and the reader port returns only extracted text',async()=>{
     const f=setup();
     try {
@@ -103,7 +127,7 @@ test('PDF tools dispatch named operations and the reader port returns only extra
         const read=await get('leer')(context(image),{},abort);
         assert.equal(read.parts[0].text,'Esto alcancé a leer:\n\ntexto sintético');
         const unavailable=await get('leer')(context(undefined),{},abort);
-        assert.match(unavailable.parts[0].text,/Responde a la imagen/);
+        assert.match(unavailable.parts[0].text,/Responde al archivo/);
     } finally { f.dispose(); }
 });
 
@@ -115,8 +139,20 @@ test('document processing and reading failures are user safe and cancellation st
         assert.match(reply.parts[0].text,/No pude procesar el archivo/);
         assert.doesNotMatch(reply.parts[0].text,/private|API_KEY|Error:/);
         const read=await f.feature.commands.find(item=>item.name==='leer').handler(context(image),{},abort);
-        assert.match(read.parts[0].text,/No pude leer esa imagen/); assert.equal(readCalls,1);
+        assert.match(read.parts[0].text,/No pude leer ese archivo/); assert.equal(readCalls,1);
         const controller=new AbortController();controller.abort();
         await assert.rejects(f.feature.commands.find(item=>item.name==='comprimir').handler(context(pdf),{},controller.signal),{name:'AbortError'});
+    } finally { f.dispose(); }
+});
+
+test('leer accepts supported text and Office document attachments',async()=>{
+    const f=setup();
+    try {
+        const read=f.feature.commands.find(item=>item.name==='leer').handler;
+        const textFile={kind:'document',mime:'text/plain',ref:'media://notes.txt'};
+        const officeFile={kind:'document',mime:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',ref:'media://notes.docx'};
+        assert.match((await read(context(textFile),{},abort)).parts[0].text,/texto sintético/);
+        assert.match((await read(context(officeFile),{},abort)).parts[0].text,/texto sintético/);
+        assert.equal(f.calls.length,0);
     } finally { f.dispose(); }
 });

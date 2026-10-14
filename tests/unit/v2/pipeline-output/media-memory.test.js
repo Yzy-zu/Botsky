@@ -13,6 +13,16 @@ function makeComposer(options = {}) {
     });
 }
 
+test('voice metadata reaches delivery and history only after a provider acknowledgement',async()=>{
+    for(const receipt of [{data:{key:{id:'voice-ack'}}},null]){
+        const records=[],calls=[];
+        const composer=makeComposer({messenger:{sendVoice:async(...args)=>{calls.push(args);return receipt;}},record:async(_ctx,text)=>records.push(text)});
+        await composer.compose(context(),{parts:[{type:'audio',ref:'/synthetic/voice.mp3',mime:'audio/mpeg',transcript:'Buenos días',durationSeconds:3.2}]});
+        assert.deepEqual(calls[0],['19995559999@g.us','/synthetic/voice.mp3',{transcript:'Buenos días',durationSeconds:3.2}]);
+        assert.deepEqual(records,receipt?['[Nota de voz: Buenos días]']:[]);
+    }
+});
+
 test('passes delivered media and reply context to rememberMedia before releasing its ref', async () => {
     const order = [], ctx = context();
     const part = {type:'image',ref:'/synthetic/image.png',mime:'image/png',caption:'photo'};

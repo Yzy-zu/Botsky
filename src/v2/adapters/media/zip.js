@@ -6,12 +6,13 @@ const path = require('node:path');
 
 const MAX_FILES = 100;
 const DEFAULT_MAX_BYTES = 20 * 1024 * 1024;
+const MAX_CLASSIC_ZIP_BYTES = 0xffffffff;
 
 /** @typedef {{path:string,name:string}} ZipFile */
 /** @param {ZipFile[]} files @param {string} output @param {{signal:AbortSignal,maxBytes?:number,fs?:typeof fsPromises}} options */
 async function writeZip(files, output, { signal, maxBytes = DEFAULT_MAX_BYTES, fs = fsPromises }) {
     if (!Array.isArray(files) || files.length < 1 || files.length > MAX_FILES) throw new Error('Invalid ZIP file count');
-    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > DEFAULT_MAX_BYTES) throw new Error('Invalid ZIP byte limit');
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_CLASSIC_ZIP_BYTES) throw new Error('Invalid ZIP byte limit');
     if (!path.isAbsolute(output) || path.resolve(output) !== output) throw new Error('Invalid ZIP output path');
     const root = path.dirname(output);
     const rootStat = await fs.lstat(root);
@@ -19,17 +20,21 @@ async function writeZip(files, output, { signal, maxBytes = DEFAULT_MAX_BYTES, f
     const names = new Set();
     const contents = [];
     let total = 0;
+    let archiveEstimate = 22;
     for (const file of files) {
         signal.throwIfAborted();
         if (!file || typeof file.path !== 'string' || !path.isAbsolute(file.path) || path.dirname(path.resolve(file.path)) !== root) throw new Error('ZIP input is outside output directory');
         if (!validName(file.name) || names.has(file.name)) throw new Error('Invalid or duplicate ZIP entry name');
         names.add(file.name);
+        const nameBytes=Buffer.byteLength(file.name,'utf8');
         const stat = await fs.lstat(file.path);
         if (!stat.isFile() || stat.isSymbolicLink() || await fs.realpath(file.path) !== file.path) throw new Error('ZIP input is not an owned regular file');
-        if (!Number.isSafeInteger(stat.size) || stat.size < 0 || stat.size > maxBytes - total) throw new Error('ZIP inputs exceed byte limit');
+        const entryBytes=30+nameBytes+46+nameBytes;
+        if (!Number.isSafeInteger(stat.size) || stat.size < 0 || stat.size > maxBytes-total-entryBytes-archiveEstimate) throw new Error('ZIP inputs exceed byte limit');
+        archiveEstimate+=entryBytes;
         const data = await fs.readFile(file.path);
         total += data.length;
-        if (total > maxBytes) throw new Error('ZIP inputs exceed byte limit');
+        if (total+archiveEstimate > maxBytes) throw new Error('ZIP inputs exceed byte limit');
         contents.push({ name: Buffer.from(file.name, 'utf8'), data });
     }
     signal.throwIfAborted();
@@ -60,6 +65,7 @@ async function writeZip(files, output, { signal, maxBytes = DEFAULT_MAX_BYTES, f
     end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(contents.length, 8); end.writeUInt16LE(contents.length, 10);
     end.writeUInt32LE(centralDirectory.length, 12); end.writeUInt32LE(localDirectory.length, 16); end.writeUInt16LE(0, 20);
     const archive = Buffer.concat([localDirectory, centralDirectory, end]);
+    if(archive.length>maxBytes||archive.length>MAX_CLASSIC_ZIP_BYTES||localDirectory.length>MAX_CLASSIC_ZIP_BYTES||centralDirectory.length>MAX_CLASSIC_ZIP_BYTES)throw new Error('ZIP archive exceeds classic format byte limit');
     let created = false;
     /** @type {import('node:fs/promises').FileHandle|undefined} */
     let handle;
@@ -95,4 +101,4 @@ function crc32(buffer) {
     return (crc ^ 0xffffffff) >>> 0;
 }
 
-module.exports = { writeZip };
+module.exports = { writeZip, DEFAULT_MAX_BYTES, MAX_CLASSIC_ZIP_BYTES };

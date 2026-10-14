@@ -63,7 +63,9 @@ function rememberDeliveredMedia(store,clock,botJid,ctx,part,delivery) {
     const expected={image:'image/',video:'video/',audio:'audio/',document:'application/',sticker:'image/'};
     if (!mime.toLowerCase().startsWith(expected[mediaType])) return false;
     const attachment={id,chatId:ctx.event.chatId,ownerJid:botJid,expiresAt:clock.now()+RETURNED_MEDIA_TTL_MS,
-        ref:`provider-media:${id}`,mime,kind:mediaType,providerKey:{id,remoteJid:ctx.event.chatId,fromMe:true}};
+        ref:`provider-media:${id}`,mime,kind:mediaType,providerKey:{id,remoteJid:ctx.event.chatId,fromMe:true},
+        ...(mediaType==='audio'&&typeof part.transcript==='string'?{transcript:part.transcript}:{}),
+        ...(mediaType==='audio'&&typeof part.durationSeconds==='number'&&Number.isFinite(part.durationSeconds)&&part.durationSeconds>0?{durationSeconds:part.durationSeconds}:{})};
     store.set('pipeline.attachment.id',JSON.stringify([ctx.event.chatId,id]),attachment,RETURNED_MEDIA_TTL_MS);
     return true;
 }
@@ -71,9 +73,9 @@ function rememberDeliveredMedia(store,clock,botJid,ctx,part,delivery) {
 /**
  * Build a separate, disposable v2 runtime graph. Calling this function performs
  * the explicit SQLite and directory IO; importing this module performs none.
- * @param {{config:Record<string,any>,clock:import('../platform/clock').Clock,evolutionHttp:import('../adapters/evolution/client').HttpClient,llm:import('../domain/ports').LLM,http:import('../adapters/media/transcription').TranscriptionAdapterOptions['http'],formData:import('../adapters/media/transcription').TranscriptionAdapterOptions['formData'],sidecarDbFilename:string,backupPath:string,logger?:{info:(message:string)=>void,warn:(message:string)=>void}}} options
+ * @param {{config:Record<string,any>,clock:import('../platform/clock').Clock,evolutionHttp:import('../adapters/evolution/client').HttpClient,llm:import('../domain/ports').LLM,http:import('../adapters/media/transcription').TranscriptionAdapterOptions['http'],formData:import('../adapters/media/transcription').TranscriptionAdapterOptions['formData'],elevenLabs?:Parameters<typeof createMediaServices>[0]['elevenLabs'],sidecarDbFilename:string,backupPath:string,logger?:{info:(message:string)=>void,warn:(message:string)=>void}}} options
  */
-async function createRuntime({config,clock,evolutionHttp,llm,http,formData,sidecarDbFilename,backupPath,logger={info(){},warn(){}}}) {
+async function createRuntime({config,clock,evolutionHttp,llm,http,formData,elevenLabs,sidecarDbFilename,backupPath,logger={info(){},warn(){}}}) {
     if (!config || typeof config !== 'object' || !clock || !evolutionHttp || !llm || !http || typeof formData !== 'function') throw new TypeError('Validated runtime dependencies are required');
     const botJid = normalizeJid(String(config.BOT_NUMBER || '').includes('@') ? String(config.BOT_NUMBER) : `${String(config.BOT_NUMBER || '')}@s.whatsapp.net`);
     if (!botJid) throw new TypeError('A valid configured BOT_NUMBER is required');
@@ -118,7 +120,7 @@ async function createRuntime({config,clock,evolutionHttp,llm,http,formData,sidec
             maxFileSizeMb:Number(config.MAX_FILE_SIZE_MB || 64),maxDocumentSizeMb:Number(config.MAX_DOCUMENT_SIZE_MB || 200),
             maxDownloadBytes:Number(config.MAX_FILE_SIZE_MB || 64)*1024*1024});
 
-        media = createMediaServices({config,clock,llm,evolution,http,formData});
+        media = createMediaServices({config,clock,llm,evolution,http,formData,elevenLabs});
         const roles = {admins:normalizeConfiguredJids(config.ALLOWED_NUMBERS_ADMIN || [],'s.whatsapp.net'),owners:[],
             members:normalizeConfiguredJids([...(config.ALLOWED_NUMBERS_NORMAL || []),...(config.ALLOWED_NUMBERS_TASKS || [])],'s.whatsapp.net'),groups:allowedGroups};
         const startedAt = clock.now();

@@ -16,7 +16,8 @@ test('legacy import/startup does not construct graph; private canary owns only i
  assert.equal(await service.tryHandle(raw('Botsky voz hola')),false);
  assert.equal(await service.tryHandle(raw('Botsky lee un QR')),false);
  assert.equal(await service.tryHandle({key:{id:'quote',remoteJid:CHAT},message:{ephemeralMessage:{message:{extendedTextMessage:{text:'Botsky qr',contextInfo:{stanzaId:'media'}}}}}}),false);
- assert.equal(calls.length,1);await service.dispose();assert.equal(disposed,1);
+ assert.equal(await service.tryHandle(raw('Botsky qr minecraft --to otro-chat')),true);
+ assert.equal(calls.length,2);await service.dispose();assert.equal(disposed,1);
 });
 test('failed owned request never replays; uncaptioned media keeps legacy owner; full/group cutover refused',async()=>{
  const clock=new FakeClock();let calls=0;

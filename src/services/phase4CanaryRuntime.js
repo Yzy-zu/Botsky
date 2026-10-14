@@ -30,6 +30,8 @@ function createPhase4Service({root,clock=new SystemClock(),buildGraph,logger={in
     function eligible(raw){
         const {text,media,quoted}=messageText(raw);const clean=text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
         if(!clean.trim())return false;
+        // Literal QR contents cannot change the selected feature or destination.
+        if(enabled.has('qr')&&!media&&!quoted&&/^(?:(?:botsky|botsito)[,:]?\s+)?qr(?:\s+|$)/u.test(clean.trim()))return true;
         // Until later waves are ported, requests naming their domain stay with v1.
         if(/\b(?:minecraft|maicra|recordatorios?|notas?|tareas?|escuela|ruleta|blackjack|daily|niveles?|xp|cooperacha|packs?|nopor|terminal|sistema|drive|difusion|encuesta|airdrop)\b/.test(clean))return false;
         if(/--(?:to|destino|para)\b/.test(clean))return false;
@@ -91,12 +93,15 @@ async function defaultGraph({config,clock,root}){
     const axios=require('axios');const FormData=require('form-data');
     const {createClient}=require('../v2/adapters/evolution');
     const {createAiAdapter}=require('../v2/adapters/ai');
+    const {createElevenLabsMedia}=require('../v2/adapters/media/elevenLabs');
     const {createRuntime}=require('../v2/composition/runtime');
-    const http={post:(url,payload,options)=>axios.post(url,payload,options)};
+    const http={get:(url,options)=>axios.get(url,options),post:(url,payload,options)=>axios.post(url,payload,options)};
     const client=createClient({baseUrl:String(config.EVOLUTION_API_URL),apiKey:String(config.EVOLUTION_API_KEY),clock});
     const llm=createAiAdapter({config:()=>config,clock,http});
+    const elevenLabsMedia=createElevenLabsMedia({http,config:{elevenLabsApiKey:String(config.ELEVENLABS_API_KEY||'')},clock});
+    const elevenLabs=async(text,voice,signal)=>(await elevenLabsMedia.generateAudio(text,voice,signal)).buffer;
     const stateDirectory=path.join(path.resolve(root,String(config.DATA_DIR||'data')),'v2');
-    return createRuntime({config,clock,evolutionHttp:client,llm,http,formData:()=>new FormData(),
+    return createRuntime({config,clock,evolutionHttp:client,llm,http,formData:()=>new FormData(),elevenLabs,
         sidecarDbFilename:path.join(stateDirectory,'canary.db'),backupPath:path.join(stateDirectory,'backups',`before-${clock.now()}.db`)});
 }
-module.exports={createPhase4Service,messageText};
+module.exports={createPhase4Service,messageText,defaultGraph};

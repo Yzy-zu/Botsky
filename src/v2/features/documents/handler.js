@@ -79,6 +79,16 @@ function createDocumentHandlers(ports) {
         return run(ctx, 'convert-document', { ...args, format }, signal);
     }
 
+    /** Pure selector for an addressed user's active PDF collection. @param {import('../../pipeline/contracts').Ctx} ctx */
+    function attachmentContinuation(ctx) {
+        const attachment=ctx.attachment;
+        if (!attachment || ctx.event.text.trim() || attachment.ownerJid!==ctx.event.sender.jid || attachment.chatId!==ctx.event.chatId) return undefined;
+        const current=/** @type {{kind:'images'|'pdfs',items:DocumentSource[]}|undefined} */(store.get(SESSION_NS,ownerKey(ctx)));
+        if (current?.kind==='images' && isImage(attachment)) return {name:'doc',args:{format:'pdf'}};
+        if (current?.kind==='pdfs' && isPdf(attachment)) return {name:'unirpdf',args:{}};
+        return undefined;
+    }
+
     /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
     async function collectPdfs(ctx, args, signal) {
         const stateKey = ownerKey(ctx);
@@ -106,7 +116,7 @@ function createDocumentHandlers(ports) {
     async function read(ctx, _args, signal) {
         signal.throwIfAborted();
         const attachment = ctx.attachment;
-        if (!attachment || !(isImage(attachment) || isPdf(attachment))) return text(ctx, 'Responde a la imagen con `leer` y saco el texto.');
+        if (!attachment || !isReadable(attachment)) return text(ctx, 'Responde al archivo con `leer` y saco el texto de imágenes, PDF, texto u Office.');
         try {
             const value = await readContent(sourceOf(ctx), { signal });
             signal.throwIfAborted();
@@ -115,7 +125,7 @@ function createDocumentHandlers(ports) {
         } catch (error) {
             signal.throwIfAborted();
             if (error instanceof AppError) throw error;
-            return text(ctx, 'No pude leer esa imagen. Intenta de nuevo con una foto más nítida.');
+            return text(ctx, 'No pude leer ese archivo. Prueba con una copia legible o una foto más nítida.');
         }
     }
 
@@ -134,7 +144,7 @@ function createDocumentHandlers(ports) {
         return run(ctx, session.kind === 'images' ? 'images-to-pdf' : 'merge-pdfs', { count: session.items.length }, signal, session.items);
     }
 
-    return { convert, document, collectPdfs, compress, crop, pdfImages, read };
+    return { convert, document, collectPdfs, compress, crop, pdfImages, read, attachmentContinuation };
 }
 
 /** @param {import('../../pipeline/contracts').Ctx} ctx */
@@ -145,6 +155,14 @@ function sourceOf(ctx) { if (!ctx.attachment) throw new TypeError('Attachment re
 function isImage(attachment) { return attachment.kind === 'image' || attachment.mime.toLowerCase().startsWith('image/'); }
 /** @param {import('../../pipeline/contracts').Attachment} attachment */
 function isPdf(attachment) { return attachment.mime.toLowerCase() === 'application/pdf' || attachment.ref.toLowerCase().split(/[?#]/, 1)[0].endsWith('.pdf'); }
+/** @param {import('../../pipeline/contracts').Attachment} attachment */
+function isReadable(attachment) {
+    if(isImage(attachment)||isPdf(attachment))return true;
+    const mime=attachment.mime.toLowerCase().split(';',1)[0].trim();
+    const extension=String(attachment.ref).toLowerCase().split(/[?#]/,1)[0].split('.').pop()||'';
+    return mime.startsWith('text/')||mime==='application/json'||mime==='application/xhtml+xml'||
+        ['txt','md','csv','json','log','text','html','htm','docx','xlsx','pptx','odt','ods','odp','doc','xls','ppt'].includes(extension);
+}
 /** @param {unknown} value @param {string} fallback */
 function normalizedString(value, fallback) { return typeof value === 'string' ? value.trim().toLowerCase() || fallback : fallback; }
 /** @param {unknown} value @returns {value is string} */

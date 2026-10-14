@@ -7,6 +7,7 @@ const { createImageCensor } = require('../../../../src/v2/features/sticker/image
 const { createThumbnailCollage } = require('../../../../src/v2/features/sticker/thumbnailCollage');
 const { createVoiceFeature, parseExplicit: parseVoice } = require('../../../../src/v2/features/voice/manifest');
 const { isReply } = require('../../../../src/v2/domain/types');
+const { AppError } = require('../../../../src/v2/domain/errors');
 
 const signal = () => new AbortController().signal;
 function context({ attachment, quote } = {}) {
@@ -109,6 +110,8 @@ test('voice manifest keeps command aliases and explicit voice, duration, gender,
         { mode: 'verbatim', voice: 'mujer', literalText: 'Buenos días' });
     assert.deepEqual(parseVoice(['--goku', 'Vamos']), { mode: 'verbatim', voice: 'goku', literalText: 'Vamos' });
     assert.deepEqual(parseVoice(['-t', 'Hola']), { mode: 'verbatim', voice: 'hombre', literalText: 'Hola' });
+    assert.deepEqual(parseVoice(['--voice', 'humana', 'Hola']).voice,'humana');
+    assert.deepEqual(parseVoice(['--voice', 'paisa', 'Hola']).voice,'paisa');
     assert.equal(parseVoice(['--duration', '600', 'hola']).durationSeconds, 600);
     assert.equal(parseVoice(['x'.repeat(20000)]).literalText.length, 20000);
     assert.throws(() => parseVoice(['--duration', '999']), /Invalid explicit/);
@@ -153,7 +156,70 @@ test('voice handler uses injected script, synthesis, and duration ports and retu
     assert.deepEqual(calls[1], ['synthesize', 'Hola, aquí va.', 'goku']);
     assert.deepEqual(calls[2], ['fit', 8, 12]);
     assert.equal(reply.replyTo, 'in-media');
-    assert.deepEqual(reply.parts[0], { type: 'audio', ref: 'media://voice', mime: 'audio/ogg' });
+    assert.deepEqual(reply.parts[0], { type: 'audio', ref: 'media://voice', mime: 'audio/ogg', transcript:'Hola, aquí va.', durationSeconds:12 });
+});
+
+test('verbatim voice uses quoted text when literal text is absent and never rewrites it', async () => {
+    const calls=[];
+    const command=createVoiceFeature({
+        prepareScript:async input=>{calls.push(['script',input]);return{success:true,mode:'verbatim',text:input.literalText,voice:'mujer',durationSeconds:10};},
+        synthesize:async text=>{calls.push(['synthesize',text]);return{ref:'voice-original',mime:'audio/ogg',durationSeconds:13};},
+        fitDuration:async media=>media
+    }).commands[0];
+    const reply=await command.handler(context({quote:'Texto exacto citado'}),{mode:'verbatim',durationSeconds:10},signal());
+    assert.equal(calls[0][1].literalText,'Texto exacto citado');
+    assert.equal(calls.filter(([kind])=>kind==='synthesize').length,1);
+    assert.deepEqual(reply.parts,[{type:'audio',ref:'voice-original',mime:'audio/ogg',transcript:'Texto exacto citado',durationSeconds:13},
+        {type:'text',text:'La nota quedó en 13.0 s; buscábamos 10 s.'}]);
+});
+
+test('composed voice gets one duration revision and retains the closer recording', async () => {
+    const scripts=[];const synthesized=[];const released=[];
+    const command=createVoiceFeature({
+        prepareScript:async input=>{scripts.push(input);return scripts.length===1?{success:true,mode:'compose',text:'Primer borrador',voice:'hombre',durationSeconds:10}:
+            {success:true,mode:'compose',text:'Borrador ajustado',voice:'hombre',durationSeconds:10};},
+        synthesize:async text=>{synthesized.push(text);return{ref:`voice-${synthesized.length}`,mime:'audio/ogg',durationSeconds:synthesized.length===1?14:10.5};},
+        fitDuration:async media=>media,release:async ref=>{released.push(ref);}
+    }).commands[0];
+    const reply=await command.handler(context(),{mode:'compose',instruction:'Explica la reunión',durationSeconds:10},signal());
+    assert.equal(scripts.length,2);assert.equal(scripts[1].revision.previousText,'Primer borrador');
+    assert.equal(scripts[1].revision.measuredSeconds,14);assert.deepEqual(synthesized,['Primer borrador','Borrador ajustado']);
+    assert.deepEqual(released,['voice-1']);
+    assert.deepEqual(reply.parts,[{type:'audio',ref:'voice-2',mime:'audio/ogg',transcript:'Borrador ajustado',durationSeconds:10.5}]);
+});
+
+test('composed voice keeps the closer first recording and reports mismatch; unknown measurement does not retry', async () => {
+    let scripts=0,syntheses=0;const released=[];
+    const command=createVoiceFeature({
+        prepareScript:async()=>{scripts++;return{success:true,mode:'compose',text:scripts===1?'Initial':'Revision',durationSeconds:10};},
+        synthesize:async()=>{syntheses++;return{ref:`voice-${syntheses}`,mime:'audio/ogg',...(syntheses===1?{durationSeconds:12}:{durationSeconds:15})};},
+        fitDuration:async media=>media,release:async ref=>released.push(ref)
+    }).commands[0];
+    const reply=await command.handler(context(),{mode:'compose',instruction:'Resume',durationSeconds:10},signal());
+    assert.equal(syntheses,2);assert.deepEqual(released,['voice-2']);
+    assert.deepEqual(reply.parts,[{type:'audio',ref:'voice-1',mime:'audio/ogg',transcript:'Initial',durationSeconds:12},
+        {type:'text',text:'La nota quedó en 12.0 s; buscábamos 10 s.'}]);
+
+    scripts=0;syntheses=0;
+    const unknown=createVoiceFeature({prepareScript:async()=>{scripts++;return{success:true,text:'Sin medición',durationSeconds:10};},
+        synthesize:async()=>{syntheses++;return{ref:'voice-unmeasured',mime:'audio/ogg'};},fitDuration:async media=>media}).commands[0];
+    const unknownReply=await unknown.handler(context(),{mode:'compose',instruction:'Resume',durationSeconds:10},signal());
+    assert.equal(scripts,1);assert.equal(syntheses,1);assert.deepEqual(unknownReply.parts,[{type:'audio',ref:'voice-unmeasured',mime:'audio/ogg',transcript:'Sin medición'}]);
+});
+
+test('quota and cancellation during a duration revision release the first output exactly once', async () => {
+    for (const failure of ['quota','abort']) {
+        const controller=new AbortController();let scripts=0,syntheses=0;const released=[];
+        const command=createVoiceFeature({
+            prepareScript:async()=>{scripts++;if(scripts===2){if(failure==='abort')controller.abort();else throw new AppError('quota');}
+                return{success:true,mode:'compose',text:'Borrador',durationSeconds:10};},
+            synthesize:async()=>{syntheses++;return{ref:'voice-initial',mime:'audio/ogg',durationSeconds:12};},
+            fitDuration:async media=>media,release:async ref=>released.push(ref)
+        }).commands[0];
+        if(failure==='quota') await assert.rejects(command.handler(context(),{mode:'compose',instruction:'Resume',durationSeconds:10},controller.signal),{kind:'quota'});
+        else await assert.rejects(command.handler(context(),{mode:'compose',instruction:'Resume',durationSeconds:10},controller.signal),{name:'AbortError'});
+        assert.equal(syntheses,1);assert.deepEqual(released,['voice-initial']);
+    }
 });
 
 test('voice clarification, adapter failure, and cancellation never leak provider details', async () => {

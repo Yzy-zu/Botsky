@@ -7,7 +7,8 @@ const { gate } = require('./gate');
 const { addressingPolicy } = require('../policies/addressing.policy');
 const { attachmentPolicy } = require('../policies/attachment.policy');
 const { createRouter } = require('./router');
-const { createExecutor } = require('./executor');
+const { createExecutor, validArgs } = require('./executor');
+const { accessPolicy } = require('../policies/access.policy');
 const { createComposer, errorReply } = require('./composer');
 /** @typedef {import('./contracts').PipelineResult} PipelineResult */
 /** @typedef {import('./contracts').Ctx} Ctx */
@@ -35,18 +36,39 @@ function createPipeline(options) {
         // Shadow state is scoped to this pipeline instance; no business listeners.
         context.observe(event);
         const metadata = { ...context.addressingMetadata(event), now: clock.now(), botJid };
-        const addressed = addressingPolicy(event, metadata, { botJid, sessionGroupRelaxed, now: clock.now() });
+        let addressed = addressingPolicy(event, metadata, { botJid, sessionGroupRelaxed, now: clock.now() });
+        /** @type {import('../domain/types').Decision|undefined} */ let continuationDecision;
+        const bareMedia = Boolean(event.media) && event.text.trim()==='';
+        if (bareMedia && !addressed.respond) {
+            const selectorCtx = { event, addressing:addressed, history:[], ...(metadata.attachment?{attachment:metadata.attachment}:{}),
+                correlationId:event.id, roles:roles||{admins:[],owners:[]} };
+            continuationDecision = attachmentContinuation(features,selectorCtx,()=>{observationFailures++;});
+            if (continuationDecision) addressed = {respond:true,reason:'active-attachment-collection',addressedBy:'session'};
+        }
         if (!addressed.respond) return { kind: 'ignore', reason: addressed.reason, event, addressing: addressed };
         /** @type {Ctx} */
         let ctx = { event, addressing: addressed, history: [], correlationId: event.id, roles: roles || { admins: [], owners: [] } };
         try {
             ctx = await context.build(event, addressed);
             if (closed) return { kind: 'ignore', reason: 'pipeline-closed' };
+            if (bareMedia && !continuationDecision) continuationDecision = attachmentContinuation(features,ctx,()=>{observationFailures++;});
             if (!shadow && options.recordInbound) {
                 try { await options.recordInbound(ctx); }
                 catch { observationFailures++; }
             }
             if (closed) return { kind: 'ignore', reason: 'pipeline-closed' };
+            if (continuationDecision) {
+                const selected=continuationDecision;
+                if (shadow) return {kind:'decision',reason:'attachment-continuation',event,addressing:addressed,decision:selected};
+                const reply=await executor.execute(ctx,selected);
+                if (closed) return {kind:'ignore',reason:'pipeline-closed'};
+                const command=features.find(feature=>feature.id===selected.feature)?.commands.find(item=>item.name===selected.name);
+                const args=/** @type {Record<string,unknown>} */ (selected.args||{});
+                const composed=await composer.compose(ctx,reply,{allowLong:command?.allowLong,detailRequested:args.detail===true,status:selected.feature==='system-info'});
+                if (closed) return {kind:'ignore',reason:'pipeline-closed'};
+                if (composed.parts.length) afterReply(event);
+                return {kind:'reply',event,addressing:addressed,decision:selected,reply:composed};
+            }
             const attachment = attachmentPolicy(event, metadata);
             if (attachment.suggest) {
                 if (shadow) return { kind: 'decision', reason: 'attachment-suggestion', event, addressing: addressed, decision: { kind: 'intent', name: 'attachment.suggest', confidence: 1, via: 'rule' } };
@@ -110,5 +132,19 @@ function createPipeline(options) {
         return disposal;
     }
     return { handle, decideOnly, get observationFailures() { return observationFailures; }, dispose, context };
+}
+/** @param {import('./contracts').Feature[]} features @param {Ctx} ctx @param {()=>void} onFailure @returns {import('../domain/types').Decision|undefined} */
+function attachmentContinuation(features,ctx,onFailure) {
+    for (const feature of features) {
+        if (feature.enabled===false||typeof feature.attachmentContinuation!=='function') continue;
+        let selected;
+        try { selected=feature.attachmentContinuation(ctx); } catch { onFailure(); continue; }
+        if (!selected||typeof selected.name!=='string'||!selected.args||typeof selected.args!=='object'||Array.isArray(selected.args)) continue;
+        const command=feature.commands.find(command=>command.name===selected.name);
+        if (!command || !validArgs(selected.args,command.argsSchema)) continue;
+        if (!accessPolicy({senderJid:ctx.event.sender.jid,chatId:ctx.event.chatId,isGroup:ctx.event.isGroup,roles:ctx.roles,requiredAccess:command.access,scope:command.scope}).allow) continue;
+        return {kind:'command',feature:feature.id,name:selected.name,args:selected.args,confidence:1,via:'session'};
+    }
+    return undefined;
 }
 module.exports = { createPipeline };

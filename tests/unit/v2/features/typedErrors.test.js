@@ -39,9 +39,9 @@ test('transcription and voice rethrow typed provider errors while keeping untype
     const plainTranscription = createTranscriptionHandler({ transcribe: async () => { throw Error('secret'); } });
     assert.match((await plainTranscription(ctx, {}, signal())).parts[0].text, /No pude transcribir/);
     const voice = createVoiceHandler({ prepareScript: async () => { throw error(); }, synthesize: async () => ({ref:'unused',mime:'audio/ogg'}), fitDuration: async media => media });
-    await assert.rejects(voice(ctx, { instruction:'saluda' }, signal()), e => e instanceof AppError && e.kind === 'quota');
+    await assert.rejects(voice(context(), { instruction:'saluda' }, signal()), e => e instanceof AppError && e.kind === 'quota');
     const plainVoice = createVoiceHandler({ prepareScript: async () => { throw Error('secret'); }, synthesize: async () => ({ref:'unused',mime:'audio/ogg'}), fitDuration: async media => media });
-    assert.match((await plainVoice(ctx, { instruction:'saluda' }, signal())).parts[0].text, /No pude preparar el texto/);
+    assert.match((await plainVoice(context(), { instruction:'saluda' }, signal())).parts[0].text, /No pude preparar el texto/);
 });
 
 test('document, sticker, and effect handlers propagate typed errors without exposing untyped details', async () => {
@@ -49,7 +49,7 @@ test('document, sticker, and effect handlers propagate typed errors without expo
     const docs = createDocumentHandlers({ process: async () => { throw error(); }, readContent: async () => { throw Error('secret'); }, clock, store });
     try {
         await assert.rejects(docs.convert(ctx, {format:'pdf'}, signal()), e => e instanceof AppError && e.kind === 'quota');
-        assert.match((await docs.read(ctx, {}, signal())).parts[0].text, /No pude leer esa imagen/);
+        assert.match((await docs.read(ctx, {}, signal())).parts[0].text, /No pude leer ese archivo/);
         const sticker = createStickerHandler({ downloadUrl: async () => ({ref:'unused',mime:'image/png'}), createSticker: async () => { throw error(); } });
         await assert.rejects(sticker(ctx, {}, signal()), e => e instanceof AppError && e.kind === 'quota');
         const effect = createEffectHandler({ applyEffect: async () => { throw error(); } });

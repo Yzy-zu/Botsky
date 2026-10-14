@@ -6,9 +6,9 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
-const { TextDecoder } = require('node:util');
 const os = require('node:os');
 const { writeZip } = require('./zip');
+const { createContentReader } = require('./contentReader');
 
 const execFileAsync = promisify(execFile);
 const PREFIX = 'botsky-documents-';
@@ -16,8 +16,6 @@ const DEFAULT_MAX_INPUT_BYTES = 64 * 1024 * 1024;
 const DEFAULT_MAX_OUTPUT_BYTES = 128 * 1024 * 1024;
 const DEFAULT_OUTPUT_TTL_MS = 60 * 60 * 1000;
 const DEFAULT_MAX_PDF_PAGES = 1000;
-const MAX_TEXT_BYTES = 12 * 1024 * 1024;
-const MAX_TEXT_CHARACTERS = 100_000;
 const MAX_COLLECTION_BYTES = 256 * 1024 * 1024;
 const DOCUMENT_FORMATS = Object.freeze(['pdf','docx','doc','xlsx','xls','pptx','ppt','odt','ods','odp']);
 const PROCESS_OPERATIONS = Object.freeze(['convert-media','convert-document','images-to-pdf','compress-pdf','crop-pdf','merge-pdfs','pdf-to-images']);
@@ -61,6 +59,19 @@ function createDocumentsMedia({download,downloadUrl,run=createExecFileRunner(),o
     /** @type {Promise<void>|undefined} */ let rootReady;
     /** @type {Set<string>} */ const active = new Set();
     /** @type {Map<string,number>} */ const leases = new Map();
+    const contentReader=createContentReader({
+        downloadMedia:(source,options)=>download({
+            ...source,
+            attachment:{...source.attachment,kind:source.attachment.kind||'document'}
+        },options),
+        run:(command,args,options)=>run(command,args,options),
+        ocr,
+        tempDirectory,
+        files,
+        maxInputBytes:Math.min(maxInputBytes,12*1024*1024),
+        maxPdfPages:Math.min(maxPdfPages,1000),
+        onCleanupError
+    });
 
     async function ensureRoot() {
         if (!rootReady) rootReady=(async()=>{
@@ -379,7 +390,7 @@ function createDocumentsMedia({download,downloadUrl,run=createExecFileRunner(),o
         if (outputs.length!==selected.length) throw new Error('PDF rasterizer omitted requested pages');
         if (request.args.zip===true) {
             const zip=path.join(directory,`${safeOutputName(downloaded.originalFileName?path.parse(downloaded.originalFileName).name:'documento','zip')||'documento.zip'}`);
-            await writeZip(outputs.map(file=>({path:file,name:path.basename(file)})),zip,{signal,fs:files,maxBytes:Math.min(maxOutputBytes,20*1024*1024)});
+            await writeZip(outputs.map(file=>({path:file,name:path.basename(file)})),zip,{signal,fs:files,maxBytes:maxOutputBytes});
             await assertOutput(directory,zip); if (!isZip(await files.readFile(zip))) throw new Error('ZIP output signature invalid');
             return mediaReply(directory,zip,'application/zip','Listo, aquí están las imágenes en un ZIP.');
         }
@@ -402,50 +413,13 @@ function createDocumentsMedia({download,downloadUrl,run=createExecFileRunner(),o
     }
     /** @param {DocumentSource} source @param {{signal:AbortSignal}} options */
     async function readContent(source,{signal}) {
-        const directory=await workspace(signal);
-        try {
-            const value=await localize(source,directory,signal);
-            if (value.downloaded.buffer.length>MAX_TEXT_BYTES) throw new Error('Document exceeds the content reader limit');
-            if (value.extension==='pdf'||value.mime==='application/pdf') {
-                if (!isPdf(value.downloaded.buffer)) throw new Error('Corrupt PDF');
-                await pageCount(value.input,signal);
-                const result=await execute('pdftotext',['-layout',value.input,'-'],15_000,signal,2*1024*1024);
-                const text=asText(result.stdout).trim();
-                return validateExtractedText(text);
-            }
-            if (TEXT_EXTENSIONS.includes(value.extension)||value.mime.startsWith('text/')||value.mime==='application/json') {
-                if (value.downloaded.buffer.length>MAX_TEXT_BYTES) throw new Error('Text file too large');
-                let text;
-                try { text=new TextDecoder('utf-8',{fatal:true}).decode(value.downloaded.buffer); }
-                catch { throw new Error('Text encoding is invalid'); }
-                return validateExtractedText(text);
-            }
-            if (isImageFormat(value.extension,value.mime)) {
-                if (!ocr) throw new Error('Image OCR engine is not configured');
-                validateImage(value.extension,value.mime,value.downloaded.buffer);
-                const text=await ocr(value.input,{mime:value.mime,language:'spa+eng',signal});
-                check(signal); return validateExtractedText(typeof text==='string'?text:'');
-            }
-            if (DOCUMENT_FORMATS.includes(/** @type {never} */(value.extension))) {
-                const pdf=await officeToPdf(value.input,value.extension,directory,signal);
-                await pageCount(pdf,signal);
-                const result=await execute('pdftotext',['-layout',pdf,'-'],15_000,signal,2*1024*1024);
-                return validateExtractedText(asText(result.stdout));
-            }
-            throw new Error('Unsupported document type');
-        } catch(error) {
-            if (isAborted(error)||signal.aborted) throw error;
-            throw new Error('Document content read failed');
-        } finally {
-            const cleanupError=await cleanupWorkspace(directory);
-            if (cleanupError&&!signal.aborted) throw new Error('Document workspace cleanup failed');
-        }
-    }
-    /** @param {string} text */
-    function validateExtractedText(text) {
-        if (text.length>MAX_TEXT_CHARACTERS) throw new Error('Extracted document text is too long');
-        if (/[\x00-\x08\x0E-\x1F]/.test(text)) throw new Error('Extracted content is binary');
-        return text.trim()||null;
+        const attachment=source?.attachment;
+        if (!attachment) return contentReader.readContent(source,{signal});
+        const mime=String(attachment.mime||'').split(';')[0].trim().toLowerCase();
+        const extension=path.extname(String(attachment.ref||'').split(/[?#]/,1)[0]).slice(1).toLowerCase();
+        const image=mime.startsWith('image/')||['jpg','jpeg','png','webp','gif','tif','tiff','bmp'].includes(extension);
+        const normalized=image&&attachment.kind!=='image'?{...source,attachment:{...attachment,kind:'image'}}:source;
+        return contentReader.readContent(normalized,{signal});
     }
     /** Release a retained local output after a delivery adapter confirms it consumed the ref. @param {string} ref */
     async function release(ref) {

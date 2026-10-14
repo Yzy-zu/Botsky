@@ -23,7 +23,7 @@ function createDocumentsFeature(ports) {
         command('pdf2img', ['extraer'], handlers.pdfImages, 'Extrae páginas de un PDF como imágenes.', ['pdf2img (responde a un PDF)', 'pdf2img --zip']),
         command('leer', ['ocr'], handlers.read, 'Extrae texto de una imagen o documento adjunto.', ['leer (responde a una imagen)', 'ocr (responde a un PDF)'])
     ].map(item => ({ ...item, argsSchema, parseExplicit: tokens => parseExplicit(item.name, tokens) }));
-    return { id: 'documents', commands, intents: [
+    return { id: 'documents', commands, attachmentContinuation: handlers.attachmentContinuation, intents: [
         intent('documents.convert-media', 'Convertir audio, video o imagen a otro formato; acepta formato, calidad, velocidad, bitrate, recorte y nombre.', 'convertir'),
         intent('documents.convert-document', 'Convertir un documento entre formatos o reunir imágenes en un PDF; puede terminar o cancelar la colección.', 'doc'),
         intent('documents.compress-pdf', 'Comprimir o reducir el tamaño de un PDF adjunto.', 'comprimir'),

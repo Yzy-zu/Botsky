@@ -1,19 +1,19 @@
 {
-  "recordedAt": "2026-10-14T10:10:28.239417+00:00",
-  "status": "implementation_and_private_canary_preparation",
+  "recordedAt": "2026-10-14T10:37:01.343422+00:00",
+  "status": "private_minimal_canary_active_full_wave_a_open",
   "verify": {
     "exitCode": 0,
-    "passCount": 353,
+    "pass": 390,
     "fail": 0,
-    "report": "/tmp/botsky-wave-a-runtime-verify.log",
-    "sha256": "57aeefd6aed68d9bf6523a8f15a4c5012acdc2cd8cfd2afc75d68318c708e49c"
+    "report": "/tmp/botsky-wave-a-parity-checkpoint-verify.log",
+    "sha256": "f6275c97a47b1c8d6a618cdc3a86f7bfee41b08918ca8cfda4221d221668959d"
   },
   "refactor": {
     "exitCode": 0,
-    "passCount": 59,
+    "pass": 59,
     "fail": 0,
-    "report": "/tmp/botsky-wave-a-runtime-refactor.tap",
-    "sha256": "1aa1fd757a40f3d02552dd0c19442f908eea363f4bd681b8750539224361532a"
+    "report": "/tmp/botsky-wave-a-parity-checkpoint-refactor.tap",
+    "sha256": "4f19fc89b0f7c9298a868af5ccf09bf8df670b2131f6e32ca509f905d5ec1855"
   },
   "legacy": {
     "exitCode": 0,
@@ -30,7 +30,7 @@
     "sha256": "a84b0ece586858c8b5c41b1b2ae9b6d486fd60f94487f459940ed9424ab806e8"
   },
   "architecture": {
-    "modules": 96,
+    "modules": 97,
     "violations": 0
   },
   "environmentSettings": 97,
@@ -53,16 +53,50 @@
     "sidecar": "data/v2/canary.db",
     "sourceFilesVerified": 97,
     "sourceMismatches": 0,
-    "humanValidation": "pending",
+    "humanValidation": "deferred_by_user",
     "runtimeProbe": "real graph startup/SQLite and disposal passed; zero messages",
     "rollbackFlagRehearsal": "new bootstrap in legacy mode: health200, pipeline disabled, queue empty before canary activation"
   },
   "pending": [
-    "Activación y recorrido real QR/ayuda/estado en privado; luego grupo controlado.",
-    "Portado caso por caso de la traza legacy de olaA.",
-    "Colecciones PDF y seguimiento de adjuntos sin prefijos: continuidad entre eventos.",
-    "Contenido web/yt-dlp y contrato de lectura multimodal.",
-    "Integración final ElevenLabs/destinos de voz y contratos de paridad.",
-    "OlasB–D, Fases5–6; encuesta real diferida F0-E001 antes deOlaB."
-  ]
+    "Real private QR/help/status walk deferred by user, then one controlled group.",
+    "Remaining per-case WaveA legacy trace porting; only eight formal ports completed.",
+    "Canary eligibility for media/collections and subsequent full-wave activation.",
+    "Webpage/yt-dlp URL handling versus direct-file downloader.",
+    "Authorized voice destination/contact resolution and outbound confirmation.",
+    "Custom persona/affinity data unification in Phase5.",
+    "WavesB–D and Phases5–6; real poll fixture deferred F0-E001."
+  ],
+  "humanValidation": {
+    "status": "deferred_by_user",
+    "answer": "Los pruebo después",
+    "request": "Botsky qr hola / Botsky ayuda / Botsky estado"
+  },
+  "localFollowup": {
+    "deployed": false,
+    "verify": {
+      "exitCode": 0,
+      "pass": 390,
+      "fail": 0,
+      "report": "/tmp/botsky-wave-a-parity-checkpoint-verify.log",
+      "sha256": "f6275c97a47b1c8d6a618cdc3a86f7bfee41b08918ca8cfda4221d221668959d"
+    },
+    "tracePorts": [
+      "TR-0214",
+      "TR-0215",
+      "TR-0726",
+      "TR-0727",
+      "TR-0728",
+      "TR-0729",
+      "TR-0803",
+      "TR-0804"
+    ],
+    "features": [
+      "owner/chat TTL PDF continuation",
+      "single native text/HTML/PDF/Office reader",
+      "configured media/ZIP limits",
+      "injected ElevenLabs",
+      "voice attachment context/shared style",
+      "quoted literal/duration revision/acknowledged metadata"
+    ]
+  }
 }

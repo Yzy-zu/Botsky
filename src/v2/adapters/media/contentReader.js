@@ -1,0 +1,218 @@
+// @ts-check
+'use strict';
+
+const fsPromises=require('node:fs/promises');
+const os=require('node:os');
+const path=require('node:path');
+const {pathToFileURL}=require('node:url');
+const {TextDecoder}=require('node:util');
+const {AppError}=require('../../domain/errors');
+
+const MAX_INLINE_BYTES=12*1024*1024;
+const MAX_TEXT_CHARACTERS=100_000;
+const MAX_PDF_PAGES=1000;
+const MAX_COMMAND_OUTPUT=2*1024*1024;
+const PDFINFO_TIMEOUT_MS=15_000;
+const PDFTEXT_TIMEOUT_MS=30_000;
+const OFFICE_TIMEOUT_MS=45_000;
+const OFFICE_EXTENSIONS=Object.freeze(['docx','xlsx','pptx','odt','ods','odp','doc','xls','ppt']);
+const TEXT_EXTENSIONS=Object.freeze(['txt','md','csv','json','log','text','html','htm']);
+const OFFICE_MIMES=Object.freeze({
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'xlsx',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation':'pptx',
+    'application/vnd.oasis.opendocument.text':'odt','application/vnd.oasis.opendocument.spreadsheet':'ods',
+    'application/vnd.oasis.opendocument.presentation':'odp','application/msword':'doc',
+    'application/vnd.ms-excel':'xls','application/vnd.ms-powerpoint':'ppt'
+});
+const OFFICE_BY_MIME=/** @type {Readonly<Record<string,string>>} */(OFFICE_MIMES);
+
+/** @typedef {{attachment:Omit<import('../../pipeline/contracts').Attachment,'kind'>&{kind?:string,chatId?:string},raw:object}} ReaderSource */
+/** @typedef {{buffer:Buffer,extension:string,mime?:string,originalFileName?:string|null}} DownloadedContent */
+/** @typedef {{downloadMedia:(source:ReaderSource,options:{maxBytes:number,signal:AbortSignal})=>Promise<DownloadedContent>,run:(command:string,args:string[],options:{timeoutMs:number,signal:AbortSignal,maxBuffer:number})=>Promise<{stdout?:string|Buffer,stderr?:string|Buffer}>,ocr?:(inputPath:string,options:{mime:string,language:'spa+eng',signal:AbortSignal})=>Promise<string|null|undefined>,tempDirectory:string,files?:typeof fsPromises,maxInputBytes?:number,maxTextCharacters?:number,maxPdfPages?:number,onCleanupError?:(error:unknown)=>void}} ContentReaderOptions */
+
+/**
+ * Bounded document-to-text adapter. It accepts only injected media, process, file and OCR ports.
+ * @param {ContentReaderOptions} options
+ */
+function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromises,maxInputBytes=MAX_INLINE_BYTES,maxTextCharacters=MAX_TEXT_CHARACTERS,maxPdfPages=MAX_PDF_PAGES,onCleanupError=()=>{}}) {
+    if(typeof downloadMedia!=='function'||typeof run!=='function')throw new TypeError('Content reader download and process ports are required');
+    if(!path.isAbsolute(tempDirectory)||path.resolve(tempDirectory)!==tempDirectory)throw new TypeError('Content reader temp directory must be absolute');
+    if(![maxInputBytes,maxTextCharacters,maxPdfPages].every(Number.isSafeInteger)||maxInputBytes<1||maxInputBytes>MAX_INLINE_BYTES||maxTextCharacters<1||maxTextCharacters>MAX_TEXT_CHARACTERS||maxPdfPages<1||maxPdfPages>MAX_PDF_PAGES)throw new RangeError('Invalid content reader bounds');
+
+    /** @param {ReaderSource} source @param {{signal:AbortSignal}} request */
+    async function readContent(source,{signal}) {
+        signal.throwIfAborted();
+        if(!source?.attachment||typeof source.attachment.ref!=='string'||!source.attachment.ref)throw new AppError('bad_output');
+        const sourceMime=String(source.attachment.mime||'').split(';')[0].trim().toLowerCase();
+        const sourceExtension=path.extname(source.attachment.ref.split(/[?#]/,1)[0]).slice(1).toLowerCase();
+        const inferredKind=sourceMime.startsWith('image/')||['jpg','jpeg','png','webp','gif','tif','tiff','bmp'].includes(sourceExtension)?'image':'document';
+        if(!['image','document'].includes(source.attachment.kind||inferredKind))throw new AppError('unsupported_media');
+        /** @type {string|undefined} */ let workspace;
+        try {
+            const downloaded=await downloadMedia(source,{maxBytes:maxInputBytes,signal});
+            signal.throwIfAborted();
+            if(!downloaded||!Buffer.isBuffer(downloaded.buffer)||downloaded.buffer.length===0)throw new AppError('bad_output');
+            if(downloaded.buffer.length>maxInputBytes)throw new AppError('too_large');
+            const buffer=downloaded.buffer;
+            const fileName=path.basename(String(downloaded.originalFileName||''));
+            let extension=path.extname(fileName).slice(1).toLowerCase()||String(downloaded.extension||'').replace(/^\./,'').toLowerCase();
+            const declaredMime=String(downloaded.mime||source.attachment.mime||'').split(';')[0].trim().toLowerCase();
+            const signature=sniffMime(buffer);
+            if(signature==='application/pdf')extension='pdf';
+            if(OFFICE_BY_MIME[declaredMime]&&!extension)extension=OFFICE_BY_MIME[declaredMime];
+
+            const officeExtension=OFFICE_EXTENSIONS.includes(extension)?extension:OFFICE_BY_MIME[declaredMime];
+            if(officeExtension) {
+                const legacy=['doc','xls','ppt'].includes(officeExtension);
+                if(signature!==(legacy?'application/x-ole-storage':'application/zip'))throw new AppError('bad_output');
+                workspace=await createWorkspace();
+                const input=path.join(workspace,`input.${officeExtension}`);
+                await writePrivate(input,buffer);
+                const pdf=await officeToPdf(input,officeExtension,workspace,signal);
+                return await readPdf(pdf,signal);
+            }
+            if(signature==='application/pdf'||extension==='pdf'||declaredMime==='application/pdf') {
+                if(signature!=='application/pdf')throw new AppError('bad_output');
+                workspace=await createWorkspace();
+                const input=path.join(workspace,'input.pdf');
+                await writePrivate(input,buffer);
+                return await readPdf(input,signal);
+            }
+            const mime=signature||declaredMime;
+            if(isImage(extension,mime)) {
+                if(extension==='gif'||mime==='image/gif'||!ocr)throw new AppError('unsupported_media');
+                validateImage(extension,mime,buffer);
+                workspace=await createWorkspace();
+                const input=path.join(workspace,`input.${safeExtension(extension)}`);
+                await writePrivate(input,buffer);
+                const result=await ocr(input,{mime,language:'spa+eng',signal});
+                signal.throwIfAborted();
+                return validateContentText(typeof result==='string'?result:'');
+            }
+            if(TEXT_EXTENSIONS.includes(extension)||mime.startsWith('text/')||mime==='application/json'||mime==='application/xhtml+xml') {
+                const text=decodeText(buffer);
+                const extracted=(extension==='html'||extension==='htm'||mime==='text/html'||mime==='application/xhtml+xml')?htmlToText(text):text;
+                return validateContentText(extracted);
+            }
+            throw new AppError('unsupported_media');
+        } catch(error) {
+            if(signal.aborted)signal.throwIfAborted();
+            if(error instanceof AppError)throw error;
+            throw mapFailure(error);
+        } finally {
+            if(workspace) {
+                try { await files.rm(workspace,{recursive:true,force:true}); }
+                catch(error) { try { onCleanupError(error); } catch {} }
+            }
+        }
+    }
+
+    async function createWorkspace() {
+        await files.mkdir(tempDirectory,{recursive:true,mode:0o700});
+        const rootStat=await files.lstat(tempDirectory);
+        if(!rootStat.isDirectory()||rootStat.isSymbolicLink()||await files.realpath(tempDirectory)!==tempDirectory)throw new AppError('unsupported_media');
+        await files.chmod(tempDirectory,0o700);
+        const directory=await files.mkdtemp(path.join(tempDirectory,'botsky-v2-reader-'));
+        await files.chmod(directory,0o700);
+        return directory;
+    }
+    /** @param {string} target @param {Buffer} buffer */
+    async function writePrivate(target,buffer) { await files.writeFile(target,buffer,{flag:'wx',mode:0o600}); await files.chmod(target,0o600); }
+    /** @param {string} input @param {string} extension @param {string} directory @param {AbortSignal} signal */
+    async function officeToPdf(input,extension,directory,signal) {
+        if(!OFFICE_EXTENSIONS.includes(extension))throw new AppError('unsupported_media');
+        try {
+            await run('libreoffice',[`-env:UserInstallation=${pathToFileURL(path.join(directory,'profile')).href}`,'--headless','--nologo','--nodefault','--nofirststartwizard','--convert-to','pdf','--outdir',directory,input],{timeoutMs:OFFICE_TIMEOUT_MS,signal,maxBuffer:MAX_COMMAND_OUTPUT});
+            signal.throwIfAborted();
+            const output=path.join(directory,`${path.parse(input).name}.pdf`);
+            const stat=await files.lstat(output);
+            if(!stat.isFile()||stat.isSymbolicLink()||stat.size>maxInputBytes)throw new AppError(stat.size>maxInputBytes?'too_large':'bad_output');
+            const pdf=await files.readFile(output);
+            if(sniffMime(pdf)!=='application/pdf')throw new AppError('bad_output');
+            return output;
+        } catch(error) { if(signal.aborted)signal.throwIfAborted(); if(error instanceof AppError)throw error; throw mapFailure(error); }
+    }
+    /** @param {string} input @param {AbortSignal} signal */
+    async function readPdf(input,signal) {
+        try {
+            const info=await run('pdfinfo',[input],{timeoutMs:PDFINFO_TIMEOUT_MS,signal,maxBuffer:256*1024});
+            signal.throwIfAborted();
+            const meta=asText(info.stdout);
+            if(/^Encrypted:\s+yes/im.test(meta))throw new AppError('unsupported_media');
+            const pages=Number(meta.match(/^Pages:\s+(\d+)/im)?.[1]);
+            if(!Number.isSafeInteger(pages)||pages<1)throw new AppError('bad_output');
+            if(pages>maxPdfPages)throw new AppError('too_large');
+            const output=await run('pdftotext',['-layout',input,'-'],{timeoutMs:PDFTEXT_TIMEOUT_MS,signal,maxBuffer:MAX_COMMAND_OUTPUT});
+            signal.throwIfAborted();
+            return validateContentText(asText(output.stdout));
+        } catch(error) { if(signal.aborted)signal.throwIfAborted(); if(error instanceof AppError)throw error; throw mapFailure(error); }
+    }
+    /** @param {string} text */
+    function validateContentText(text) { return validateText(text,maxTextCharacters); }
+    return {readContent};
+}
+
+/** @param {Buffer} buffer */
+function sniffMime(buffer) {
+    if(buffer.subarray(0,5).toString('ascii')==='%PDF-')return 'application/pdf';
+    if(buffer.length>=8&&buffer.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))return 'image/png';
+    if(buffer.length>=3&&buffer[0]===255&&buffer[1]===216&&buffer[2]===255)return 'image/jpeg';
+    if(buffer.length>=12&&buffer.subarray(0,4).toString('ascii')==='RIFF'&&buffer.subarray(8,12).toString('ascii')==='WEBP')return 'image/webp';
+    if(/^GIF8[79]a$/.test(buffer.subarray(0,6).toString('ascii')))return 'image/gif';
+    if(buffer.length>=2&&buffer.subarray(0,2).toString('ascii')==='BM')return 'image/bmp';
+    if(buffer.length>=4&&((buffer[0]===0x49&&buffer[1]===0x49&&buffer[2]===0x2a&&buffer[3]===0)||(buffer[0]===0x4d&&buffer[1]===0x4d&&buffer[2]===0&&buffer[3]===0x2a)))return 'image/tiff';
+    if(buffer.length>=4&&buffer[0]===80&&buffer[1]===75&&[3,5,7].includes(buffer[2])&&[4,6,8].includes(buffer[3]))return 'application/zip';
+    if(buffer.subarray(0,8).equals(Buffer.from([208,207,17,224,161,177,26,225])))return 'application/x-ole-storage';
+    return null;
+}
+/** @param {Buffer} buffer */
+function decodeText(buffer) {
+    let text;
+    try { text=new TextDecoder('utf-8',{fatal:true}).decode(buffer); } catch { throw new AppError('bad_output'); }
+    if(/[\x00-\x08\x0E-\x1F]/.test(text))throw new AppError('bad_output');
+    return text;
+}
+/** @param {string} html */
+function htmlToText(html) {
+    return html.replace(/<!--[\s\S]*?-->/g,' ').replace(/<(script|style|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,' ')
+        .replace(/<(?:br|hr)\b[^>]*>/gi,'\n').replace(/<\/(?:p|div|li|tr|h[1-6]|section|article|table|ul|ol)\s*>/gi,'\n')
+        .replace(/<[^>]*>/g,' ').replace(/&(#(?:x[\da-f]+|\d+)|amp|lt|gt|quot|apos|nbsp);/gi,(_match,entity)=>decodeEntity(entity))
+        .replace(/[\t\r ]+/g,' ').replace(/ *\n */g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+/** @param {string} entity */
+function decodeEntity(entity) {
+    const named=/** @type {Record<string,string>} */({amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:' '});
+    if(entity[0]!=='#')return named[entity.toLowerCase()]||'';
+    const hex=entity[1]?.toLowerCase()==='x';
+    const code=Number.parseInt(entity.slice(hex?2:1),hex?16:10);
+    try { return Number.isFinite(code)&&code>=0&&code<=0x10ffff?String.fromCodePoint(code):''; } catch { return ''; }
+}
+/** @param {string} text @param {number} maxCharacters */
+function validateText(text,maxCharacters=MAX_TEXT_CHARACTERS) {
+    if(text.length>maxCharacters)throw new AppError('too_large');
+    if(/[\x00-\x08\x0E-\x1F]/.test(text))throw new AppError('bad_output');
+    const trimmed=text.trim();
+    return trimmed||null;
+}
+/** @param {string} extension @param {string} mime */
+function isImage(extension,mime) { return mime.startsWith('image/')||['jpg','jpeg','png','webp','gif','tif','tiff','bmp'].includes(extension); }
+/** @param {string} extension @param {string} mime @param {Buffer} buffer */
+function validateImage(extension,mime,buffer) {
+    const actual=sniffMime(buffer);
+    if(extension==='gif'||mime==='image/gif'||!actual||!actual.startsWith('image/'))throw new AppError('unsupported_media');
+    if(mime.startsWith('image/')&&actual!==mime)throw new AppError('bad_output');
+}
+/** @param {string} extension */
+function safeExtension(extension) { return /^[a-z0-9]{1,8}$/.test(extension)?extension:'bin'; }
+/** @param {unknown} value */
+function asText(value) { return typeof value==='string'?value:Buffer.isBuffer(value)?value.toString('utf8'):''; }
+/** @param {unknown} error */
+function mapFailure(error) {
+    const item=/** @type {{name?:string,code?:string,killed?:boolean}} */(error||{});
+    if(item.name==='TimeoutError'||item.code==='ETIMEDOUT'||item.killed)return new AppError('timeout',{cause:error});
+    if(item.code==='ENOENT')return new AppError('unsupported_media',{cause:error});
+    return new AppError('bad_output',{cause:error});
+}
+
+module.exports={createContentReader,sniffMime,htmlToText,MAX_INLINE_BYTES,MAX_TEXT_CHARACTERS,MAX_PDF_PAGES};

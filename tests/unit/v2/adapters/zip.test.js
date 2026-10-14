@@ -5,7 +5,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { writeZip } = require('../../../../src/v2/adapters/media/zip');
+const { writeZip, DEFAULT_MAX_BYTES, MAX_CLASSIC_ZIP_BYTES } = require('../../../../src/v2/adapters/media/zip');
 
 async function fixture() {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'botsky-zip-test-'));
@@ -62,5 +62,29 @@ test('checks input stat size before allocating contents with readFile', async ()
         };
         await assert.rejects(writeZip([{ path:f.first, name:'large.jpg' }], f.output, { signal:new AbortController().signal, maxBytes:20, fs:guardedFs }), /byte limit/);
         assert.equal(readCalled, false);
+    } finally { await f.dispose(); }
+});
+
+test('supports configured limits above the default while enforcing classic ZIP bounds', async () => {
+    const f = await fixture();
+    try {
+        const result=await writeZip([{path:f.first,name:'page.jpg'}],f.output,{signal:new AbortController().signal,maxBytes:21*1024*1024});
+        assert.ok(result.bytes<DEFAULT_MAX_BYTES);
+        await fs.unlink(f.output);
+        await assert.rejects(writeZip([{path:f.first,name:'page.jpg'}],f.output,{signal:new AbortController().signal,maxBytes:MAX_CLASSIC_ZIP_BYTES+1}),/byte limit/);
+        await assert.rejects(fs.stat(f.output),{code:'ENOENT'});
+    } finally { await f.dispose(); }
+});
+
+test('default 20 MiB cap rejects oversized input stat before reading', async () => {
+    const f = await fixture();
+    let readCalled=false;
+    try {
+        const cappedFs={...fs,
+            lstat:async file=>file===f.first?{isFile:()=>true,isSymbolicLink:()=>false,size:DEFAULT_MAX_BYTES+1}:fs.lstat(file),
+            readFile:async()=>{readCalled=true;throw Error('readFile must not run');}
+        };
+        await assert.rejects(writeZip([{path:f.first,name:'large.jpg'}],f.output,{signal:new AbortController().signal,fs:cappedFs}),/byte limit/);
+        assert.equal(readCalled,false);
     } finally { await f.dispose(); }
 });
