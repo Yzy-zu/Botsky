@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-10-14T11:42:37.172609+00:00",
+  "recordedAt": "2026-10-14T11:43:57.451032+00:00",
   "status": "private_minimal_canary_active_full_wave_a_open",
   "verify": {
     "exitCode": 0,
@@ -43,20 +43,27 @@
     ],
     "privateChats": 1,
     "groups": 0,
-    "sourceCommit": "2bba3de",
-    "pid": 3961074,
+    "sourceCommit": "b5a4513",
+    "pid": 3971001,
     "health": 200,
     "proactiveEnabled": false,
     "pm2Saved": true,
     "killTimeoutMs": 45000,
     "productionBotDbModified": false,
     "sidecar": "data/v2/canary.db",
-    "sourceFilesVerified": 102,
+    "sourceFilesVerified": 103,
     "sourceMismatches": 0,
     "humanValidation": "deferred_by_user",
-    "runtimeProbe": "Production environment: graph startup, sidecar migrations and disposal passed; zero messages",
+    "runtimeProbe": "production startup/migrations/disposal passed; zero messages",
     "rollbackFlagRehearsal": "new bootstrap in legacy mode: health200, pipeline disabled, queue empty before canary activation",
-    "lastRefreshBackup": "/tmp/botsky-canary-refresh-1791977371520"
+    "lastRefreshBackup": "/tmp/botsky-ownership-refresh-1791978206854",
+    "lastCheckedCounters": {
+      "handled": 0,
+      "replies": 0,
+      "errors": 0,
+      "denied": 0,
+      "ignored": 0
+    }
   },
   "pending": [
     "Human QR/help/status walk deferred by user, then one controlled group.",
@@ -116,7 +123,7 @@
       "property/aliased import architecture guard"
     ],
     "activation": "Sources installed; only qr/help/system-info active in one private chat; other features remain legacy",
-    "pendingPatch": [
+    "installedPatch": [
       "startup/disposal ownership lifecycle",
       "passive group collection silence",
       "atomic best-effort attachment caching",

@@ -387,3 +387,10 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - Contrato E2E selector/aplicación/pipeline/composer: qr hola sin prefijo y Botsky qr minecraft --to otro-chat conservan literal y solo destino actual, cero IA. Chats no elegidos/grupos/fromMe quedan legacy. Pruebas falsas no sustituyen validación humana aplazada.
 - Diseño de hosted media en docs/refactor/phase4-hosted-media-design.md: no portar yt-dlp con --proxy sin aislamiento de egreso. Texto web y archivo directo ya soportados; extracción de sitios pendiente. No añadir aprobación inventada ni eliminar esa capacidad legacy.
 - Producción quedó actualizada anteriormente a 2bba3de, PID3961074, health200, exactamente un privado y QR/ayuda/estado. Registrar por separado cualquier despliegue de este checkpoint; mantener flags/proactivity/jobs. Fase4 abierta, canario humano pendiente por decisión del cliente.
+
+
+## Despliegue del checkpoint de continuidad — 2026-10-14 UTC
+
+- b5a4513 publicado en origin/refactor/v2 e instalado: 103 fuentes verificadas contra Git, cero diferencias. Backup privado /tmp/botsky-ownership-refresh-1791978206854; no publicar pm2.json.
+- Startup productivo/SQLite/dispose probados antes del reinicio, cero mensajes externos. PID 3971001, online, health200 y PM2 save; proactivefalse, exactamente un privado con qr/help/system-info. Ningún grupo ni feature adicional activada. Contadores handled/replies/errors en cero; no acreditar entrega humana.
+- Próximo punto para retomar: Fase4/OlaA sigue abierta. Hosted media extractor requiere implementar aislamiento de egreso del diseño, completar casos legacy por feature y elegibilidad de selector/adjuntos antes de ampliar canario. Validación real privada y grupo pendiente por decisión del cliente; no repetir petición ni cerrar gate usando fakes. Refs/colecciones TTL se pierden al reiniciar, documentado. OlasB–D/Fases5–6 pendientes. Observador cancelado, nunca reactivarlo.
