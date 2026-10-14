@@ -77,3 +77,22 @@ test('shutdown runs runtime disposal concurrently with the accepted owner drain'
  await service.dispose();assert.equal(await handling,true);assert.equal(disposed,1);
  assert.equal(service.status.enabled,false);assert.equal(service.status.counters.handled,1);
 });
+
+test('complete media canary owns private uploads and quoted QR while partial feature sets keep the prior owner',async()=>{
+ const mediaFeatures=['qr','help','system-info','documents','sticker','voice','transcription'];
+ for(const features of [mediaFeatures,['qr','documents','sticker','voice']]){
+  const calls=[];const service=createPhase4Service({root:'/synthetic',clock:new FakeClock(),buildGraph:async()=>({app:{pipeline:{handle:async input=>{calls.push(input);return{kind:'reply'};}}},dispose:async()=>{}})});
+  await service.initialize({...config,V2_CANARY_FEATURES:features});
+  const full=features.includes('transcription');
+  for(const name of ['image','video','audio','document','sticker']){
+   const upload={key:{id:name,remoteJid:CHAT},message:{[name+'Message']:{url:'synthetic-ref',mimetype:name==='document'?'application/pdf':name+'/fixture'}}};
+   assert.equal(await service.tryHandle(upload),full);
+   assert.equal(await service.tryHandle({...upload,key:{...upload.key,remoteJid:'120000001@g.us'}}),false);
+   assert.equal(await service.tryHandle({...upload,key:{...upload.key,fromMe:true}}),false);
+  }
+  const quote={key:{id:'quoted-qr',remoteJid:CHAT},message:{extendedTextMessage:{text:'Botsky lee el QR',contextInfo:{stanzaId:'uploaded-image'}}}};
+  assert.equal(await service.tryHandle(quote),full);
+  assert.equal(await service.tryHandle(raw('Botsky encuesta mañana')),false);
+  assert.equal(calls.length,full?6:0);await service.dispose();
+ }
+});

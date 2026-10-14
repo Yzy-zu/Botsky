@@ -214,6 +214,12 @@ function safeReadFeedback(error) {
     if(error.reason==='media_too_large')return 'Ese archivo supera el límite de tamaño para lectura. Envíame uno más pequeño o solo las páginas que necesitas.';
     if(error.reason==='pdf_no_pages')return 'No encontré páginas legibles en ese PDF. Reenvíame una copia que abra correctamente.';
     if(error.reason==='pdf_page_limit')return 'Ese PDF supera el límite de páginas para lectura. Envíame solo las páginas o ejercicios que necesitas.';
+    if(error.reason==='pdf_corrupt')return 'No pude abrir ese PDF. Reenvíame una copia que abra correctamente o conviértelo a imágenes claras.';
+    if(error.reason==='pdf_encrypted')return 'Ese PDF está protegido con contraseña. Envíame una copia sin contraseña para poder leerlo.';
+    if(error.reason==='pdf_reader_unavailable')return 'Ahora no está disponible el lector de PDF. Envíame las páginas como imágenes claras o inténtalo más tarde.';
+    if(error.reason==='pdf_reader_timeout')return 'El PDF tardó demasiado en abrirse. Envíame menos páginas o una copia más pequeña.';
+    if(error.reason==='temp_prepare_failed')return 'No pude preparar el archivo para leerlo. Reenvíalo o intenta con una copia más pequeña.';
+    if(error.reason==='temp_cleanup_failed')return 'No pude terminar de procesar el archivo de forma segura. Reenvíalo y vuelve a intentarlo.';
     if(error.reason==='gif_requires_still_image')return 'No puedo leer un GIF animado. Envíame una foto fija, legible y de frente.';
     return undefined;
 }

@@ -51,6 +51,7 @@ function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromis
         const declaredSize=declaredAttachmentSize(source.raw,source.attachment);
         if(declaredSize!==undefined&&declaredSize>BigInt(maxInputBytes))throw new AppError('too_large',{reason:'media_too_large'});
         /** @type {string|undefined} */ let workspace;
+        let readSucceeded=false;
         try {
             let downloaded;
             try{downloaded=await downloadMedia(source,{maxBytes:maxInputBytes,signal});}
@@ -75,14 +76,14 @@ function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromis
                 const input=path.join(workspace,`input.${officeExtension}`);
                 await writePrivate(input,buffer);
                 const pdf=await officeToPdf(input,officeExtension,workspace,signal);
-                return await readPdf(pdf,signal);
+                const text=await readPdf(pdf,signal);readSucceeded=true;return text;
             }
             if(signature==='application/pdf'||extension==='pdf'||declaredMime==='application/pdf') {
                 if(signature!=='application/pdf')throw new AppError('bad_output');
                 workspace=await createWorkspace();
                 const input=path.join(workspace,'input.pdf');
                 await writePrivate(input,buffer);
-                return await readPdf(input,signal);
+                const text=await readPdf(input,signal);readSucceeded=true;return text;
             }
             const mime=signature||declaredMime;
             if(isImage(extension,mime)) {
@@ -94,7 +95,7 @@ function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromis
                 await writePrivate(input,buffer);
                 const result=await ocr(input,{mime,language:'spa+eng',signal});
                 signal.throwIfAborted();
-                return validateContentText(typeof result==='string'?result:'');
+                const text=validateContentText(typeof result==='string'?result:'');readSucceeded=true;return text;
             }
             if(TEXT_EXTENSIONS.includes(extension)||mime.startsWith('text/')||mime==='application/json'||mime==='application/xhtml+xml') {
                 const text=decodeText(buffer);
@@ -109,22 +110,24 @@ function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromis
         } finally {
             if(workspace) {
                 try { await files.rm(workspace,{recursive:true,force:true}); }
-                catch(error) { try { onCleanupError(error); } catch {} }
+                catch(error) { try { onCleanupError(error); } catch {} if(readSucceeded)throw new AppError('bad_output',{reason:'temp_cleanup_failed',cause:error}); }
             }
         }
     }
 
     async function createWorkspace() {
-        await files.mkdir(tempDirectory,{recursive:true,mode:0o700});
-        const rootStat=await files.lstat(tempDirectory);
-        if(!rootStat.isDirectory()||rootStat.isSymbolicLink()||await files.realpath(tempDirectory)!==tempDirectory)throw new AppError('unsupported_media');
-        await files.chmod(tempDirectory,0o700);
-        const directory=await files.mkdtemp(path.join(tempDirectory,'botsky-v2-reader-'));
-        await files.chmod(directory,0o700);
-        return directory;
+        try {
+            await files.mkdir(tempDirectory,{recursive:true,mode:0o700});
+            const rootStat=await files.lstat(tempDirectory);
+            if(!rootStat.isDirectory()||rootStat.isSymbolicLink()||await files.realpath(tempDirectory)!==tempDirectory)throw new AppError('unsupported_media');
+            await files.chmod(tempDirectory,0o700);
+            const directory=await files.mkdtemp(path.join(tempDirectory,'botsky-v2-reader-'));
+            await files.chmod(directory,0o700);
+            return directory;
+        } catch(error) { if(error instanceof AppError)throw error; throw new AppError('bad_output',{reason:'temp_prepare_failed',cause:error}); }
     }
     /** @param {string} target @param {Buffer} buffer */
-    async function writePrivate(target,buffer) { await files.writeFile(target,buffer,{flag:'wx',mode:0o600}); await files.chmod(target,0o600); }
+    async function writePrivate(target,buffer) { try{await files.writeFile(target,buffer,{flag:'wx',mode:0o600});await files.chmod(target,0o600);}catch(error){throw new AppError('bad_output',{reason:'temp_prepare_failed',cause:error});} }
     /** @param {string} input @param {string} extension @param {string} directory @param {AbortSignal} signal */
     async function officeToPdf(input,extension,directory,signal) {
         if(!OFFICE_EXTENSIONS.includes(extension))throw new AppError('unsupported_media');
@@ -145,14 +148,15 @@ function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromis
             const info=await run('pdfinfo',[input],{timeoutMs:PDFINFO_TIMEOUT_MS,signal,maxBuffer:256*1024});
             signal.throwIfAborted();
             const meta=asText(info.stdout);
-            if(/^Encrypted:\s+yes/im.test(meta))throw new AppError('unsupported_media');
+            if(/^Encrypted:\s+yes/im.test(meta))throw new AppError('unsupported_media',{reason:'pdf_encrypted'});
             const pages=Number(meta.match(/^Pages:\s+(\d+)/im)?.[1]);
-            if(!Number.isSafeInteger(pages)||pages<1)throw new AppError('bad_output',{reason:'pdf_no_pages'});
+            if(Number.isSafeInteger(pages)&&pages===0)throw new AppError('bad_output',{reason:'pdf_no_pages'});
+            if(!Number.isSafeInteger(pages)||pages<1)throw new AppError('bad_output',{reason:'pdf_corrupt'});
             if(pages>maxPdfPages)throw new AppError('too_large',{reason:'pdf_page_limit'});
             const output=await run('pdftotext',['-layout',input,'-'],{timeoutMs:PDFTEXT_TIMEOUT_MS,signal,maxBuffer:MAX_COMMAND_OUTPUT});
             signal.throwIfAborted();
             return validateContentText(asText(output.stdout));
-        } catch(error) { if(signal.aborted)signal.throwIfAborted(); if(error instanceof AppError)throw error; throw mapFailure(error); }
+        } catch(error) { if(signal.aborted)signal.throwIfAborted(); if(error instanceof AppError)throw error; throw mapPdfFailure(error); }
     }
     /** @param {string} text */
     function validateContentText(text) { return validateText(text,maxTextCharacters); }
@@ -229,6 +233,15 @@ function mapDownloadFailure(error) {
     if(value.code==='MEDIA_TOO_LARGE')return new AppError('too_large',{cause:error,reason:'media_too_large'});
     if(value.code==='MEDIA_UNAVAILABLE')return new AppError('network',{cause:error,reason:'media_unavailable'});
     return new AppError('network',{cause:error,reason:'media_download_failed'});
+}
+
+/** @param {unknown} error */
+function mapPdfFailure(error) {
+    const item=/** @type {{code?:string,killed?:boolean,name?:string,message?:string}} */(error||{});
+    if(item.code==='ENOENT')return new AppError('unsupported_media',{cause:error,reason:'pdf_reader_unavailable'});
+    if(item.name==='TimeoutError'||item.code==='ETIMEDOUT'||item.killed)return new AppError('timeout',{cause:error,reason:'pdf_reader_timeout'});
+    if(/password|encrypt/i.test(String(item.message||'')))return new AppError('unsupported_media',{cause:error,reason:'pdf_encrypted'});
+    return new AppError('bad_output',{cause:error,reason:'pdf_corrupt'});
 }
 
 /** Read provider-declared image/document length only when raw identifies this attachment.

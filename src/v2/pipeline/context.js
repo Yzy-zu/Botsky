@@ -46,7 +46,8 @@ function createContext({ clock, store, conversation, roles = { admins: [], owner
         const key = contextKey(event.chatId,event.sender.jid);
         const storedSession = /** @type {Session|undefined} */(store.get('pipeline.session',key));
         const session = storedSession && storedSession.ownerJid === event.sender.jid && storedSession.expiresAt > now ? { ...storedSession } : undefined;
-        const quoted = event.quoted ? /** @type {Attachment|undefined} */(store.get('pipeline.attachment.id',contextKey(event.chatId,event.quoted.messageId))) : undefined;
+        const cachedQuote = event.quoted ? /** @type {Attachment|undefined} */(store.get('pipeline.attachment.id',contextKey(event.chatId,event.quoted.messageId))) : undefined;
+        const quoted=cachedQuote&&cachedQuote.expiresAt>now?cachedQuote:quotedMediaReference(event,now);
         const own = /** @type {Attachment|undefined} */(store.get('pipeline.attachment.owner',key));
         // An unknown quote must never silently select a different recent file.
         const source = event.quoted ? quoted && quoted.expiresAt > now ? quoted : undefined
@@ -70,6 +71,35 @@ function createContext({ clock, store, conversation, roles = { admins: [], owner
         return { event,addressing,history:history.slice(-historyLimit).map(row => ({role:row.role,content:row.content})),attachment:metadata.attachment,session:metadata.session,correlationId:event.id,roles:{admins:[...roles.admins],owners:[...roles.owners],...(roles.members ? { members:[...roles.members] } : {}),...(roles.groups ? { groups:[...roles.groups] } : {})} };
     }
     return { observe,addressingMetadata,build };
+}
+/** An explicit provider quote can hydrate a pre-canary attachment by its exact
+ * chat/message key. No recent-file substitution, URL fetch or media bytes retained.
+ * @param {InboundEvent} event @param {number} now @returns {Attachment|undefined} */
+function quotedMediaReference(event,now) {
+    if(!event.quoted||!event.quoted.senderJid)return undefined;
+    const quotedIdentity=event.quoted;
+    /** @param {unknown} value @returns {Record<string,unknown>} */
+    const record=value=>value&&typeof value==='object'&&!Array.isArray(value)?/** @type {Record<string,unknown>} */(value):{};
+    const raw=record(event.raw),data=record(raw.data||raw),key=record(data.key);
+    if(key.id!==event.id||typeof key.remoteJid!=='string'||normalizeJid(key.remoteJid)!==event.chatId)return undefined;
+    /** @param {unknown} input */
+    function unwrap(input){let value=record(input);for(let i=0;i<8;i++){
+        const wrapper=record(value.ephemeralMessage||value.viewOnceMessage||value.viewOnceMessageV2||value.viewOnceMessageV2Extension||value.documentWithCaptionMessage);
+        if(!wrapper.message)break;value=record(wrapper.message);
+    }return value;}
+    const message=unwrap(data.message);
+    const contexts=[message.messageContextInfo,data.contextInfo,...Object.values(message).map(value=>record(value).contextInfo)].map(record);
+    const context=contexts.find(value=>value.stanzaId===quotedIdentity.messageId&&typeof value.participant==='string'&&normalizeJid(value.participant)===quotedIdentity.senderJid);
+    if(!context)return undefined;
+    const quoted=unwrap(context.quotedMessage);
+    for(const kind of ['image','video','audio','document','sticker']){
+        const payload=record(quoted[kind+'Message']);if(!Object.keys(payload).length)continue;
+        if(typeof payload.mimetype!=='string'||!payload.mimetype||payload.mimetype.length>160)return undefined;
+        return {id:event.quoted.messageId,chatId:event.chatId,ownerJid:event.quoted.senderJid,expiresAt:now+600000,
+            kind,ref:event.quoted.messageId,mime:payload.mimetype,quotedMatch:true,
+            providerKey:{id:event.quoted.messageId,remoteJid:key.remoteJid,participant:/** @type {string} */(context.participant),fromMe:event.quoted.isFromBot}};
+    }
+    return undefined;
 }
 /** Preserve the provider lookup identity for both Evolution envelope shapes.
  * Only copy the key fields; never retain raw message/media bytes in TTL state.

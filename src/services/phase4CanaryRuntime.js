@@ -11,15 +11,15 @@ function messageText(data){
         const wrapper=message.ephemeralMessage||message.viewOnceMessage||message.viewOnceMessageV2||message.documentWithCaptionMessage;
         if(!wrapper?.message)break;message=wrapper.message;
     }
-    if(!message||typeof message!=='object')return{ text:'',media:false,quoted:false };
+    if(!message||typeof message!=='object')return{ text:'',media:false,quoted:false,kind:undefined };
     let text=typeof message.conversation==='string'?message.conversation:typeof message.extendedTextMessage?.text==='string'?message.extendedTextMessage.text:'';
-    let media=false;
+    let media=false,kind;
     for(const name of ['imageMessage','videoMessage','audioMessage','documentMessage','stickerMessage']){
-        if(!message[name])continue;media=true;
+        if(!message[name])continue;media=true;kind=name.replace(/Message$/,'');
         if(typeof message[name].caption==='string')text=message[name].caption;
     }
     const context=message.extendedTextMessage?.contextInfo||message.imageMessage?.contextInfo||message.videoMessage?.contextInfo||message.documentMessage?.contextInfo;
-    return{text,media,quoted:!!context?.stanzaId};
+    return{text,media,quoted:!!context?.stanzaId,kind};
 }
 
 function createPhase4Service({root,clock=new SystemClock(),buildGraph,logger={info(){},error(){}}}){
@@ -28,10 +28,14 @@ function createPhase4Service({root,clock=new SystemClock(),buildGraph,logger={in
     const enabled=new Set();
     const counters={handled:0,replies:0,errors:0,denied:0,ignored:0};
     function eligible(raw){
-        const {text,media,quoted}=messageText(raw);const clean=text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-        if(!clean.trim())return false;
+        const {text,media,quoted,kind}=messageText(raw);const clean=text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+        // Current uploads and their follow-ups must share one owner. Enable
+        // passive uploads only once all their Wave A consumers are present.
+        const completeMedia=['qr','documents','sticker','voice','transcription'].every(feature=>enabled.has(feature));
+        if(!clean.trim())return completeMedia&&media&&['image','video','audio','document','sticker'].includes(kind);
+
         // Literal QR contents cannot change the selected feature or destination.
-        if(enabled.has('qr')&&!media&&!quoted&&/^(?:(?:botsky|botsito)[,:]?\s+)?qr(?:\s+|$)/u.test(clean.trim()))return true;
+        if(enabled.has('qr')&&(!media&&!quoted||completeMedia)&&/^(?:(?:botsky|botsito)[,:]?\s+)?qr(?:\s+|$)/u.test(clean.trim()))return true;
         // Until later waves are ported, requests naming their domain stay with v1.
         if(/\b(?:minecraft|maicra|recordatorios?|notas?|tareas?|escuela|ruleta|blackjack|daily|niveles?|xp|cooperacha|packs?|nopor|terminal|sistema|drive|difusion|encuesta|airdrop)\b/.test(clean))return false;
         if(/--(?:to|destino|para)\b/.test(clean))return false;
@@ -40,7 +44,7 @@ function createPhase4Service({root,clock=new SystemClock(),buildGraph,logger={in
             sticker:/\b(?:sticker|stickers|calca|efecto)\b/,voice:/\b(?:voz|tts)\b/,
             transcription:/\b(?:transcribir|transcribe|transcripcion)\b/};
         // QR reading/quoted media keeps its existing owner until attachment workflows are ported.
-        if(/\bqr\b/.test(clean)&&(media||quoted||/\b(?:leer|lee|leeme|escanea|decodifica)\b/.test(clean)))return false;
+        if(!completeMedia&&/\bqr\b/.test(clean)&&(media||quoted||/\b(?:leer|lee|leeme|escanea|decodifica)\b/.test(clean)))return false;
         return [...enabled].some(feature=>matches[feature]?.test(clean));
     }
     async function initialize(config){

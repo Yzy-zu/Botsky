@@ -1,19 +1,19 @@
 {
-  "recordedAt": "2026-10-14T14:42:11.544529+00:00",
+  "recordedAt": "2026-10-14T14:53:42.355088+00:00",
   "status": "private_minimal_canary_active_full_wave_a_open",
   "verify": {
     "exitCode": 0,
-    "pass": 498,
+    "pass": 528,
     "fail": 0,
-    "report": "/tmp/botsky-resume-final-verify.log",
-    "sha256": "831efb84f29bc10b0bc958c05d5d1aac48a3274e70ebf07f9af2a0d1ea197033"
+    "report": "/tmp/botsky-deploy-preparation-verify.log",
+    "sha256": "6bb716a69fe81e0e6dfb8976d307300dcfc14c661c1ca0f05aed3f4cbf15127a"
   },
   "refactor": {
     "exitCode": 0,
-    "pass": 70,
+    "pass": 71,
     "fail": 0,
-    "report": "/tmp/botsky-resume-final-refactor.tap",
-    "sha256": "0c1b0c90d7898e28c65b58868107fa51748f09cad66fd9a3b338e94fea4e4c8e"
+    "report": "/tmp/botsky-deploy-preparation-refactor.tap",
+    "sha256": "bfcf8409f9f8d7242850e0b123134df7d42b85051a416fb188b303e297aead3f"
   },
   "legacy": {
     "exitCode": 0,
@@ -67,7 +67,7 @@
   },
   "pending": [
     "Human QR/help/status walk deferred by user, then one controlled group.",
-    "Remaining WaveA per-case trace ports: 77 implemented / 727 pending across full legacy inventory.",
+    "Remaining WaveA per-case trace ports: 99 implemented / 705 pending across full legacy inventory.",
     "Canary media eligibility/collection and retained legacy attachment references.",
     "Media extraction from hosted platforms/yt-dlp; guarded web text reader does not implement video/audio extraction.",
     "Custom persona/affinity data in Phase5.",
@@ -82,10 +82,10 @@
     "deployed": true,
     "verify": {
       "exitCode": 0,
-      "pass": 498,
+      "pass": 528,
       "fail": 0,
-      "report": "/tmp/botsky-resume-final-verify.log",
-      "sha256": "831efb84f29bc10b0bc958c05d5d1aac48a3274e70ebf07f9af2a0d1ea197033"
+      "report": "/tmp/botsky-deploy-preparation-verify.log",
+      "sha256": "6bb716a69fe81e0e6dfb8976d307300dcfc14c661c1ca0f05aed3f4cbf15127a"
     },
     "tracePorts": [
       "TR-0214",
@@ -131,26 +131,30 @@
     ]
   },
   "workInProgress": {
-    "status": "verified_sources_installed_private_minimal_canary_only",
-    "deployed": true,
+    "status": "verified_awaiting_installation",
+    "deployed": false,
     "globalVerification": {
       "exitCode": 0,
-      "pass": 498,
+      "pass": 528,
       "fail": 0,
-      "report": "/tmp/botsky-resume-final-verify.log",
-      "sha256": "831efb84f29bc10b0bc958c05d5d1aac48a3274e70ebf07f9af2a0d1ea197033"
+      "report": "/tmp/botsky-deploy-preparation-verify.log",
+      "sha256": "6bb716a69fe81e0e6dfb8976d307300dcfc14c661c1ca0f05aed3f4cbf15127a"
     },
     "inventory": {
       "original": 804,
-      "ported": 77,
-      "remaining": 727,
+      "ported": 99,
+      "remaining": 705,
       "waveACuratedRows": 92,
-      "waveACuratedPorted": 64,
-      "waveACuratedPending": 28
+      "waveACuratedPorted": 86,
+      "waveACuratedPending": 6
     },
     "partial": [
-      "TR-0763: standalone voice tool remains Phase5 work"
+      "TR-0166/TR-0437 native PDF multimodal context",
+      "TR-0368 heavy progress reaction lifecycle",
+      "TR-0686 semantic-vs-literal bare voice grammar",
+      "TR-0688 forwarding existing media WaveB",
+      "TR-0763 standalone voice tool Phase5"
     ],
-    "activation": "Only qr/help/system-info enabled; other features remain legacy"
+    "selectorMedia": "Prepared: requires all five media consumers before owning bare uploads; flags unchanged"
   }
 }

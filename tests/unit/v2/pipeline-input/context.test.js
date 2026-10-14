@@ -82,3 +82,19 @@ test('uncached current attachment uses the same original key and mismatched raw 
         assert.equal(ctx.attachment.providerKey,undefined);
     }
 });
+
+test('explicit provider media quotes hydrate exact pre-canary IDs without retaining bytes or choosing a recent file',()=>{
+ const {context}=setup();const chat='19995559999@g.us',sender='19995550101@s.whatsapp.net';
+ for(const kind of ['image','video','audio','document','sticker']){
+  const quote={stanzaId:'older-'+kind,participant:sender,quotedMessage:{ephemeralMessage:{message:{[kind+'Message']:{mimetype:kind==='document'?'application/pdf':kind+'/fixture',base64:'PRIVATE_BYTES',mediaKey:'PRIVATE_KEY',url:'https://untrusted.invalid/media'}}}}};
+  const inbound=event({id:'new-'+kind,chatId:chat,sender:{jid:sender},text:'Botsky lee esto',media:undefined,quoted:{messageId:quote.stanzaId,senderJid:sender,isFromBot:false},
+   raw:{data:{key:{id:'new-'+kind,remoteJid:chat},message:{ephemeralMessage:{message:{extendedTextMessage:{text:'Botsky lee esto',contextInfo:quote}}}}}}});
+  const ref=context.addressingMetadata(inbound).attachment;
+  assert.equal(ref.id,quote.stanzaId);assert.equal(ref.kind,kind);assert.equal(ref.ref,quote.stanzaId);
+  assert.deepEqual(ref.providerKey,{id:quote.stanzaId,remoteJid:chat,participant:sender,fromMe:false});
+  assert.ok(!JSON.stringify(ref).includes('PRIVATE_'));assert.ok(!JSON.stringify(ref).includes('untrusted.invalid'));
+  assert.equal(context.addressingMetadata({...inbound,quoted:{...inbound.quoted,messageId:'unknown'}}).attachment,undefined);
+  assert.equal(context.addressingMetadata({...inbound,chatId:'19995558888@g.us'}).attachment,undefined);
+  assert.equal(context.addressingMetadata({...inbound,quoted:{...inbound.quoted,senderJid:'other@s.whatsapp.net'}}).attachment,undefined);
+ }
+});
