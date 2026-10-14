@@ -19,6 +19,10 @@ require('../services/school');
 const queue = require('../core/queue');
 const { handleDrive } = require('../commands/drive');
 const { coalesceAndDispatch } = require('./coalescer');
+const { createPhase4Service } = require('../services/phase4CanaryRuntime');
+const phase4 = createPhase4Service({ root: path.resolve(__dirname, '../..'), logger });
+let shuttingDown = false;
+let listener;
 const {
     normalizeIncomingMessage,
     getCachedMediaById,
@@ -81,12 +85,16 @@ app.post('/webhook', async (req, res) => {
     try {
         const body = req.body;
         if (body.event !== 'messages.upsert') return;
+        if (shuttingDown) return;
 
         const data = body.data;
         if (!data) return;
 
         const from = data.key?.remoteJid;
         if (!from) return;
+
+        // A selected request has exactly one owner, before any legacy side effects.
+        if (await phase4.tryHandle(data)) return;
 
         // Registrar respuestas del bot en el historial
         if (data.key?.fromMe) {
@@ -169,11 +177,16 @@ app.get('/status', (req, res) => {
         time: new Date().toISOString(),
         uptime: process.uptime(),
         memory: process.memoryUsage(),
+        pipeline: phase4.status,
     });
 });
 
 // ─── Iniciar servidor ─────────────────────────────────────────────────────────
 async function startServer() {
+    if (process.env.PIPELINE_MODE === 'canary' || process.env.PIPELINE_MODE === 'v2') {
+        const { readConfigFromProcessEnv } = require('../v2/config');
+        await phase4.initialize(readConfigFromProcessEnv({ requireEvolution: true, requireBotIdentity: true }));
+    }
     if (process.env.LEGACY_COMMAND_USAGE_ENABLED === 'true') {
         await require('../services/commandUsageRuntime').start();
     }
@@ -182,7 +195,7 @@ async function startServer() {
     } catch (recErr) {
         logger.error('[HappyHour] Error inicializando recuperación de estado:', recErr.message);
     }
-    app.listen(PORT, HOST, () => {
+    listener = app.listen(PORT, HOST, () => {
         logger.success(`Bot iniciado en http://${HOST}:${PORT}`);
         logger.info(`Webhook:  POST http://${HOST}:${PORT}/webhook`);
         logger.info(`Status:   GET  http://${HOST}:${PORT}/status`);
@@ -202,6 +215,18 @@ startServer().catch(err => {
     logger.error('Fallo crítico al iniciar el bot:', err);
     process.exit(1);
 });
+
+// Drain only the v2 runtime here; legacy scheduler jobs keep their existing owner.
+async function shutdown() {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    if (listener) listener.close();
+    try { await phase4.dispose(); }
+    catch { logger.error('[V2] Error while draining runtime.'); }
+    process.exit(0);
+}
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
 
 // ─── Manejo de errores no capturados ─────────────────────────────────────────
 process.on('unhandledRejection', (reason) => {

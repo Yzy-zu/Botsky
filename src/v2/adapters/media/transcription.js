@@ -8,6 +8,7 @@ const MAX_TRANSCRIPT_CHARS = 32 * 1024;
 const MAX_SUMMARY_CHARS = 4 * 1024;
 const TRANSCRIPT_TRUNCATION_NOTICE = '[Transcripción recortada por límite de tamaño.]';
 const SUMMARY_TRUNCATION_NOTICE = '[Resumen recortado por límite de tamaño.]';
+const { AppError } = require('../../domain/errors');
 
 /** @param {string} text @param {number} limit @param {string} notice */
 function capText(text, limit, notice) {
@@ -85,6 +86,7 @@ function createTranscriptionMedia({ downloadMedia, downloadUrl, http, formData, 
             assertAudio(audio, maxAudioBytes);
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             throw new Error('Audio download failed');
         }
 
@@ -110,6 +112,7 @@ function createTranscriptionMedia({ downloadMedia, downloadUrl, http, formData, 
             return result;
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             if (!fallbackTranscribe) throw new Error('Transcription providers failed');
             try {
                 const fallback = await bounded(inner => fallbackTranscribe({ buffer: audio.buffer, mime: audio.mime, model, language, signal: inner }), signal, timeoutMs);
@@ -117,6 +120,7 @@ function createTranscriptionMedia({ downloadMedia, downloadUrl, http, formData, 
                 return { ...fallback, text: capText(fallback.text, MAX_TRANSCRIPT_CHARS, TRANSCRIPT_TRUNCATION_NOTICE) };
             } catch (fallbackError) {
                 signal.throwIfAborted();
+                if (fallbackError instanceof AppError) throw fallbackError;
                 throw new Error('Transcription providers failed');
             }
         }

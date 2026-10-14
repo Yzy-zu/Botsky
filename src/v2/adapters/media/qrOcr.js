@@ -133,7 +133,7 @@ function createQrOcrMedia({ run = createExecFileRunner(), download, tempDirector
         const directory = await workspace(signal);
         const output = path.join(directory, 'qr.png');
         try {
-            await execute('qrencode', ['-s', '10', '-m', '2', '-o', output, text], QR_TIMEOUT_MS, signal);
+            await execute('qrencode', ['-s', '10', '-m', '2', '-o', output, '--', text], QR_TIMEOUT_MS, signal);
             const stat = await files.stat(output);
             if (!stat.isFile() || stat.size < 1 || stat.size > maxMediaBytes) throw new Error('QR generator produced invalid output');
             await files.chmod(output, 0o600);

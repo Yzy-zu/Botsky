@@ -7,8 +7,8 @@ function errorReply(error) {
     const feedback = toUserFeedback(error);
     return { parts: [{ type: 'text', text: `${feedback.message} ${feedback.nextStep}` }] };
 }
-/** @param {{messenger:import('../domain/ports').Messenger,llm:import('../domain/ports').LLM,record?:(ctx:import('./contracts').Ctx,text:string)=>Promise<unknown>,rememberSent?:(chatId:string,messageId:string)=>void,recentReplies?:(chatId:string)=>Promise<string[]>,releaseMedia?:(ref:string)=>Promise<unknown>,chunkChars?:number,privateMaxChars?:number,groupMaxChars?:number,chatMaxOutputTokens?:number,isClosed?:()=>boolean}} options */
-function createComposer({ messenger, llm, record = async () => {}, rememberSent = () => {}, recentReplies = async () => [], releaseMedia = async () => {}, chunkChars = 3500, privateMaxChars = 600, groupMaxChars = 350, chatMaxOutputTokens = 300, isClosed = () => false }) {
+/** @param {{messenger:import('../domain/ports').Messenger,llm:import('../domain/ports').LLM,record?:(ctx:import('./contracts').Ctx,text:string)=>Promise<unknown>,rememberSent?:(chatId:string,messageId:string)=>void,recentReplies?:(chatId:string)=>Promise<string[]>,releaseMedia?:(ref:string)=>Promise<unknown>,rememberMedia?:(ctx:import('./contracts').Ctx,part:import('../domain/types').Reply['parts'][number],delivery:unknown)=>Promise<unknown>|unknown,chunkChars?:number,privateMaxChars?:number,groupMaxChars?:number,chatMaxOutputTokens?:number,isClosed?:()=>boolean}} options */
+function createComposer({ messenger, llm, record = async () => {}, rememberSent = () => {}, recentReplies = async () => [], releaseMedia = async () => {}, rememberMedia = async () => {}, chunkChars = 3500, privateMaxChars = 600, groupMaxChars = 350, chatMaxOutputTokens = 300, isClosed = () => false }) {
     let observationFailures = 0;
     if (!Number.isSafeInteger(chunkChars) || chunkChars < 1) throw new RangeError('Invalid chunk size');
     /** @param {import('./contracts').Ctx} ctx @param {import('../domain/types').Reply} reply @param {{allowLong?:boolean,detailRequested?:boolean,status?:boolean}} [options] */
@@ -62,6 +62,9 @@ function createComposer({ messenger, llm, record = async () => {}, rememberSent 
             else if (part.type === 'poll') throw new Error('Poll delivery port is not enabled before the poll migration.');
             else delivery = await messenger.sendMedia(ctx.event.chatId, part.ref, part.caption || '', part.type === 'document', false, null, null, textOptions);
             remember(delivery, ctx.event.chatId);
+            if (part.type === 'image' || part.type === 'video' || part.type === 'audio' || part.type === 'document' || part.type === 'sticker') {
+                try { await rememberMedia(ctx, part, delivery); } catch { observationFailures++; }
+            }
         }
         return composed;
     }

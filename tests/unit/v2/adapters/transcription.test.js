@@ -2,6 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createTranscriptionMedia } = require('../../../../src/v2/adapters/media/transcription');
+const { AppError } = require('../../../../src/v2/domain/errors');
 
 function hasUnpairedSurrogate(text) {
     for (let i = 0; i < text.length; i++) {
@@ -60,6 +61,15 @@ test('failed fallback exposes only a generic error and never logs or returns pro
     const f = fixture({ http: { post: async () => { throw new Error('sensitive provider response'); } },
         fallbackTranscribe: async () => { throw new Error('private LLM response'); } });
     await assert.rejects(f.media.transcribe(source(), request()), { message: 'Transcription providers failed' });
+});
+
+test('typed quota errors survive transcription download, primary provider and fallback boundaries', async () => {
+    const download = fixture({ downloadMedia: async () => { throw new AppError('quota'); } });
+    await assert.rejects(download.media.transcribe(source(), request()), e => e instanceof AppError && e.kind === 'quota');
+    const primary = fixture({ http: { post: async () => { throw new AppError('quota'); } } });
+    await assert.rejects(primary.media.transcribe(source(), request()), e => e instanceof AppError && e.kind === 'quota');
+    const fallback = fixture({ http: { post: async () => { throw Error('primary generic'); } }, fallbackTranscribe: async () => { throw new AppError('quota'); } });
+    await assert.rejects(fallback.media.transcribe(source(), request()), e => e instanceof AppError && e.kind === 'quota');
 });
 
 test('URL helper validates without fetching and transcription uses only the injected bounded downloader', async () => {

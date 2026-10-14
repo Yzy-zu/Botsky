@@ -60,8 +60,8 @@ async function handleQr(parsed, from, messageData) {
         } else {
             outputPath = path.join(TMP_DIR, `${sessionId}-qr.png`);
 
-            logger.cmd(`qrencode -s 10 -m 2 -o "${outputPath}" "${textToEncode}"`);
-            await execFileAsync('qrencode', ['-s', '10', '-m', '2', '-o', outputPath, textToEncode], { timeout: 30_000 });
+            logger.cmd(`qrencode -s 10 -m 2 -o "${outputPath}" <payload>`);
+            await execFileAsync('qrencode', ['-s', '10', '-m', '2', '-o', outputPath, '--', textToEncode], { timeout: 30_000 });
 
             if (!fs.existsSync(outputPath)) {
                 throw new Error('no se pudo generar el qr');

@@ -59,13 +59,14 @@ const attachment = (overrides = {}) => ({ id: 'message-1', ownerJid: 'user', exp
 
 test('QR encoder uses execFile arguments, private temp storage, and keeps output until TTL cleanup', async t => {
     const f = await fixture(t);
-    const output = await f.adapter.create('hello $(touch /tmp/not-run)', new AbortController().signal);
+    const payload = '--read-from=/synthetic/private';
+    const output = await f.adapter.create(payload, new AbortController().signal);
     assert.equal(output.mime, 'image/png');
     assert.ok(output.ref.startsWith(path.join(f.tempDirectory, 'botsky-media-')));
     assert.equal(await fs.readFile(output.ref, 'utf8'), 'png-output');
     assert.equal((await fs.stat(output.ref)).mode & 0o077, 0);
     assert.deepEqual(f.runs[0].command, 'qrencode');
-    assert.deepEqual(f.runs[0].args, ['-s', '10', '-m', '2', '-o', output.ref, 'hello $(touch /tmp/not-run)']);
+    assert.deepEqual(f.runs[0].args, ['-s', '10', '-m', '2', '-o', output.ref, '--', payload]);
     assert.equal(f.runs[0].options.timeoutMs, 30_000);
     assert.deepEqual(f.downloads, []);
     assert.ok(f.storageCalls.includes('mkdtemp'), 'the injected storage port owns temporary files');

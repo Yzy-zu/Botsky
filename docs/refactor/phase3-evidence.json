@@ -1,18 +1,19 @@
 {
   "status": "closed_with_exception_F3-E001",
-  "recordedAt": "2026-10-14T02:53:56.606445+00:00",
+  "recordedAt": "2026-10-14T10:04:45.889181+00:00",
   "verify": {
     "exitCode": 0,
-    "pass": 314,
     "fail": 0,
-    "report": "/tmp/botsky-phase3-incident-final-verify.log",
-    "sha256": "56124de9a85e17956afe90768f5b618f7fedca3b08d60949c4dd9188b875c93f"
+    "report": "/tmp/botsky-wave-a-runtime-verify.log",
+    "sha256": "57aeefd6aed68d9bf6523a8f15a4c5012acdc2cd8cfd2afc75d68318c708e49c",
+    "pass": 353
   },
   "refactor": {
-    "pass": 55,
+    "exitCode": 0,
     "fail": 0,
-    "report": "/tmp/botsky-incident-refactor-final.tap",
-    "sha256": "e35e3f4c9ed7fe554e344fbbda3daf579adf68ba261eb97019df944b037bd19a"
+    "report": "/tmp/botsky-wave-a-runtime-refactor.tap",
+    "sha256": "1aa1fd757a40f3d02552dd0c19442f908eea363f4bd681b8750539224361532a",
+    "pass": 59
   },
   "coverage": [
     {
@@ -136,10 +137,9 @@
     "cancelledByUser": true
   },
   "limitations": [
-    "24h reales a\u00fan pendientes; no simuladas por FakeClock.",
-    "Sombra inicial compara addressing/decisiones con planes v1 grabados; no consulta historial ni sesiones legacy y marca unknown donde no hay plan/ID correlacionable.",
-    "No activa canario ni ejecuta tools/passivos/migraciones/jobs v2.",
-    "Repo nuevo de hilos probado s\u00f3lo con SQLite temporal; no migraci\u00f3n001 productiva."
+    "Observador cancelado por el usuario mediante F3-E001; no se acredita sombra de24h.",
+    "La excepción no elimina pruebas, cobertura, revisión ni gates de cada ola.",
+    "Pruebas sintéticas/contratos no acreditan paridad real ni cierre de migración."
   ],
   "deployment": {
     "installedSourceCommit": "3c56f0a",
@@ -156,14 +156,15 @@
       "authorizedUtc": "2026-10-14T02:07:48.573Z",
       "scope": "live-shadow-observer",
       "reason": "El cliente cancela el observador y prioriza terminar el bot tras el incidente de v1.",
-      "limitations": "No se afirma soak de 24 horas ni paridad real completa. Siguen obligatorios tests, cobertura, revisi\u00f3n del n\u00facleo y gates de migraci\u00f3n por ola."
+      "limitations": "No se afirma soak de 24 horas ni paridad real completa. Siguen obligatorios tests, cobertura, revisión del núcleo y gates de migración por ola."
     }
   ],
   "legacyVerification": {
-    "pass": 819,
+    "exitCode": 0,
     "fail": 0,
-    "report": "/tmp/botsky-incident-legacy-final.tap",
-    "sha256": "c6f4f90987d0cf9b1663cb2de691691e18e3bb9edb9476571a1ccb285201d59b",
+    "report": "/tmp/botsky-wave-a-legacy-final.tap",
+    "sha256": "540c6a38ae8ca390cb8944e29c581697dfb63baa0e9aef0da26ba5b4a6fd6c6f",
+    "pass": 820,
     "baselinePreserved": true
   }
 }

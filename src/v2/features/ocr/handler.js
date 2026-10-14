@@ -1,5 +1,6 @@
 // @ts-check
 'use strict';
+const { AppError } = require('../../domain/errors');
 
 const MAX_OCR_TEXT_CHARS = 32 * 1024;
 const OCR_TRUNCATION_NOTICE = '\n\n[Texto OCR recortado por límite de tamaño.]';
@@ -34,6 +35,7 @@ function createOcrHandler({ readText }) {
                 : 'No alcancé a leer texto. Prueba con una foto más nítida, de frente y con buena luz.' }], replyTo: ctx.event.id };
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             return { parts: [{ type: 'text', text: 'No pude leer esa imagen. Intenta de nuevo con una foto más nítida.' }], replyTo: ctx.event.id };
         }
     };

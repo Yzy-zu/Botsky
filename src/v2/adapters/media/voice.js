@@ -162,7 +162,7 @@ function createVoiceMedia({ run=createExecFileRunner(), callLLM, elevenLabs, tem
             }
             if(!generated) {
                 try {
-                    await execute(edgeTtsCommand,['--voice',profile.voice,`--rate=${profile.rate}`,`--pitch=${profile.pitch}`,'--text',cleaned,'--write-media',raw],60_000,signal);
+                    await execute(edgeTtsCommand,['--voice',profile.voice,`--rate=${profile.rate}`,`--pitch=${profile.pitch}`,`--text=${cleaned}`,'--write-media',raw],60_000,signal);
                     const stat=await files.stat(raw); if(!stat.isFile()||stat.size<1||stat.size>maxMediaBytes) throw new Error('edge-tts output invalid'); generated=true;
                 } catch(error) { if(error&&typeof error==='object'&&/** @type {{name?:string}} */(error).name==='AbortError') throw error; }
             }
@@ -171,7 +171,7 @@ function createVoiceMedia({ run=createExecFileRunner(), callLLM, elevenLabs, tem
                 catch(error) { if(error&&typeof error==='object'&&/** @type {{name?:string}} */(error).name==='AbortError') throw error; }
             }
             if(!generated) {
-                try { await execute(gttsCommand,[cleaned,'--lang','es','--output',raw],60_000,signal); const stat=await files.stat(raw); if(!stat.isFile()||stat.size<1||stat.size>maxMediaBytes) throw new Error('gTTS output invalid'); generated=true; }
+                try { await execute(gttsCommand,['--lang','es','--output',raw,'--',cleaned],60_000,signal); const stat=await files.stat(raw); if(!stat.isFile()||stat.size<1||stat.size>maxMediaBytes) throw new Error('gTTS output invalid'); generated=true; }
                 catch(error) { if(error&&typeof error==='object'&&/** @type {{name?:string}} */(error).name==='AbortError') throw error; throw new AppError('network',{cause:error}); }
             }
             check(signal);

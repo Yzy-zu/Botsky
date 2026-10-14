@@ -1,5 +1,6 @@
 // @ts-check
 'use strict';
+const { AppError } = require('../../domain/errors');
 
 /** @type {Readonly<Record<string,string>>} */
 const MODELS = Object.freeze({
@@ -113,6 +114,7 @@ function createTranscriptionHandler({ transcribe, downloadUrl, summarize, defaul
                     signal.throwIfAborted();
                 } catch (error) {
                     signal.throwIfAborted();
+                    if (error instanceof AppError) throw error;
                     summary = null;
                 }
             }
@@ -127,6 +129,7 @@ function createTranscriptionHandler({ transcribe, downloadUrl, summarize, defaul
             return { parts, replyTo: ctx.event.id };
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             return textReply(ctx, 'No pude transcribir el audio. Intenta de nuevo con un audio más claro.');
         }
     };

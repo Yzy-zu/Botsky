@@ -1,5 +1,6 @@
 // @ts-check
 'use strict';
+const { AppError } = require('../../domain/errors');
 
 const EFFECTS = Object.freeze(['ardilla', 'robot', 'lento', 'rapido', 'grave', 'eco', 'reversa']);
 const IMAGE_MIMES = Object.freeze(['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/tiff']);
@@ -58,6 +59,7 @@ function createStickerHandler(ports) {
             return { parts: [{ type: 'sticker', ref: output.ref, mime: output.mime }], replyTo: ctx.event.id };
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             return textReply(ctx, url ? 'No pude crear el sticker desde esa URL. Revisa el enlace o adjunta el archivo.' : 'No pude crear el sticker. Prueba con una imagen o video más claro y corto.');
         }
     };
@@ -83,6 +85,7 @@ function createEffectHandler(ports) {
             return { parts: [{ type: 'audio', ref: output.ref, mime: output.mime }], replyTo: ctx.event.id };
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             return textReply(ctx, 'No pude aplicar el efecto. Prueba de nuevo con otro audio.');
         }
     };

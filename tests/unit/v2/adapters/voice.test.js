@@ -46,6 +46,13 @@ test('verbatim preparation bypasses the LLM and preserves literal wording', asyn
     const script = await f.adapter.prepareScript({ request: 'léelo exacto', literalText: '  Hola, mundo.  ', mode: 'verbatim', voice: 'mujer', durationSeconds: 10 }, new AbortController().signal);
     assert.deepEqual(script, { success: true, mode: 'verbatim', text: 'Hola, mundo.', voice: 'mujer', durationSeconds: 10 });
     assert.equal(f.calls.length, 0);
+    const atLegacyBounds = await f.adapter.prepareScript({ literalText: 'x'.repeat(20000), mode: 'verbatim', durationSeconds: 600 }, new AbortController().signal);
+    assert.equal(atLegacyBounds.text.length, 20000);
+    assert.equal(atLegacyBounds.durationSeconds, 600);
+    const overText = await f.adapter.prepareScript({ literalText: 'x'.repeat(20001), mode: 'verbatim' }, new AbortController().signal);
+    assert.equal(overText.success, false);
+    const overDuration = await f.adapter.prepareScript({ literalText: 'exact', mode: 'verbatim', durationSeconds: 601 }, new AbortController().signal);
+    assert.equal(overDuration.needsClarification, true);
 });
 
 test('compose script sends bounded semantic context to the injected LLM and validates response', async t => {
@@ -82,12 +89,26 @@ test('synthesis uses safe edge-tts argv, cleans speech text, applies legacy voic
     const result = await f.adapter.synthesize('**Hola** https://example.test 😃', { voice: 'ardilla', signal: new AbortController().signal });
     assert.equal(result.mime, 'audio/mpeg');
     const edge = f.calls.find(call => call.command === 'edge-tts');
-    assert.ok(edge.args.includes('Hola'));
-    assert.ok(edge.args.includes('--text'));
+    assert.ok(edge.args.includes('--text=Hola'));
     assert.ok(f.calls.some(call => call.command === 'ffmpeg' && call.args.includes('asetrate=24000*1.45,aresample=24000,atempo=1/1.2')));
     assert.ok(await fs.stat(result.ref));
     assert.equal(await f.adapter.release(result.ref), true);
     assert.deepEqual(await fs.readdir(f.tempDirectory), []);
+});
+
+test('TTS keeps option-looking user text inside the text argument for Edge and gTTS', async t => {
+    const payload = '--file=/synthetic/private';
+    const edge = await fixture(); t.after(() => fs.rm(edge.root, { recursive: true, force: true }));
+    await edge.adapter.synthesize(payload, { voice: 'hombre', signal: new AbortController().signal });
+    assert.ok(edge.calls.some(call => call.command === 'edge-tts' && call.args.includes(`--text=${payload}`)));
+
+    const fallback = await fixture({ run: async (command, args) => {
+        if (command === 'edge-tts') throw Error('synthetic edge failure');
+        await fs.writeFile(args[args.indexOf('--output') + 1], Buffer.from('fallback')); return {};
+    } });
+    t.after(() => fs.rm(fallback.root, { recursive: true, force: true }));
+    await fallback.adapter.synthesize(payload, { voice: 'hombre', signal: new AbortController().signal });
+    assert.deepEqual(fallback.calls.find(call => call.command === 'gtts-cli').args.slice(-2), ['--', payload]);
 });
 
 test('professional/persona voices prefer optional ElevenLabs; failures fall back to Edge then gTTS', async t => {
@@ -101,11 +122,12 @@ test('professional/persona voices prefer optional ElevenLabs; failures fall back
 
     const fallback = await fixture({ run: async (command, args) => {
         if (command === 'edge-tts') throw new Error('offline edge');
-        await fs.writeFile(args.at(-1), Buffer.from('fallback')); return {};
+        await fs.writeFile(args[args.indexOf('--output') + 1], Buffer.from('fallback')); return {};
     } });
     t.after(() => fs.rm(fallback.root, { recursive: true, force: true }));
     const backup = await fallback.adapter.synthesize('Hola', { voice: 'hombre', signal: new AbortController().signal });
     assert.ok(fallback.calls.some(call => call.command === 'gtts-cli'));
+    assert.deepEqual(fallback.calls.find(call => call.command === 'gtts-cli').args.slice(-2), ['--', 'Hola']);
     assert.equal(backup.mime, 'audio/mpeg');
 });
 
@@ -121,6 +143,9 @@ test('duration measurement and fitting use bounded ffprobe/ffmpeg filters and ho
     const outOfBounds = await f.adapter.fitDuration(media, 20, new AbortController().signal);
     assert.equal(outOfBounds.durationSeconds, 10.1);
     assert.equal(outOfBounds.ref, media.ref, 'extreme time changes return the original, measured audio');
+    const maxDuration = await f.adapter.fitDuration(media, 600, new AbortController().signal);
+    assert.equal(maxDuration.ref, media.ref, '600 seconds is a valid legacy target');
+    await assert.rejects(f.adapter.fitDuration(media, 601, new AbortController().signal), /Invalid target duration/);
 });
 
 test('cancellation and provider failures are bounded, cleanup workspaces, and TTL removes retained outputs', async t => {

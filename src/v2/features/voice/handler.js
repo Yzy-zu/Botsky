@@ -1,11 +1,14 @@
 // @ts-check
 'use strict';
+const { AppError } = require('../../domain/errors');
 
 const VOICES = Object.freeze(['hombre', 'mujer', 'colombiano', 'colombiana', 'argentino', 'argentina', 'loquendo',
     'chileno', 'venezolano', 'peruano', 'ardilla', 'demonio', 'robot', 'radio', 'dross', 'goku', 'donramon',
     'babidi', 'anime', 'daniel', 'narrador', 'adam', 'charlie', 'george', 'harry', 'liam', 'alice', 'lily',
     'jessica', 'bill', 'elevenlabs', 'realista']);
 const MODES = Object.freeze(['compose', 'verbatim']);
+const MAX_VOICE_DURATION_SECONDS = 600;
+const MAX_VOICE_TEXT_CHARS = 20_000;
 
 /** @typedef {{ref:string,mime:string,durationSeconds?:number}} VoiceMedia */
 /** @typedef {{success?:boolean,text?:string,voice?:string,mode?:string,durationSeconds?:number|null,question?:string,error?:string,needsClarification?:boolean}} VoiceScript */
@@ -23,8 +26,8 @@ function createVoiceHandler({ prepareScript, synthesize, fitDuration }) {
         const request = typeof args.instruction === 'string' ? args.instruction.trim() : '';
         const rawDuration = args.durationSeconds;
         const durationSeconds = typeof rawDuration === 'number' && Number.isFinite(rawDuration) ? rawDuration : null;
-        if (!VOICES.includes(voice) || !MODES.includes(mode) || (durationSeconds !== null && (durationSeconds < 1 || durationSeconds > 180))) {
-            return textReply(ctx, 'No pude interpretar la voz o duración. Indica una voz conocida y una duración de 1 a 180 segundos.');
+        if (!VOICES.includes(voice) || !MODES.includes(mode) || (durationSeconds !== null && (durationSeconds < 1 || durationSeconds > MAX_VOICE_DURATION_SECONDS)) || literalText.length > MAX_VOICE_TEXT_CHARS) {
+            return textReply(ctx, 'No pude interpretar la voz, el texto o la duración. Indica una voz conocida, hasta 20,000 caracteres de texto y una duración de 1 a 600 segundos.');
         }
         const quotedText = ctx.event.quoted?.text || '';
         let script;
@@ -35,20 +38,24 @@ function createVoiceHandler({ prepareScript, synthesize, fitDuration }) {
             signal.throwIfAborted();
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             return textReply(ctx, 'No pude preparar el texto para el audio. Dime de nuevo qué quieres que comunique.');
         }
         if (!script || script.success === false || script.needsClarification || typeof script.text !== 'string' || !script.text.trim()) {
             return textReply(ctx, typeof script?.question === 'string' && script.question.trim()
                 ? script.question.trim() : '¿Qué quieres que comunique el audio? Puedes decirme el tema, el tono y cuánto debe durar.');
         }
+        if (script.durationSeconds !== undefined && script.durationSeconds !== null &&
+            (typeof script.durationSeconds !== 'number' || !Number.isFinite(script.durationSeconds) || script.durationSeconds <= 0 || script.durationSeconds > MAX_VOICE_DURATION_SECONDS)) {
+            return textReply(ctx, '¿Cuánto debe durar el audio? Indícalo en segundos o minutos, hasta 10 minutos.');
+        }
+        const target = typeof script.durationSeconds === 'number' ? script.durationSeconds : durationSeconds;
         const finalVoice = typeof script.voice === 'string' && VOICES.includes(script.voice.toLowerCase()) ? script.voice.toLowerCase() : voice;
         let media;
         try {
             media = await synthesize(script.text.trim(), { voice: finalVoice, signal });
             signal.throwIfAborted();
             if (!validVoiceMedia(media)) throw new Error('Invalid voice output');
-            const target = typeof script.durationSeconds === 'number' && Number.isFinite(script.durationSeconds) && script.durationSeconds > 0
-                ? script.durationSeconds : durationSeconds;
             if (target !== null) {
                 media = await fitDuration(media, target, signal);
                 signal.throwIfAborted();
@@ -57,6 +64,7 @@ function createVoiceHandler({ prepareScript, synthesize, fitDuration }) {
             return { parts: [{ type: 'audio', ref: media.ref, mime: media.mime }], replyTo: ctx.event.id };
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             return textReply(ctx, 'No pude preparar o enviar el audio ahorita. Intenta de nuevo en un momento.');
         }
     };
@@ -72,4 +80,4 @@ function validVoiceMedia(value) {
 /** @param {import('../../pipeline/contracts').Ctx} ctx @param {string} text @returns {import('../../domain/types').Reply} */
 function textReply(ctx, text) { return { parts: [{ type: 'text', text }], replyTo: ctx.event.id }; }
 
-module.exports = { createVoiceHandler, VOICES, MODES, validVoiceMedia };
+module.exports = { createVoiceHandler, VOICES, MODES, validVoiceMedia, MAX_VOICE_DURATION_SECONDS, MAX_VOICE_TEXT_CHARS };

@@ -1,0 +1,55 @@
+{
+  "recordedAt": "2026-10-14T10:04:45.889181+00:00",
+  "status": "implementation_and_private_canary_preparation",
+  "verify": {
+    "exitCode": 0,
+    "passCount": 353,
+    "fail": 0,
+    "report": "/tmp/botsky-wave-a-runtime-verify.log",
+    "sha256": "57aeefd6aed68d9bf6523a8f15a4c5012acdc2cd8cfd2afc75d68318c708e49c"
+  },
+  "refactor": {
+    "exitCode": 0,
+    "passCount": 59,
+    "fail": 0,
+    "report": "/tmp/botsky-wave-a-runtime-refactor.tap",
+    "sha256": "1aa1fd757a40f3d02552dd0c19442f908eea363f4bd681b8750539224361532a"
+  },
+  "legacy": {
+    "exitCode": 0,
+    "passCount": 820,
+    "fail": 0,
+    "report": "/tmp/botsky-wave-a-legacy-final.tap",
+    "sha256": "540c6a38ae8ca390cb8944e29c581697dfb63baa0e9aef0da26ba5b4a6fd6c6f"
+  },
+  "nativeSmoke": {
+    "exitCode": 0,
+    "passCount": 7,
+    "fail": 0,
+    "report": "/tmp/botsky-wave-a-native-smoke.tap",
+    "sha256": "a84b0ece586858c8b5c41b1b2ae9b6d486fd60f94487f459940ed9424ab806e8"
+  },
+  "architecture": {
+    "modules": 96,
+    "violations": 0
+  },
+  "environmentSettings": 97,
+  "canary": {
+    "deployed": false,
+    "features": [
+      "qr",
+      "help",
+      "system-info"
+    ],
+    "privateChats": 1,
+    "groups": 0
+  },
+  "pending": [
+    "Activación y recorrido real QR/ayuda/estado en privado; luego grupo controlado.",
+    "Portado caso por caso de la traza legacy de olaA.",
+    "Colecciones PDF y seguimiento de adjuntos sin prefijos: continuidad entre eventos.",
+    "Contenido web/yt-dlp y contrato de lectura multimodal.",
+    "Integración final ElevenLabs/destinos de voz y contratos de paridad.",
+    "OlasB–D, Fases5–6; encuesta real diferida F0-E001 antes deOlaB."
+  ]
+}

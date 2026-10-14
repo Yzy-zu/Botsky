@@ -1,5 +1,6 @@
 // @ts-check
 'use strict';
+const { AppError } = require('../../domain/errors');
 
 const SESSION_NS = 'feature.documents';
 const SESSION_TTL_MS = 20 * 60_000;
@@ -28,6 +29,7 @@ function createDocumentHandlers(ports) {
             return validReply(reply) ? { ...reply, replyTo: ctx.event.id } : text(ctx, 'No pude procesar el archivo. Revisa que abra correctamente y prueba de nuevo.');
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             return text(ctx, safeFailure(operation));
         }
     }
@@ -112,6 +114,7 @@ function createDocumentHandlers(ports) {
             return text(ctx, extracted ? `Esto alcancé a leer:\n\n${extracted}` : 'No alcancé a leer texto. Prueba con una foto más nítida, de frente y con buena luz.');
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             return text(ctx, 'No pude leer esa imagen. Intenta de nuevo con una foto más nítida.');
         }
     }

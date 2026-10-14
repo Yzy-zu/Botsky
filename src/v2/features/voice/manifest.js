@@ -5,9 +5,9 @@ const { createVoiceHandler, VOICES, MODES } = require('./handler');
 /** @param {Parameters<typeof createVoiceHandler>[0]} ports @returns {import('../../pipeline/contracts').Feature} */
 function createVoiceFeature(ports) {
     const argsSchema = { type: 'object', properties: {
-        instruction: { type: 'string', maxLength: 2000 }, literalText: { type: 'string', maxLength: 2000 },
+        instruction: { type: 'string', maxLength: 2000 }, literalText: { type: 'string', maxLength: 20000 },
         mode: { type: 'string', enum: [...MODES] }, voice: { type: 'string', enum: [...VOICES] },
-        durationSeconds: { type: 'integer', minimum: 1, maximum: 180 }
+        durationSeconds: { type: 'integer', minimum: 1, maximum: 600 }
     }, additionalProperties: false };
     return { id: 'voice', commands: [{ name: 'voz', aliases: ['audio', 'tts', 'habla', 'hablar', 'notadevoz'],
         scope: ['private', 'group'], access: 'public', tier: 'heavy', timeoutMs: 240_000, allowLong: true,
@@ -41,7 +41,7 @@ function parseExplicit(tokens) {
                 voice = candidate;
             } else if (['--duration', '--duracion', '--segundos'].includes(name)) {
                 durationSeconds = Number(value);
-                if (!Number.isSafeInteger(durationSeconds) || durationSeconds < 1 || durationSeconds > 180) throw new TypeError('Invalid explicit voice arguments');
+                if (!Number.isSafeInteger(durationSeconds) || durationSeconds < 1 || durationSeconds > 600) throw new TypeError('Invalid explicit voice arguments');
             } else source.push(value);
             continue;
         }
@@ -60,7 +60,7 @@ function parseExplicit(tokens) {
         source.push(token);
     }
     const literalText = source.join(' ').trim();
-    if (literalText.length > 2000) throw new TypeError('Invalid explicit voice arguments');
+    if (literalText.length > 20000) throw new TypeError('Invalid explicit voice arguments');
     return { mode: 'verbatim', voice, literalText, ...(durationSeconds === undefined ? {} : { durationSeconds }) };
 }
 

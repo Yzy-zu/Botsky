@@ -8,6 +8,7 @@ const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { TextDecoder } = require('node:util');
 const os = require('node:os');
+const { writeZip } = require('./zip');
 
 const execFileAsync = promisify(execFile);
 const PREFIX = 'botsky-documents-';
@@ -378,7 +379,7 @@ function createDocumentsMedia({download,downloadUrl,run=createExecFileRunner(),o
         if (outputs.length!==selected.length) throw new Error('PDF rasterizer omitted requested pages');
         if (request.args.zip===true) {
             const zip=path.join(directory,`${safeOutputName(downloaded.originalFileName?path.parse(downloaded.originalFileName).name:'documento','zip')||'documento.zip'}`);
-            await execute('zip',['-j','-q',zip,...outputs],60_000,signal,16*1024*1024);
+            await writeZip(outputs.map(file=>({path:file,name:path.basename(file)})),zip,{signal,fs:files,maxBytes:Math.min(maxOutputBytes,20*1024*1024)});
             await assertOutput(directory,zip); if (!isZip(await files.readFile(zip))) throw new Error('ZIP output signature invalid');
             return mediaReply(directory,zip,'application/zip','Listo, aquí están las imágenes en un ZIP.');
         }

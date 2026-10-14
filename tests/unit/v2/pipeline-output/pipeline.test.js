@@ -23,12 +23,13 @@ test('Router uses enabled manifests in strict explicit/session/rule/LLM order',a
  f.enabled=false;assert.equal((await router.route(ctx)).kind,'chat');assert.equal(calls,4);
 });
 test('Router validates proposal intent and never accepts hallucinated commands',async()=>{
+ const ctx=context();ctx.event.text='Botsky haz eso';
  for(const text of ['null','invalid','{"kind":"intent","intent":"missing","args":{}}','{"kind":"intent","intent":"test.do","args":[]}']){
-  const router=createRouter({features:[feature()],llm:{generate:async()=>good(text)}});await assert.rejects(router.route(context()),error=>error.kind==='bad_output');
+  const router=createRouter({features:[feature()],llm:{generate:async()=>good(text)}});await assert.rejects(router.route(ctx),error=>error.kind==='bad_output');
  }
- const router=createRouter({features:[feature()],llm:{generate:async()=>good('{"kind":"intent","intent":"test.do","args":{"count":2}}')}});assert.equal((await router.route(context())).args.count,2);
- const ignored=createRouter({features:[],llm:{generate:async()=>good('{"kind":"ignore"}')}});assert.equal((await ignored.route(context())).kind,'ignore');
- const failed=createRouter({features:[],llm:{generate:async()=>({ok:false,failure:{kind:'quota',retryable:true}})}});await assert.rejects(failed.route(context()),error=>error.kind==='quota');
+ const router=createRouter({features:[feature()],llm:{generate:async()=>good('{"kind":"intent","intent":"test.do","args":{"count":2}}')}});assert.equal((await router.route(ctx)).args.count,2);
+ const ignored=createRouter({features:[],llm:{generate:async()=>good('{"kind":"ignore"}')}});assert.equal((await ignored.route(ctx)).kind,'ignore');
+ const failed=createRouter({features:[],llm:{generate:async()=>({ok:false,failure:{kind:'quota',retryable:true}})}});await assert.rejects(failed.route(ctx),error=>error.kind==='quota');
 });
 test('Argument schemas reject unknown fields, enum/type/range/required errors',()=>{
  const schema={properties:{n:{type:'integer',minimum:1,maximum:3},s:{type:'string',enum:['yes']},a:{type:'array'},o:{type:'object'}},required:['n'],additionalProperties:false};
@@ -94,6 +95,18 @@ test('Allowlist, addressing and roles use the same phone/device/domain normaliza
 
 test('Delivered replies survive optional observation callback failure',async()=>{
  const f=fixture({pipelineOptions:{onAccept:()=>{},onReply:()=>{throw Error('optional state failed');}}});await f.handle(raw('one','Botsky'));assert.equal(f.sent.length,1);assert.equal(f.pipeline.observationFailures,1);f.dispose();
+});
+test('recordInbound runs after live addressing only; callback failures are counted without failing replies',async()=>{
+ const observed=[];const f=fixture({pipelineOptions:{recordInbound:async ctx=>{observed.push(ctx.event.id);}}});
+ assert.equal((await f.handle(raw('addressed','Botsky do',{mentions:[BOT]}))).kind,'reply');
+ assert.deepEqual(observed,['addressed']);
+ assert.equal((await f.pipeline.decideOnly(raw('shadow','Botsky do',{mentions:[BOT]}))).kind,'decision');
+ assert.deepEqual(observed,['addressed']);
+ assert.equal((await f.handle(raw('passive','no mention'))).kind,'ignore');
+ assert.deepEqual(observed,['addressed']);f.dispose();
+ const failed=fixture({pipelineOptions:{recordInbound:async()=>{throw Error('sidecar write failed');}}});
+ assert.equal((await failed.handle(raw('write-fails','Botsky do',{mentions:[BOT]}))).kind,'reply');
+ assert.equal(failed.pipeline.observationFailures,1);assert.equal(failed.sent.length,1);failed.dispose();
 });
 test('Application composition enforces admission/cooldown and natural minimal features',async()=>{
  const {createApplication}=require('../../../../src/v2/main');const clock=new FakeClock(1000000);const sent=[];

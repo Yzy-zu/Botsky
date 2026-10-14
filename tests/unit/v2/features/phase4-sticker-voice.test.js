@@ -109,8 +109,35 @@ test('voice manifest keeps command aliases and explicit voice, duration, gender,
         { mode: 'verbatim', voice: 'mujer', literalText: 'Buenos días' });
     assert.deepEqual(parseVoice(['--goku', 'Vamos']), { mode: 'verbatim', voice: 'goku', literalText: 'Vamos' });
     assert.deepEqual(parseVoice(['-t', 'Hola']), { mode: 'verbatim', voice: 'hombre', literalText: 'Hola' });
+    assert.equal(parseVoice(['--duration', '600', 'hola']).durationSeconds, 600);
+    assert.equal(parseVoice(['x'.repeat(20000)]).literalText.length, 20000);
     assert.throws(() => parseVoice(['--duration', '999']), /Invalid explicit/);
+    assert.throws(() => parseVoice(['--duration', '601']), /Invalid explicit/);
+    assert.throws(() => parseVoice(['x'.repeat(20001)]), /Invalid explicit/);
     assert.throws(() => parseVoice(['--voice', 'unknown']), /Invalid explicit/);
+    assert.equal(command.argsSchema.properties.durationSeconds.maximum, 600);
+    assert.equal(command.argsSchema.properties.literalText.maxLength, 20000);
+});
+
+test('voice handler accepts legacy 600 second and 20,000 character bounds and rejects values beyond them', async () => {
+    const seen = [];
+    const feature = createVoiceFeature({
+        prepareScript: async input => { seen.push(input); return { success:true, text:input.literalText || 'guion', durationSeconds:input.durationSeconds }; },
+        synthesize: async () => ({ ref:'media://voice', mime:'audio/ogg', durationSeconds:5 }),
+        fitDuration: async (media, target) => ({ ...media, durationSeconds:target })
+    });
+    const handler = feature.commands[0].handler;
+    const longText = 'x'.repeat(20000);
+    const accepted = await handler(context(), { mode:'verbatim', literalText:longText, durationSeconds:600 }, signal());
+    assert.equal(accepted.parts[0].type, 'audio');
+    assert.equal(seen[0].literalText.length, 20000);
+    assert.equal(seen[0].durationSeconds, 600);
+    assert.equal(seen.length, 1, 'invalid limits are rejected before invoking providers');
+    const tooLong = await handler(context(), { mode:'verbatim', literalText:'x'.repeat(20001) }, signal());
+    const tooLongDuration = await handler(context(), { mode:'compose', instruction:'hola', durationSeconds:601 }, signal());
+    assert.match(tooLong.parts[0].text, /20,000 caracteres/);
+    assert.match(tooLongDuration.parts[0].text, /1 a 600 segundos/);
+    assert.equal(seen.length, 1);
 });
 
 test('voice handler uses injected script, synthesis, and duration ports and returns audio media', async () => {

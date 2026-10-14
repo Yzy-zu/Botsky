@@ -310,3 +310,18 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - Smoke REAL local con archivos sintéticos: QR encode/decode, conversión WAV→MP3 y recorte de la segunda página PDF pasan usando binarios instalados; no red/proveedores/mensajes reales. Archivo tests/smoke/media-local.cjs, evidencia /tmp/botsky-ola-a-local-smoke.log.
 - BRECHAS olaA: extracción de webs/yt-dlp en nuevas URLs (solo archivos directos), destino/metadata completos de voz, implementación real de censura/collage, ZIP runtime ausente, paridad contentReader/multimodal, trazabilidad y canario. Estos preparativos NO cierranGate4A ni fueron activados en producción.
 - PM2 conservóPID3667357, online/health200, PROACTIVE_ENABLED=false, modo legacy, sin preload sombra. Commit/push del checkpoint es el próximo paso; después continuar olaA sin volver a esperar24h.
+
+
+## Checkpoint de runtime y canario privado — 2026-10-14 UTC
+
+- Commit anterior6277898 publicado en origin/refactor/v2. Este checkpoint integra cambios posteriores; maestro continúa aun cuando agentes económicos agotaron su cuota. No se cambió su modelo por uno más costoso.
+- Verificación actual353/353, refactor59/59, legacy820/820; cero fallos/skips/cancelaciones. Arquitectura96módulos,0violaciones;97settings. Gate3 PASS con F3-E001, sin reactivar observador. Evidencia y SHA en phase4-evidence.json.
+- QR legacy y v2 usan terminador de opciones; payload no aparece en logs de QR. Fix legacy aplicado a producción; PID3710818 online, health200, colas vacías, proactivefalse y sin sombra al último chequeo.
+- ZIP ya no depende del binario ausente: escritor acotado comprueba tamaño ANTES de leer. Censura/collage reales con FFmpeg y PDF escaneado con Poppler/Tesseract pasan con archivos sintéticos. Composición expone imageTools y fallback OCR para PDF sin texto.
+- Voz conserva600segundos/20000caracteres y presupuesto de guion hasta4096tokens; no se reducen al límite conversacional. ElevenLabs candidato nuevo tiene6contratos offline verdes; su cableado real aún pendiente.
+- Runtime explícito en composition/runtime.js: sidecar privado separado de bot.db, migraciones000/001, listas de acceso normal/admin/tareas para privados y grupos independientes, historial SOLO después de addressing, sin escrituras de sombra. Dispose drena aplicación y janitor; status distingue credenciales configuradas de salud real.
+- Composer conserva referencia de media confirmada por proveedor ANTES de liberar archivo local: TTL por ID/chat, sin probar autoría por texto. Hook fallido no reenvía.
+- Router entrega schemas de argumentos a IA y admite nombres de comando sin prefijo: «Botsky qr hola», «voz hola», «estado». Frases naturales que no cumplen sintaxis explícita pasan al router con schema. Pruebas cubren ambos recorridos.
+- Bootstrap/server preparado para propietario único ANTES de normalización, XP, historial o despacho legacy; errores v2 no reejecutan legacy. Flags V2_CANARY_CHAT_IDS y V2_CANARY_FEATURES. Primer escalón: SOLO privado admin configurado, creaciónQR/ayuda/estado. LecturaQR, adjuntos sin caption, grupos y resto de capacidades siguen en legacy.
+- Preparación no equivale a canario activo. Registrar despliegue/PID/health/evidencia posteriormente. Toda olaA permanece ABIERTA: continuidad de colecciones/adjuntos, contenido web/multimodal, paridad/traza de casos, ElevenLabs/destinos y prueba real privada+grupo. OlasB–D y Fases5–6 pendientes; no retirar v1.
+- Retomar: completar instalación y canario privado mínimo con rollback verificado; pedir al cliente «Botsky qr hola» y «Botsky estado» cuando esté activo; comprobar counters/entrega real sin publicar JIDs/contenido. Después terminar brechas de olaA, no ampliar flags por tener solo wrappers/manifests.

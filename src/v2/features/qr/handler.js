@@ -1,5 +1,6 @@
 // @ts-check
 'use strict';
+const { AppError } = require('../../domain/errors');
 
 const MAX_QR_TEXT_CHARS = 8 * 1024;
 const QR_TRUNCATION_NOTICE = '\n\n[Lectura QR recortada por límite de tamaño.]';
@@ -30,6 +31,7 @@ function createQrHandler({ create, read }) {
                 return { parts: [{ type: 'image', ref: image.ref, mime: typeof image.mime === 'string' ? image.mime : 'image/png', caption: 'Listo, aquí está tu QR.' }], replyTo: ctx.event.id };
             } catch (error) {
                 signal.throwIfAborted();
+                if (error instanceof AppError) throw error;
                 return { parts: [{ type: 'text', text: 'No pude generar el QR. Prueba con un texto más corto o un enlace.' }], replyTo: ctx.event.id };
             }
         }
@@ -47,6 +49,7 @@ function createQrHandler({ create, read }) {
                 : 'No encontré un QR en esa imagen. Prueba con una foto de frente y sin recortar el código.' }], replyTo: ctx.event.id };
         } catch (error) {
             signal.throwIfAborted();
+            if (error instanceof AppError) throw error;
             return { parts: [{ type: 'text', text: 'No pude leer el QR. Prueba con una foto más nítida y con el código completo.' }], replyTo: ctx.event.id };
         }
     };

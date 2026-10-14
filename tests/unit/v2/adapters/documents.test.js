@@ -42,8 +42,7 @@ async function harness(options={}) {
             const prefix=args.at(-1), first=Number(args[args.indexOf('-f')+1]), last=Number(args[args.indexOf('-l')+1]);
             for(let page=first;page<=last;page++) await fs.writeFile(`${prefix}-${String(page).padStart(2,'0')}.jpg`,Buffer.from([255,216,255,0]));
             return {stdout:''};
-        } else if (command==='zip') output=args[2];
-        else throw Error(`Unexpected command ${command}`);
+        } else throw Error(`Unexpected command ${command}`);
         await fs.writeFile(output,output.endsWith('.pdf')?PDF:output.endsWith('.zip')?Buffer.from([80,75,3,4,0]):Buffer.from('rendered media'));
         return {stdout:''};
     };
