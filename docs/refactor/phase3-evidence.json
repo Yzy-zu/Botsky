@@ -1,19 +1,19 @@
 {
   "status": "closed_with_exception_F3-E001",
-  "recordedAt": "2026-10-14T11:28:23.651282+00:00",
+  "recordedAt": "2026-10-14T11:42:37.172609+00:00",
   "verify": {
     "exitCode": 0,
-    "pass": 433,
     "fail": 0,
-    "report": "/tmp/botsky-wave-a-targets-checkpoint-verify.log",
-    "sha256": "ff2a84ede08245479baa2c15af2352b880398c5658cb66a810cd70433c55068e"
+    "report": "/tmp/botsky-wave-a-ownership-final-verify.log",
+    "sha256": "0c11fb3c85644c1362068513fcf3762031171c2cbc69871f77cc7bf229fa797b",
+    "pass": 446
   },
   "refactor": {
     "exitCode": 0,
-    "pass": 59,
     "fail": 0,
-    "report": "/tmp/botsky-wave-a-targets-checkpoint-refactor.tap",
-    "sha256": "427a71d9789ac6c75b2b54067ca8304690b4a0ef402372066210e67ba10df95c"
+    "report": "/tmp/botsky-wave-a-ownership-final-refactor.tap",
+    "sha256": "e22262308e2b0a6143fb3bff6fc1062a7c8a48933bedd0f78aa58e6165425ed2",
+    "pass": 63
   },
   "coverage": [
     {

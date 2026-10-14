@@ -24,7 +24,7 @@ function messageText(data){
 
 function createPhase4Service({root,clock=new SystemClock(),buildGraph,logger={info(){},error(){}}}){
     if(typeof root!=='string'||!path.isAbsolute(root))throw new TypeError('Explicit project root required');
-    let graph,owner,closed=false,closing;
+    let graph,owner,closed=false,closing,initializing;
     const enabled=new Set();
     const counters={handled:0,replies:0,errors:0,denied:0,ignored:0};
     function eligible(raw){
@@ -44,6 +44,7 @@ function createPhase4Service({root,clock=new SystemClock(),buildGraph,logger={in
         return [...enabled].some(feature=>matches[feature]?.test(clean));
     }
     async function initialize(config){
+        if(closed||graph||initializing)throw new Error('Canary lifecycle already initialized or closed');
         if(config.PIPELINE_MODE!=='canary'){
             if(config.PIPELINE_MODE==='v2')throw new Error('Full cutover requires the remaining feature gates');
             return{enabled:false};
@@ -52,15 +53,28 @@ function createPhase4Service({root,clock=new SystemClock(),buildGraph,logger={in
         if(!chats.length||chats.some(value=>!normalizeJid(value)||normalizeJid(value).endsWith('@g.us')))throw new Error('First canary requires explicit private chat IDs');
         const features=config.V2_CANARY_FEATURES||['qr','help','system-info'];
         if(!Array.isArray(features)||!features.length||features.some(value=>!['qr','help','system-info','documents','sticker','voice','transcription'].includes(value)))throw new Error('Explicit supported canary features required');
-        if(graph||closed)throw new Error('Canary lifecycle already initialized or closed');
         for(const feature of features)enabled.add(feature);
         const factory=buildGraph||defaultGraph;
-        graph=await factory({config,clock,root});
-        owner=createCanaryOwner({mode:'canary',canaryChatIds:chats,clock,isEligibleWaveA:eligible,
-            legacy:async()=>undefined,pipeline:raw=>graph.app.pipeline.handle(raw)});
-        logger.info('[V2] Private media canary initialized. Legacy remains owner of other events and all business jobs.');
-        return{enabled:true,canaryChats:chats.length};
+        initializing=(async()=>{
+            try{
+                graph=await factory({config,clock,root});
+                // Shutdown can begin while native resources are still opening.
+                // Retain the graph for dispose, but never publish a new owner.
+                if(closed)return{enabled:false};
+                owner=createCanaryOwner({mode:'canary',canaryChatIds:chats,clock,isEligibleWaveA:eligible,
+                    legacy:async()=>undefined,pipeline:raw=>graph.app.pipeline.handle(raw)});
+                logger.info('[V2] Private media canary initialized. Legacy remains owner of other events and all business jobs.');
+                return{enabled:true,canaryChats:chats.length};
+            }catch(error){
+                enabled.clear();owner=undefined;
+                const failed=graph;graph=undefined;
+                if(failed)await failed.dispose();
+                throw error;
+            }
+        })();
+        try{return await initializing;}finally{initializing=undefined;}
     }
+
     async function tryHandle(raw){
         if(!owner)return false;
         if(closed)return owner.shouldHandle(raw).owner==='pipeline';
@@ -80,13 +94,19 @@ function createPhase4Service({root,clock=new SystemClock(),buildGraph,logger={in
     }
     function dispose(){
         if(closing)return closing;closed=true;
+        // Close admission synchronously, then await startup before draining resources.
         const owned=owner?.close()||Promise.resolve();
-        const application=graph?.dispose()||Promise.resolve();
-        closing=Promise.allSettled([owned,application]).then(results=>{
-            enabled.clear();const error=results.find(value=>value.status==='rejected');if(error)throw error.reason;
+        const startup=initializing||Promise.resolve();
+        closing=Promise.resolve(startup).catch(()=>undefined).then(()=>Promise.allSettled([
+            owned,Promise.resolve().then(()=>graph?.dispose())
+        ])).then(results=>{
+            const failed=results.find(result=>result.status==='rejected');
+            if(failed)throw failed.reason;
+            // Keep the selection rules for closed-owner checks: shutdown must
+            // never hand an already selected domain back to legacy.
         });return closing;
     }
-    return{initialize,tryHandle,dispose,get status(){return{enabled:!!owner&&!closed,mode:owner?'canary':'legacy',canaryChats:owner?.readiness.canaryChatCount||0,features:[...enabled],counters:{...counters}};}};
+    return{initialize,tryHandle,dispose,get status(){return{enabled:!!owner&&!closed,mode:owner?'canary':'legacy',canaryChats:owner?.readiness.canaryChatCount||0,features:closed?[]:[...enabled],counters:{...counters}};}};
 }
 
 async function defaultGraph({config,clock,root}){

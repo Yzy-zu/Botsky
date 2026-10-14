@@ -18,6 +18,8 @@ test('legacy import/startup does not construct graph; private canary owns only i
  assert.equal(await service.tryHandle({key:{id:'quote',remoteJid:CHAT},message:{ephemeralMessage:{message:{extendedTextMessage:{text:'Botsky qr',contextInfo:{stanzaId:'media'}}}}}}),false);
  assert.equal(await service.tryHandle(raw('Botsky qr minecraft --to otro-chat')),true);
  assert.equal(calls.length,2);await service.dispose();assert.equal(disposed,1);
+ assert.equal(await service.tryHandle(raw('estado')),true);
+ assert.equal(await service.tryHandle(raw('voz hola')),false);
 });
 test('failed owned request never replays; uncaptioned media keeps legacy owner; full/group cutover refused',async()=>{
  const clock=new FakeClock();let calls=0;
@@ -26,4 +28,52 @@ test('failed owned request never replays; uncaptioned media keeps legacy owner; 
  await service.initialize({PIPELINE_MODE:'canary',V2_CANARY_CHAT_IDS:[CHAT]});assert.equal(await service.tryHandle(raw('Botsky qr hola')),true);
  const image={key:{id:'file',remoteJid:CHAT},message:{imageMessage:{url:'opaque-ref'}}};assert.equal(await service.tryHandle(image),false);
  await clock.advance(90000);assert.equal(await service.tryHandle(image),false);assert.equal(calls,1);await service.dispose();
+});
+
+const config={PIPELINE_MODE:'canary',V2_CANARY_CHAT_IDS:[CHAT]};
+test('shutdown waits for asynchronous startup and never publishes a late owner',async()=>{
+ let finish,disposed=0,calls=0,drained=false;
+ const pending=new Promise(resolve=>{finish=resolve;});
+ const service=createPhase4Service({root:'/synthetic',clock:new FakeClock(),buildGraph:()=>pending});
+ const starting=service.initialize(config);
+ const closing=service.dispose().then(()=>{drained=true;});
+ await Promise.resolve();assert.equal(drained,false);
+ assert.equal(await service.tryHandle(raw('Botsky qr hola')),false);
+ finish({app:{pipeline:{handle:async()=>{calls++;}}},dispose:async()=>{disposed++;}});
+ assert.deepEqual(await starting,{enabled:false});await closing;
+ assert.equal(disposed,1);assert.equal(calls,0);assert.equal(service.status.enabled,false);
+ assert.deepEqual(service.status.features,[]);
+ await service.dispose();assert.equal(disposed,1);
+ await assert.rejects(service.initialize(config),/lifecycle/);
+});
+test('concurrent startup is rejected; failed startup can retry without stale feature flags',async()=>{
+ let fail,builds=0,disposed=0;
+ const pending=new Promise((resolve,reject)=>{fail=reject;});
+ const service=createPhase4Service({root:'/synthetic',clock:new FakeClock(),buildGraph:()=>{
+  builds++;return builds===1?pending:Promise.resolve({app:{pipeline:{handle:async()=>({kind:'reply'})}},dispose:async()=>{disposed++;}});
+ }});
+ const first=service.initialize({...config,V2_CANARY_FEATURES:['voice']});
+ await assert.rejects(service.initialize(config),/lifecycle/);assert.equal(builds,1);
+ fail(Error('synthetic startup failure'));await assert.rejects(first,/synthetic/);
+ assert.deepEqual(service.status.features,[]);
+ await service.initialize(config);assert.equal(builds,2);assert.equal(await service.tryHandle(raw('voz hola')),false);
+ assert.equal(await service.tryHandle(raw('estado')),true);await service.dispose();assert.equal(disposed,1);
+});
+test('shutdown drains resources and reports a synchronous disposer failure',async()=>{
+ const service=createPhase4Service({root:'/synthetic',clock:new FakeClock(),buildGraph:async()=>({app:{pipeline:{handle:async()=>{}}},dispose:()=>{throw Error('synthetic disposal failure');}})});
+ await service.initialize(config);await assert.rejects(service.dispose(),/synthetic disposal/);
+ assert.equal(service.status.enabled,false);assert.deepEqual(service.status.features,[]);
+ assert.equal(await service.tryHandle(raw('estado')),true);
+});
+
+test('shutdown runs runtime disposal concurrently with the accepted owner drain',async()=>{
+ let release,entered;const running=new Promise(resolve=>{entered=resolve;});
+ const pending=new Promise(resolve=>{release=resolve;});let disposed=0;
+ const service=createPhase4Service({root:'/synthetic',clock:new FakeClock(),buildGraph:async()=>({
+  app:{pipeline:{handle:async()=>{entered();await pending;return{kind:'ignore'};}}},
+  dispose:async()=>{disposed++;release();}
+ })});
+ await service.initialize(config);const handling=service.tryHandle(raw('estado'));await running;
+ await service.dispose();assert.equal(await handling,true);assert.equal(disposed,1);
+ assert.equal(service.status.enabled,false);assert.equal(service.status.counters.handled,1);
 });

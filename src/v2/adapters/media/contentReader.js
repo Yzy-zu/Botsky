@@ -62,7 +62,7 @@ function createContentReader({downloadMedia,run,ocr,tempDirectory,files=fsPromis
             if(signature==='application/pdf')extension='pdf';
             if(OFFICE_BY_MIME[declaredMime]&&!extension)extension=OFFICE_BY_MIME[declaredMime];
 
-            const officeExtension=OFFICE_EXTENSIONS.includes(extension)?extension:OFFICE_BY_MIME[declaredMime];
+            const officeExtension=signature==='application/pdf'?undefined:OFFICE_EXTENSIONS.includes(extension)?extension:OFFICE_BY_MIME[declaredMime];
             if(officeExtension) {
                 const legacy=['doc','xls','ppt'].includes(officeExtension);
                 if(signature!==(legacy?'application/x-ole-storage':'application/zip'))throw new AppError('bad_output');

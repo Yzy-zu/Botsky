@@ -34,22 +34,16 @@ function createPipeline(options) {
         const access = gate(event, { accessSnapshot, rateState: options.rateState?.(event), now: clock.now() });
         if (!access.allow) return { kind: 'denied', reason: access.reason, event };
         // Shadow state is scoped to this pipeline instance; no business listeners.
-        context.observe(event);
+        const attachmentCached=context.observe(event);
         const metadata = { ...context.addressingMetadata(event), now: clock.now(), botJid };
         let addressed = addressingPolicy(event, metadata, { botJid, sessionGroupRelaxed, now: clock.now() });
         /** @type {import('../domain/types').Decision|undefined} */ let continuationDecision;
         const bareMedia = Boolean(event.media) && event.text.trim()==='';
-        if (bareMedia && !addressed.respond) {
-            const selectorCtx = { event, addressing:addressed, history:[], ...(metadata.attachment?{attachment:metadata.attachment}:{}),
-                correlationId:event.id, roles:roles||{admins:[],owners:[]} };
-            continuationDecision = attachmentContinuation(features,selectorCtx,()=>{observationFailures++;});
-            if (continuationDecision) addressed = {respond:true,reason:'active-attachment-collection',addressedBy:'session'};
-        }
         if (!addressed.respond) return { kind: 'ignore', reason: addressed.reason, event, addressing: addressed };
         /** @type {Ctx} */
         let ctx = { event, addressing: addressed, history: [], correlationId: event.id, roles: roles || { admins: [], owners: [] } };
         try {
-            ctx = await context.build(event, addressed);
+            ctx = await context.build(event, addressed, {allowCurrentMediaFallback:!attachmentCached});
             if (closed) return { kind: 'ignore', reason: 'pipeline-closed' };
             if (bareMedia && !continuationDecision) continuationDecision = attachmentContinuation(features,ctx,()=>{observationFailures++;});
             if (!shadow && options.recordInbound) {
