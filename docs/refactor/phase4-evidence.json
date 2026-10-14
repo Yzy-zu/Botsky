@@ -198,5 +198,16 @@
     "requiredFollowup": "Update rain batch-size expectations and verify startup/recovery cadence; full legacy suite deferred by explicit user instruction",
     "userInstruction": "apresura, deja las pruebas para después",
     "frequencyAssumption": "Five media per minute, stated to user; fewer on final unseen tail or send failure"
+  },
+  "latestPreparationDeployment": {
+    "source": "157eba5",
+    "pid": 4126746,
+    "health": 200,
+    "filesVerified": 104,
+    "backup": "/tmp/botsky-provider-native-1791996314",
+    "active": "legacy provider overload fix; minimal private QR/help/system-info canary",
+    "nativePdfAndProgress": "installed; documents flag inactive",
+    "verification": "static checks passed; functional tests deferred by user",
+    "phase4": "open"
   }
 }

@@ -499,3 +499,10 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - PDF/imagen nativos conectados al chat v2 después de clasificación; identidad actual/citada/cacheada validada, alias sólo del proveedor original, límites/cancelación y limpieza conservados. Progreso pesado usa reacción temporal, limpiada al terminar composición; no afirma ACK de WhatsApp.
 - Typecheck, lint, arquitectura (101 módulos, cero infracciones), sintaxis legacy y diff-check PASS. PRUEBAS FUNCIONALES APLAZADAS por instrucción del cliente. Actualizar audit de 503, pruebas de lluvia lote5 y escenarios de PDF/progreso antes de cerrar gates. No aplicar resultados históricos a este código.
 - Preparar despliegue de estabilidad legacy conservando canario privado QR/ayuda/estado y proactividad false. PDF/progreso quedan instalados pero inactivos en ese alcance. Fase4 abierta; TR-0166/TR-0437/TR-0368 no se cuentan como portados; luego olas B–D, Fase5 y Fase6. No reactivar observador ni retirar legacy.
+
+
+## Estabilidad IA desplegada — 2026-10-14 UTC
+
+- Artefacto `157eba5` publicado e instalado: 104 fuentes comprobadas contra commit, backup privado `/tmp/botsky-provider-native-1791996314`. Comparación previa detectó que producción aún carecía del endurecimiento de autorización proactiva ya presente en la rama; la diferencia se revisó y se conservó ese endurecimiento en el despliegue.
+- PM2 wasa PID4126746 online, HTTP200, configuración guardada. Alcance intacto: canario QR/ayuda/estado en privado; proactividad false. Corrección de sobrecarga IA activa en legacy. PDF/progreso instalados sin activar documents; no se enviaron mensajes sintéticos.
+- Tests funcionales siguen aplazados; check de salud no demuestra paridad. Fase4 permanece abierta y fases5/6 pendientes. No prometer fecha de migración total con funcionalidades aún sin portar/verificar.
