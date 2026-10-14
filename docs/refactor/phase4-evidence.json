@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-10-14T14:53:42.355088+00:00",
+  "recordedAt": "2026-10-14T14:55:13.706754+00:00",
   "status": "private_minimal_canary_active_full_wave_a_open",
   "verify": {
     "exitCode": 0,
@@ -43,8 +43,8 @@
     ],
     "privateChats": 1,
     "groups": 0,
-    "sourceCommit": "142b6e0",
-    "pid": 4057528,
+    "sourceCommit": "753b24a",
+    "pid": 4066967,
     "health": 200,
     "proactiveEnabled": false,
     "pm2Saved": true,
@@ -56,7 +56,7 @@
     "humanValidation": "deferred_by_user",
     "runtimeProbe": "production startup/migrations/disposal passed; zero messages",
     "rollbackFlagRehearsal": "new bootstrap in legacy mode: health200, pipeline disabled, queue empty before canary activation",
-    "lastRefreshBackup": "/tmp/botsky-parity-refresh-1791988898705",
+    "lastRefreshBackup": "/tmp/botsky-media-preparation-1791989653754",
     "lastCheckedCounters": {
       "handled": 0,
       "replies": 0,
@@ -131,8 +131,8 @@
     ]
   },
   "workInProgress": {
-    "status": "verified_awaiting_installation",
-    "deployed": false,
+    "status": "verified_sources_installed_minimal_canary_only",
+    "deployed": true,
     "globalVerification": {
       "exitCode": 0,
       "pass": 528,
@@ -155,6 +155,7 @@
       "TR-0688 forwarding existing media WaveB",
       "TR-0763 standalone voice tool Phase5"
     ],
-    "selectorMedia": "Prepared: requires all five media consumers before owning bare uploads; flags unchanged"
+    "selectorMedia": "Prepared: requires all five media consumers before owning bare uploads; flags unchanged",
+    "activation": "Only qr/help/system-info enabled; media selector prepared but media flags unchanged"
   }
 }

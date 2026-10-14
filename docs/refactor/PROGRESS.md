@@ -437,3 +437,12 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - Context ahora hidrata citasmedia explícitas previas alcanario: exige mensaje/chatactual y stanza/participante exactos, devuelve opaqueID/providerKey,sinURLni bytes/mediaKey. Citasdesconocidas no sustituyenarchivo reciente. Revisiónindependiente sin ampliación nueva descope; citasgroupcachedsharedson comportamiento existente.
 - Flagsproductivoscontinúan1privado qr/help/system-info,proactivefalse,jobs/restochatslegacy. Cliente aplazópruebareal; no reactivarobserver. Instalar checkpoint trascommit/push yregistrarSHA/PID/healthseparado.
 - Para ampliar despliegue multimedia: cerrarPDFmultimodal ygrammar/messaging/toolscopependientes; resolver extractorhostedmedia conegresoaislado o mantenerlegacyowner explícito paraflujosnoportados; validar recorrido real privado y despuésgrupo como exigeplan. PreparaciónnoequivaleGate4A cerrado.
+
+
+## Despliegue de preparación multimedia — 2026-10-14 UTC
+
+- Artefacto `753b24a` publicado e instalado. Se comprobaron 103 fuentes contra Git: cero diferencias. Backup privado: `/tmp/botsky-media-preparation-1791989653754`; contiene configuración sensible y nunca debe publicarse.
+- Composición con configuración productiva, SQLite y dispose comprobada antes del reinicio, sin mensajes externos. PM2 online con PID 4066967, health 200, timeout de cierre 45 segundos y configuración guardada.
+- Alcance activo conservado: un privado con QR, ayuda y estado. Proactividad apagada; otros chats, jobs y funciones siguen en legacy. El selector multimedia nuevo está instalado pero sus flags no están activos. Contadores del canario en cero al chequeo; validación humana aplazada por el cliente.
+- Última verificación: 528 pruebas v2 y 71 de refactor, cero fallos. Matriz original: 99 portados de 804; selección curada de ola A: 86 de 92. El informe de seis brechas parciales está en `phase4-evidence.json`. Falta además extracción alojada con egreso aislado y canario real privado/grupo. Fase 4 sigue abierta; no retirar v1 ni reactivar el observador.
+- Siguiente trabajo para acelerar el despliegue amplio: PDF nativo hacia el modelo (TR-0166/TR-0437), progreso durante trabajos pesados (TR-0368), resolver la gramática semántica/literal sin prefijo (TR-0686), y conectar reenvío de media/herramienta de voz en sus fases (TR-0688/TR-0763). La urgencia no elimina esos comportamientos legacy.
