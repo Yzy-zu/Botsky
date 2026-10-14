@@ -367,3 +367,11 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - Hallazgo propio: checkpoint previo usaba module.require para cargar estilo legacy y escapaba al AST de auditoría. Se sustituyó por el módulo v2; checker ahora detecta propiedad/computada y aliases de require. No se ocultó con un shim ni se borró evidencia histórica. La ruta estaba fuera del canario instalado.
 - Cierre del runtime robusto ante fallo de timer: primero cierra admisiones, guarda fallos, drena recursos y DB; rearm fallido se captura, callbacks viejos no hacen IO después de dispose.
 - Artefacto nuevo listo para actualizar el canario mínimo tras commit/push y backup privado. Mantener exactamente un privado, QR/ayuda/estado, proactive apagado y jobs en legacy. No activar módulos adicionales ni cerrar Fase 4 por esta verificación. Registrar nuevo SHA/PID/health luego del despliegue.
+
+
+## Canario actualizado y continuación — 2026-10-14 UTC
+
+- Artefacto 2bba3de publicado e instalado: 102 fuentes v2 verificadas, cero diferencias. Backup privado /tmp/botsky-canary-refresh-1791977371520; configuración PM2 contiene secretos y no se publica.
+- Composición con configuración productiva comprobada antes del reinicio: arranque, migraciones sidecar y dispose correctos, cero mensajes externos. Reinicio PM2: PID 3961074, online, health 200; kill_timeout 45000 y PM2 save.
+- Alcance conservado: exactamente un privado y QR/ayuda/estado, proactive false, ningún grupo v2. Fuentes de voz/documentos/web instaladas pero esas features siguen en legacy. Contadores handled/replies/errors permanecían en cero al chequeo; entrega humana pendiente por decisión del cliente.
+- Tres agentes económicos reanudan brechas independientes: elegibilidad/continuidad de adjuntos, trazabilidad de documentos/conversión y evaluación segura de extracción de medios de sitios. No ampliar flags ni cerrar Fase 4 por pruebas locales.

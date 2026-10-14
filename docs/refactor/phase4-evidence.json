@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-10-14T11:28:23.651282+00:00",
+  "recordedAt": "2026-10-14T11:33:40.212196+00:00",
   "status": "private_minimal_canary_active_full_wave_a_open",
   "verify": {
     "exitCode": 0,
@@ -43,19 +43,20 @@
     ],
     "privateChats": 1,
     "groups": 0,
-    "sourceCommit": "e8f15df",
-    "pid": 3906724,
+    "sourceCommit": "2bba3de",
+    "pid": 3961074,
     "health": 200,
     "proactiveEnabled": false,
     "pm2Saved": true,
     "killTimeoutMs": 45000,
     "productionBotDbModified": false,
     "sidecar": "data/v2/canary.db",
-    "sourceFilesVerified": 97,
+    "sourceFilesVerified": 102,
     "sourceMismatches": 0,
     "humanValidation": "deferred_by_user",
-    "runtimeProbe": "real graph startup/SQLite and disposal passed; zero messages",
-    "rollbackFlagRehearsal": "new bootstrap in legacy mode: health200, pipeline disabled, queue empty before canary activation"
+    "runtimeProbe": "Production environment: graph startup, sidecar migrations and disposal passed; zero messages",
+    "rollbackFlagRehearsal": "new bootstrap in legacy mode: health200, pipeline disabled, queue empty before canary activation",
+    "lastRefreshBackup": "/tmp/botsky-canary-refresh-1791977371520"
   },
   "pending": [
     "Human QR/help/status walk deferred by user, then one controlled group.",
@@ -71,7 +72,7 @@
     "request": "Botsky qr hola / Botsky ayuda / Botsky estado"
   },
   "localFollowup": {
-    "deployed": false,
+    "deployed": true,
     "verify": {
       "exitCode": 0,
       "pass": 433,
@@ -107,6 +108,7 @@
       "guarded HTML/XHTML reader",
       "PDF page validation and doc shortcut",
       "property/aliased import architecture guard"
-    ]
+    ],
+    "activation": "Sources installed; only qr/help/system-info active in one private chat; other features remain legacy"
   }
 }
