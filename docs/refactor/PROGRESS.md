@@ -419,3 +419,10 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - Seis casos básicos QR/help/estado/crop identificados; auditor conserva804IDs originales y detecta ausentes/duplicados. Matriz reconciliada77portados/727restantes, incluyendo11ports tablas/crypto de fases previas que resumen histórico omitía. CasosA curados64/92,28pendientes; no es totalidad ni gateclosure.
 - Último chequeo productivo al integrar: PID3971001 online/health200,canary1privado qr/help/system-info,proactivefalse,counters0. Artefacto instalado sigueb5a4513 mientras se publica este nuevo código. No acreditar entrega humana; usuario la aplazó. Registrar refresh aparte si se instala.
 - Retomar brechas: lectorcontentReader9casosmenoslosyaresueltos según auditor; semanticVoice/collage/e2e/mediaUx y TR0763. URLsde sitios yt-dlp requieren aislamiento de egreso; archivosdirectos+textoweb ya disponibles. Elegibilidad multimedia/canario real privado+grupo siguenpendientes. F4 abierta, olasB–D/F5/F6 pendientes,observadorcancelado.
+
+
+## Checkpoint reanudado instalado — 2026-10-14 UTC
+
+- Código142b6e0 publicado e instalado;103fuentes verificadas contraGit,cero diferencias. Backupprivado /tmp/botsky-parity-refresh-1791988898705 contiene configuración sensible; nunca publicarlo.
+- Startupreal configproductiva/SQLite/dispose correcto,cero mensajes externos. ReinicioPID4057528,online,health200,kill_timeout45000,PM2save. Alcanceigual:1privado,qr/help/system-info,proactivefalse,grupos/jobs/restofuncioneslegacy. Counters0alchequeo,noentregahumana acreditada.
+- Próximo trabajo concreto:28casos pendientes en selección curadaA según /tmp/botsky-resume-wave-a-trace.txt:contentReader9,semanticVoice9,collage4,e2e/mediaUx5,voiceUx1parcialTR0763. Completar restantes y cobertura OCR sin inventario histórico directo; implementar extracción alojada con egresoaislado, preparar selector multimedia sin dobleowner y validarcanario privado/grupo cuandoelcliente pruebe. Fase4abierta,noavanzarBni cerrarfaseporcantidadtests. Observadorcancelado.

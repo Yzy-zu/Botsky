@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-10-14T14:41:08.959015+00:00",
+  "recordedAt": "2026-10-14T14:42:11.544529+00:00",
   "status": "private_minimal_canary_active_full_wave_a_open",
   "verify": {
     "exitCode": 0,
@@ -43,8 +43,8 @@
     ],
     "privateChats": 1,
     "groups": 0,
-    "sourceCommit": "b5a4513",
-    "pid": 3971001,
+    "sourceCommit": "142b6e0",
+    "pid": 4057528,
     "health": 200,
     "proactiveEnabled": false,
     "pm2Saved": true,
@@ -56,7 +56,7 @@
     "humanValidation": "deferred_by_user",
     "runtimeProbe": "production startup/migrations/disposal passed; zero messages",
     "rollbackFlagRehearsal": "new bootstrap in legacy mode: health200, pipeline disabled, queue empty before canary activation",
-    "lastRefreshBackup": "/tmp/botsky-ownership-refresh-1791978206854",
+    "lastRefreshBackup": "/tmp/botsky-parity-refresh-1791988898705",
     "lastCheckedCounters": {
       "handled": 0,
       "replies": 0,
@@ -131,8 +131,8 @@
     ]
   },
   "workInProgress": {
-    "status": "verified_awaiting_installation",
-    "deployed": false,
+    "status": "verified_sources_installed_private_minimal_canary_only",
+    "deployed": true,
     "globalVerification": {
       "exitCode": 0,
       "pass": 498,
@@ -150,6 +150,7 @@
     },
     "partial": [
       "TR-0763: standalone voice tool remains Phase5 work"
-    ]
+    ],
+    "activation": "Only qr/help/system-info enabled; other features remain legacy"
   }
 }
