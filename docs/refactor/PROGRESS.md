@@ -465,3 +465,11 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - Publicación aplicada y comprobada: 246 registros activos, 246 publicados y 246 originales accesibles a Botsky (antes160). Nuevas imágenes/vídeos/importaciones se asocian automáticamente al álbum público agregado; papelera no restaurada. Backup SQLite consistente `/tmp/rikolino-publication-backup-1791990255`. No se cambiaron álbumes explícitos ni precios existentes.
 - Suite legacy823/823 y focal10/10 verdes. Tests de reader crean la biblioteca fixture con autoPublish:false para conservar el contrato de álbumes manuales; tests Petrovsky nuevos cubren el default real. Rikolino sigue consultando un snapshot nuevo en cada selección.
 - Recordar para OlaC: portar esta política sin repetición hasta agotar disponibles, registro sólo tras envío exitoso y lock por generación del evento. Memoria de vistos por evento se reinicia al reiniciar proceso. Fase4 sigue abierta con sus brechas anteriores; este incidente autorizado quedó atendido.
+
+
+## Revisión de logs solicitada por el cliente — 2026-10-14 UTC
+
+- Chequeo read-only posterior a despliegue: wasa PID4081372 y miroslav PID4080831 online, ambos endpoints HTTP200. No reinicios posteriores observados. Stderr retenido de ambos servicios tiene modificación anterior a sus reinicios actuales; no tratar errores históricos como nuevos.
+- Desde el último arranque de Botsky: 14 eventos AI-PROVIDER con503 y2 errores AI-ROUTER con503; rotación de claves no evitó el fallo en esas rutas legacy. Sin uncaught/UnhandledRejection nuevos; sin errores de HoraFeliz y un despacho de lluvia registrado. No inferir caída global de Gemini, sólo respuestas503 observadas en estas solicitudes.
+- Petrovsky no registra errores nuevos desde su último arranque. Publicación246/246 fue comprobada en el checkpoint anterior. Canary v2 sigue counters0 y alcance mínimo; no atribuir estos errores a v2 ni al cambio de fotos.
+- Pendiente concreto de estabilidad a revisar junto a migración IA: reducir intentos redundantes ante503/overload y verificar fallback disponible para el router legacy, manteniendo mismos permisos y sin reenviar comandos ya ejecutados. En este chequeo no se alteró configuración, código ni se enviaron mensajes.
