@@ -2,6 +2,7 @@
 const test=require('node:test');const assert=require('node:assert/strict');
 const {FakeClock}=require('../../../src/v2/platform/clock');
 const {createApplication}=require('../../../src/v2/main');
+const {loadConfig}=require('../../../src/v2/config');
 function raw(id='request',text='/hold'){return{key:{id,remoteJid:'19995550101@s.whatsapp.net'},message:{conversation:text}};}
 function good(text){return{ok:true,data:{text,parts:[],toolCalls:[],provider:'gemini'}};}
 function deferred(){let resolve;const promise=new Promise(yes=>{resolve=yes;});return{promise,resolve};}
@@ -40,4 +41,26 @@ test('dispose prevents subsequent chunks after an already issued send settles',a
 test('disposing an idle application is awaitable, idempotent and cleans all ephemeral state',async()=>{
     const {clock,app}=setup();app.store.set('synthetic','key',true,1000);
     const shutdown=app.dispose();assert.equal(typeof shutdown.then,'function');assert.equal(app.dispose(),shutdown);await shutdown;assert.equal(app.store.size,0);assert.equal(clock.pendingTimers,0);
+});
+test('central config controls route, chat, repeated-response budgets and private/group character limits',async()=>{
+    const clock=new FakeClock(1000);const sends=[];const requests=[];let replyReads=0;
+    const app=createApplication({clock,botJid:'19995550199@s.whatsapp.net',conversation:{recent:async()=>[]},
+        recentReplies:async()=>++replyReads===1?[]:['A generated answer that is deliberately much longer than the configured limit.'],
+        messenger:{sendText:async(_chat,text)=>{sends.push(text);return{};}},
+        llm:{generate:async request=>{requests.push(request);if(request.task==='route')return good('{"kind":"chat"}');
+            if(request.messages[0]?.parts?.[0]?.text?.startsWith('Restate'))return good('A distinct varied answer that is also longer than the configured limit.');
+            return good('A generated answer that is deliberately much longer than the configured limit.');}},getStatus:async()=>({}),
+        config:loadConfig({RESPONSE_PRIVATE_MAX_CHARS:'24',RESPONSE_GROUP_MAX_CHARS:'12',LLM_CHAT_MAX_OUTPUT_TOKENS:'77',LLM_ROUTE_MAX_OUTPUT_TOKENS:'33'})});
+    const privateReply=app.pipeline.handle(raw('private','Botsky hello'));await clock.advance(1200);await privateReply;
+    assert.equal(requests[0].budget.maxOutputTokens,33);
+    assert.equal(requests[1].budget.maxOutputTokens,77);
+    assert.equal(requests.length,2);
+    assert.equal(Array.from(sends.join('')).length,24);
+    sends.length=0;requests.length=0;
+    const groupReply=app.pipeline.handle({id:'group',chatId:'19995559999@g.us',isGroup:true,sender:{jid:'19995550101@s.whatsapp.net',number:'19995550101',name:'User'},text:'Botsky hello',kind:'text',mentions:[],isFromMe:false,receivedAt:clock.now(),raw:{}});await clock.advance(1200);const groupResult=await groupReply;assert.equal(groupResult.kind,'reply',JSON.stringify(groupResult));
+    assert.equal(requests[0].budget.maxOutputTokens,33);
+    assert.equal(requests[1].budget.maxOutputTokens,77);
+    assert.equal(requests[2].budget.maxOutputTokens,77,'repetition variation uses the configured chat generation budget');
+    assert.equal(Array.from(sends.join('')).length,12);
+    await app.dispose();
 });

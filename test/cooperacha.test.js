@@ -588,7 +588,7 @@ test('Cooperacha 12: enrutamiento de lenguaje natural mediante dispatcher (le me
         await dispatch({
             from: groupJid,
             participant: userJid,
-            text: 'le meto 100',
+            text: 'Botsky, le meto 100',
             messageType: 'conversation',
             isGroup: true,
             hasPrefix: false,

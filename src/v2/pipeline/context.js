@@ -1,5 +1,6 @@
 // @ts-check
 'use strict';
+const { normalizeJid } = require('../domain/jid');
 /** @typedef {import('./contracts').Attachment} Attachment */
 /** @typedef {import('./contracts').Session} Session */
 /** @typedef {import('./contracts').AddressingMetadata} AddressingMetadata */
@@ -14,7 +15,14 @@ function createContext({ clock, store, conversation, roles = { admins: [], owner
     /** Cache only lightweight current references; no downloads/history/XP writes. @param {InboundEvent} event */
     function observe(event) {
         if (!event.media || event.isFromMe) return;
-        /** @type {Attachment} */ const attachment = { id:event.id,ownerJid:event.sender.jid,expiresAt:clock.now()+600000,ref:event.media.ref,mime:event.media.mime,kind:event.kind };
+        /** @type {Attachment} */ const attachment = { id:event.id,ownerJid:event.sender.jid,chatId:event.chatId,expiresAt:clock.now()+600000,ref:event.media.ref,mime:event.media.mime,kind:event.kind };
+        const raw = /** @type {Record<string,unknown>} */ (event.raw || {});
+        const key = /** @type {{id?:unknown,remoteJid?:unknown,participant?:unknown,participantAlt?:unknown,fromMe?:unknown}|undefined} */ (raw.key);
+        if (key?.id === event.id && typeof key.remoteJid === 'string' && normalizeJid(key.remoteJid) === event.chatId) {
+            // Canonical IDs address policies; the provider needs its original lookup key.
+            attachment.providerKey = { id:event.id,remoteJid:key.remoteJid,fromMe:Boolean(key.fromMe),
+                ...(typeof key.participant === 'string' ? {participant:key.participant} : {}) };
+        }
         store.set('pipeline.attachment.owner',contextKey(event.chatId,event.sender.jid),attachment,600000);
         store.set('pipeline.attachment.id',contextKey(event.chatId,event.id),attachment,600000);
     }
@@ -26,7 +34,9 @@ function createContext({ clock, store, conversation, roles = { admins: [], owner
         const session = storedSession && storedSession.ownerJid === event.sender.jid && storedSession.expiresAt > now ? { ...storedSession } : undefined;
         const quoted = event.quoted ? /** @type {Attachment|undefined} */(store.get('pipeline.attachment.id',contextKey(event.chatId,event.quoted.messageId))) : undefined;
         const own = /** @type {Attachment|undefined} */(store.get('pipeline.attachment.owner',key));
-        const source = quoted && quoted.expiresAt > now ? quoted : own && own.ownerJid === event.sender.jid && own.expiresAt > now ? own : undefined;
+        // An unknown quote must never silently select a different recent file.
+        const source = event.quoted ? quoted && quoted.expiresAt > now ? quoted : undefined
+            : own && own.ownerJid === event.sender.jid && own.expiresAt > now ? own : undefined;
         const attachment = source ? { ...source, quotedMatch: Boolean(quoted && quoted === source) } : undefined;
         return { ...(session ? { session } : {}), ...(attachment ? { attachment } : {}), airdropActive: store.get('pipeline.airdrop',event.chatId) === true };
     }

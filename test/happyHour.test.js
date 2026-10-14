@@ -400,7 +400,7 @@ test('R5: AI Semantic Router & Fast-Path Pre-LLM para consultas en lenguaje natu
     // Fast-path de consulta de estado
     sentTexts.length = 0;
     await dispatch({
-        text: 'hay hora feliz?',
+        text: 'Botsky hay hora feliz?',
         from: TEST_GROUP,
         isGroup: true,
         participant: USER_NORMAL_JID,
@@ -414,7 +414,7 @@ test('R5: AI Semantic Router & Fast-Path Pre-LLM para consultas en lenguaje natu
 
     // Fast-path de apagado por admin
     await dispatch({
-        text: 'apaga la hora feliz',
+        text: 'Botsky apaga la hora feliz',
         from: TEST_GROUP,
         isGroup: true,
         participant: ADMIN_JID,

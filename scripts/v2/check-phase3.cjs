@@ -11,10 +11,13 @@ function evidenceProblems(evidence,now=Date.now()) {
     if(!Array.isArray(evidence.coverage)||coverageModules.some(file=>!evidence.coverage.some(row=>row.file===file&&Number.isFinite(row.lines)&&row.lines>=90)))problems.push('Every runtime pipeline/policy module needs >=90% lines.');
     for(const id of expected)if(evidence.scenarios?.[id]!=='pass')problems.push(`${id}: missing passing evidence.`);
     if(evidence.architectureReview?.status!=='approved')problems.push('Architecture review pending.');
+    const shadowWaived=Array.isArray(evidence.exceptions)&&evidence.exceptions.some(item=>item.id==='F3-E001'&&item.status==='accepted'&&item.authorizedBy==='user'&&item.instruction==='ya olvida el observador, el chiste es q el bot quede ya listo'&&item.scope==='live-shadow-observer');
     const shadow=evidence.shadow;
+    if(!shadowWaived) {
     if(!shadow||shadow.clock!=='SystemClock'||shadow.active!==true||!Number.isFinite(shadow.startedAt)||!Number.isFinite(shadow.observedUntil)||shadow.observedUntil-shadow.startedAt<86400000||shadow.observedUntil>now||now-shadow.observedUntil>120000)problems.push('Need 24 continuous real hours of active shadow, with a recent checkpoint.');
     if(!shadow||shadow.businessEffects!==0||shadow.exceptions!==0||shadow.sinkErrors!==0||!Number.isSafeInteger(shadow.observed)||shadow.observed<1)problems.push('Shadow must have observed traffic with zero business IO, exceptions and sink errors.');
     if(!shadow?.diffReport||shadow.diffReviewed!==true)problems.push('Categorized shadow diff report must be reviewed.');
+    }
     return problems;
 }
 function main(){const filename=path.resolve(__dirname,'../../docs/refactor/phase3-evidence.json');const evidence=fs.existsSync(filename)?JSON.parse(fs.readFileSync(filename,'utf8')):{};const problems=evidenceProblems(evidence);for(const problem of problems)console.log(problem);console.log(`Gate 3: ${problems.length?'OPEN':'PASS'}`);process.exitCode=problems.length?1:0;}

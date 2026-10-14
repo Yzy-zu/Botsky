@@ -25,8 +25,19 @@ function validArgs(args, schema) {
         return !rule.type || typeof item === rule.type;
     });
 }
-/** @param {{features:import('./contracts').Feature[],queue:import('../platform/queue').TieredQueue,clock:import('../platform/clock').Clock,llm:import('../domain/ports').LLM,timeoutMs?:number}} options */
-function createExecutor({ features, queue, clock, llm, timeoutMs = 30000 }) {
+const MAX_COMMAND_TIMEOUT_MS = 900_000;
+/** @param {unknown} timeout @returns {timeout is number} */
+function isValidTimeout(timeout) { return Number.isSafeInteger(timeout) && /** @type {number} */ (timeout) > 0 && /** @type {number} */ (timeout) <= MAX_COMMAND_TIMEOUT_MS; }
+/** @param {{features:import('./contracts').Feature[],queue:import('../platform/queue').TieredQueue,clock:import('../platform/clock').Clock,llm:import('../domain/ports').LLM,timeoutMs?:number,chatMaxOutputTokens?:number}} options */
+function createExecutor({ features, queue, clock, llm, timeoutMs = 30000, chatMaxOutputTokens = 300 }) {
+    if (!isValidTimeout(timeoutMs)) throw new RangeError('Invalid default executor timeout');
+    for (const feature of features) {
+        for (const command of feature.commands) {
+            if (command.timeoutMs !== undefined && !isValidTimeout(command.timeoutMs)) {
+                throw new RangeError(`Invalid timeout for command ${command.name}`);
+            }
+        }
+    }
     let stopped = false;
     /** @type {Set<AbortController>} */ const active = new Set();
     function stop() { stopped = true; for (const controller of active) controller.abort(); }
@@ -35,7 +46,7 @@ function createExecutor({ features, queue, clock, llm, timeoutMs = 30000 }) {
         if (stopped) throw new AppError('unknown');
         if (decision.kind === 'ignore') return { parts: [] };
         if (decision.kind === 'chat') {
-            const result = await llm.generate({ task: 'chat', budget: { maxOutputTokens: 300, timeoutMs }, messages: [
+            const result = await llm.generate({ task: 'chat', budget: { maxOutputTokens: chatMaxOutputTokens, timeoutMs }, messages: [
                 ...ctx.history.map(message => ({ role: /** @type {'user'|'assistant'} */ (message.role), parts: [{ text: message.content }] })),
                 { role: 'user', parts: [{ text: ctx.event.text }] }
             ] });
@@ -44,6 +55,7 @@ function createExecutor({ features, queue, clock, llm, timeoutMs = 30000 }) {
         }
         const entry = resolveCommand(features, decision);
         if (!entry) throw new AppError('bad_output');
+        const commandTimeoutMs = entry.command.timeoutMs ?? timeoutMs;
         const access = accessPolicy({ senderJid: ctx.event.sender.jid, chatId: ctx.event.chatId, isGroup: ctx.event.isGroup, roles: ctx.roles, requiredAccess: entry.command.access, scope: entry.command.scope });
         if (!access.allow) return { parts: [{ type: 'text', text: 'Esta acción requiere permisos adicionales. Pide a una persona autorizada que la ejecute.' }] };
         const args = /** @type {Record<string,unknown>} */ (decision.args || {});
@@ -64,14 +76,14 @@ function createExecutor({ features, queue, clock, llm, timeoutMs = 30000 }) {
                 return reply;
             } finally { signal.removeEventListener('abort', abort); active.delete(controller); }
         };
-        if (entry.command.tier !== 'none') return /** @type {Promise<import('../domain/types').Reply>} */ (queue.add(JSON.stringify([ctx.event.chatId, ctx.event.sender.jid]), run, entry.command.tier, entry.command.name, { timeoutMs }));
+        if (entry.command.tier !== 'none') return /** @type {Promise<import('../domain/types').Reply>} */ (queue.add(JSON.stringify([ctx.event.chatId, ctx.event.sender.jid]), run, entry.command.tier, entry.command.name, { timeoutMs: commandTimeoutMs }));
         // Even unqueued commands have a deadline; abort and prevent a late reply.
         const controller = new AbortController();
         let handle = 0;
-        const timeout = new Promise((_, reject) => { handle = clock.setTimeout(() => { controller.abort(); reject(new AppError('timeout')); }, timeoutMs); });
+        const timeout = new Promise((_, reject) => { handle = clock.setTimeout(() => { controller.abort(); reject(new AppError('timeout')); }, commandTimeoutMs); });
         try { return /** @type {import('../domain/types').Reply} */ (await Promise.race([run(controller.signal), timeout])); }
         finally { clock.clearTimeout(handle); }
     }
     return { execute, stop };
 }
-module.exports = { createExecutor, validArgs };
+module.exports = { createExecutor, validArgs, isValidTimeout, MAX_COMMAND_TIMEOUT_MS };

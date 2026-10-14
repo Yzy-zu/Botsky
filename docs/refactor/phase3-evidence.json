@@ -1,18 +1,18 @@
 {
-  "status": "shadow_active_gate_open",
-  "recordedAt": "2026-10-13T10:18:22.469226+00:00",
+  "status": "closed_with_exception_F3-E001",
+  "recordedAt": "2026-10-14T02:53:56.606445+00:00",
   "verify": {
     "exitCode": 0,
-    "pass": 229,
+    "pass": 314,
     "fail": 0,
-    "report": "/tmp/botsky-phase3-resume-verify.log",
-    "sha256": "f1723292ce7a56f4ba4946e82b094b86b02a59446a2ebb44d5a6cf5d49e24ebb"
+    "report": "/tmp/botsky-phase3-incident-final-verify.log",
+    "sha256": "56124de9a85e17956afe90768f5b618f7fedca3b08d60949c4dd9188b875c93f"
   },
   "refactor": {
-    "pass": 52,
+    "pass": 55,
     "fail": 0,
-    "report": "/tmp/botsky-phase3-resume-refactor.tap",
-    "sha256": "7d2a42d08cc51dad55eb1e517ef73ec123cf0b48f3c781e3a51c0a5c32d98130"
+    "report": "/tmp/botsky-incident-refactor-final.tap",
+    "sha256": "e35e3f4c9ed7fe554e344fbbda3daf579adf68ba261eb97019df944b037bd19a"
   },
   "coverage": [
     {
@@ -88,35 +88,39 @@
     "S13": "pass",
     "S14": "pass",
     "S15": "pass",
-    "S16": "pass"
+    "S16": "pass",
+    "S10": "pass",
+    "S11": "pass"
   },
   "architectureReview": {
-    "status": "approved_for_partial_shadow",
-    "functionalReview": "favorable_after_verified_local_fixes",
+    "status": "approved",
+    "functionalReview": "approved_after_core_fixes_and_314_passing_checks",
     "document": "docs/refactor/wo/WO-037.md",
     "liveDiffReview": "docs/refactor/phase3-diff-review.md",
-    "finalOperationalReview": "pending_24h_and_complete_diff_review"
+    "finalOperationalReview": "observer_cancelled_by_user_F3-E001"
   },
   "shadow": {
-    "recordedAt": "2026-10-13T10:15:37.093Z",
-    "active": true,
+    "recordedAt": "2026-10-14T02:04:53.873Z",
+    "active": false,
     "clock": "SystemClock",
     "startedAt": 1791860560938,
-    "observedUntil": 1791886481170,
-    "elapsedMs": 25920232,
-    "observed": 4,
-    "processed": 4,
+    "observedUntil": 1791941438939,
+    "elapsedMs": 80878001,
+    "observed": 465,
+    "processed": 465,
     "exceptions": 0,
     "sinkErrors": 0,
     "dropped": 0,
     "bridgeDropped": 0,
-    "v1TimedOut": 0,
-    "unmatchedRecords": 304,
+    "v1TimedOut": 282,
+    "unmatchedRecords": 1276,
     "workerBusy": false,
-    "actualDiffs": 4,
+    "actualDiffs": 465,
     "categories": {
-      "unknown": 3,
-      "changed": 1
+      "unknown": 311,
+      "changed": 45,
+      "v2-less": 107,
+      "v2-more": 2
     },
     "earliestCompletion": "2026-10-14T03:02:40.938Z",
     "businessEffects": 0,
@@ -127,19 +131,39 @@
       "Elapsed time is real UTC and requires same process/fresh heartbeat; a restart cannot accumulate segments.",
       "Diff review and final architecture approval remain manual; 24h alone never closes Gate3."
     ],
-    "diffReport": "docs/refactor/phase3-shadow-status.json",
-    "diffReviewed": false
+    "diffReport": "docs/refactor/phase3-interrupted-shadow.json",
+    "diffReviewed": false,
+    "cancelledByUser": true
   },
   "limitations": [
-    "24h reales aún pendientes; no simuladas por FakeClock.",
+    "24h reales a\u00fan pendientes; no simuladas por FakeClock.",
     "Sombra inicial compara addressing/decisiones con planes v1 grabados; no consulta historial ni sesiones legacy y marca unknown donde no hay plan/ID correlacionable.",
     "No activa canario ni ejecuta tools/passivos/migraciones/jobs v2.",
-    "Repo nuevo de hilos probado sólo con SQLite temporal; no migración001 productiva."
+    "Repo nuevo de hilos probado s\u00f3lo con SQLite temporal; no migraci\u00f3n001 productiva."
   ],
   "deployment": {
     "installedSourceCommit": "3c56f0a",
     "installedSourceHashCheck": "73 files, zero mismatches on 2026-10-13T10:15Z",
     "localCorrectionsDeployed": false,
     "difference": "Canonical normalized-input validation and asynchronous shutdown/cancellation fixes are local only. No live restart or source overwrite; the shadow never executes its business executor/composer."
+  },
+  "exceptions": [
+    {
+      "id": "F3-E001",
+      "status": "accepted",
+      "authorizedBy": "user",
+      "instruction": "ya olvida el observador, el chiste es q el bot quede ya listo",
+      "authorizedUtc": "2026-10-14T02:07:48.573Z",
+      "scope": "live-shadow-observer",
+      "reason": "El cliente cancela el observador y prioriza terminar el bot tras el incidente de v1.",
+      "limitations": "No se afirma soak de 24 horas ni paridad real completa. Siguen obligatorios tests, cobertura, revisi\u00f3n del n\u00facleo y gates de migraci\u00f3n por ola."
+    }
+  ],
+  "legacyVerification": {
+    "pass": 819,
+    "fail": 0,
+    "report": "/tmp/botsky-incident-legacy-final.tap",
+    "sha256": "c6f4f90987d0cf9b1663cb2de691691e18e3bb9edb9476571a1ccb285201d59b",
+    "baselinePreserved": true
   }
 }

@@ -134,7 +134,7 @@ test('Cualquier paráfrasis llega al modelo una vez y su plan no se sustituye po
 
 test('Seguimiento en grupo usa el ID elegido y conserva identidad del solicitante', async () => {
     const h=harness();const loc={from:'clase@g.us',participant:'ana@s.whatsapp.net'};
-    const original=h.media(loc);h.normalize(original);await h.dispatch(h.text('haz los primeros tres',loc));
+    const original=h.media(loc);h.normalize(original);await h.dispatch(h.text('Botsky, haz los primeros tres',loc));
     assert.equal(h.downloads[0].payload.message.key.id,original.key.id);assert.equal(h.delivered.length,1);
 });
 

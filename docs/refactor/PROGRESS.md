@@ -1,6 +1,6 @@
 # Refactor v2 — registro de continuidad
 
-Actualizado: 2026-10-13 UTC. Maestro: Codex. Plano: `plan.md`.
+Actualizado: 2026-10-14 UTC. Maestro: Codex. Plano: `plan.md`.
 
 ## Retomar el trabajo
 
@@ -23,8 +23,8 @@ Actualizado: 2026-10-13 UTC. Maestro: Codex. Plano: `plan.md`.
 | 0 Baseline y seguridad | Cerrada con excepción autorizada F0-E001 | Gate0 PASS; 21 fixtures reales / 14 categorías; poll diferido por cliente; baseline y trazabilidad completos |
 | 1 Cimientos | Cerrada | Gate1 PASS: verify exit0; 42 tests; 100% líneas config/TTL/queue/scheduler; 90 env documentadas |
 | 2 Adaptadores | Cerrada con excepción F2-E001 | verify:phase2 PASS; 123 tests verdes; legacy636/159, cero nuevos y28resueltos |
-| 3 Pipeline y sombra | Sombra real activa; gate abierto | verify229/229, hooks52/52, pipeline/policies100%;24h+diffs/revisiónfinal pendientes |
-| 4 Migración A–D | No iniciada | Gate 3 pendiente |
+| 3 Pipeline y políticas | Cerrada con excepción F3-E001 | verify314/314, hooks55/55, gate3PASS; sombra cancelada explícitamente por cliente |
+| 4 Migración A–D | OlaA en preparación/integración local | Adaptadores y pruebas locales; paridad, traza y canario pendientes |
 | 5 IA y duplicados | No iniciada | Gate 4 pendiente |
 | 6 Cutover y retiro | No iniciada | Soaks, rollback probado y aceptación pendientes |
 
@@ -58,12 +58,11 @@ Actualizado: 2026-10-13 UTC. Maestro: Codex. Plano: `plan.md`.
 
 ## Próximo paso concreto
 
-La auditoría de159 cerró con814/814 y está publicada. Fase3 tiene núcleo local
-verificado y sombra real activa desde2026-10-13T03:02:40.938Z; v1 sigue dueño.
-Retomar report-phase3-shadow.cjs --write para comprobar mismoPID/checkpoint/diffs.
-No cerrarGate3 ni avanzarFase4 hasta24h reales y revisiónfinal; earliest2026-10-14
-03:02:40.938UTC, siempreque no haya reinicios/excepciones/pérdida de heartbeat.
-Las comparacionesunknown/historial/sesionesparciales permanecen documentadas.
+Fase3 cerrada con excepción F3-E001; cliente canceló la sombra, NO reactivarla.
+Producción v1 online con guard determinista de grupos y proactividad apagada.
+Retomar integración de olaA (src/v2/composition/media.js), revisar paridad pendiente,
+portar filas de traceability y preparar canario real con único dueño por evento/job.
+No declarar v2 productivo ni migración completa antes de sus gates.
 
 ## Checkpoint operacional histórico previo a captura
 
@@ -284,3 +283,30 @@ Las comparacionesunknown/historial/sesionesparciales permanecen documentadas.
 - Integración final: npm run verify EXIT0, 229 pass/0 fail; 69 módulos sin violaciones, 94 settings y 100% líneas de pipeline/policies. Refactor/glue: 52/52, cero skips/cancelaciones. Logs temporales y hashes en phase3-evidence.json. Revisión funcional favorable WO037; Gate3 sigue abierto por tiempo y revisiones operacionales finales.
 - unmatched=304 no significa 304 errores o pérdidas: mezcla notificaciones no normalizables, decisiones sin pending y errores de clonación de plan. Sin desglose no atribuir cantidades. Los tres unknown siguen indeterminados. El changed de ayuda conserva feature/via/respond; es diferencia estructural command→intent, no una acción extra.
 - RETOMAR: después de la fecha mínima, ejecutar report-phase3-shadow.cjs --write y comprobar mismo PID, hashes, heartbeat reciente, errores y diffs completos. Distinguir versión instalada 3c56f0a del candidato local corregido. Si no hay 24 horas, mantener gate abierto. No acreditar historial/sesiones de producción desde estos tests. Publicar commit/push de esta integración.
+
+
+## Reanudación e incidente — 2026-10-14 UTC
+
+- Cliente pide proseguir y usar agentes económicos: se delega con gpt-6-luna; maestro mantiene su modelo actual.
+- Incidente confirmado por logs retenidos de v1: 3 envíos proactivos al grupo, 9 privados y 2 intervenciones burst. Estos contadores abarcan el log retenido, no una ventana garantizada. También hay timeouts de proveedores y errores HTTP; no se atribuyen todos al mismo incidente.
+- PM2 registra SIGKILL a 01:30:40 UTC; no hay evidencia de OOM en el journal consultado. El motivo del SIGKILL permanece indeterminado. La sombra llegó a 22h27m58s, NO a 24h; el preload falló al reutilizar archivo exclusivo después del reinicio.
+- Maestro pausó exclusivamente wasa a 02:00:40 UTC para contener. Evolution/Postgres/Redis permanecieron activos. Backup privado de las dos fuentes tocadas: /tmp/botsky-incident-backup-1791943771 (0700, archivos0600).
+- Usuario cancela explícitamente el observador: “ya olvida el observador, el chiste es q el bot quede ya listo”. F3-E001 autoriza retirar el requisito de sombra real; no afirma soak ni paridad completa. No se siguió desarrollando su recovery. Informe del tramo interrumpido conservado en phase3-interrupted-shadow.json.
+- Corrección productiva MINIMA: proactive.js requiere PROACTIVE_ENABLED exactamente true para scheduler/ciclo/burst; default apagado y guardas antes de enviar. dispatcher.js corta conversación grupal ajena antes de fastpaths/IA; permite Botsky/botsito, mención propia, cita propia verificada, prefijo opcional y seguimiento de adjunto del mismo dueño. Citas autentican identidad exacta; texto/historial/substring no prueban autoría.
+- Producción solo recibió los nuevos hunks del guard y proactive.js; NO el resto de correcciones legacy del worktree ni features v2. BOT_NUMBER configurado desde identidad real verificada, sin publicar su valor. PROACTIVE_ENABLED=false explícito PM2. Preload/flags sombra retirados y argumentos originales restaurados; PM2 save completado.
+- Bot restaurado online PID3667357, modo legacy, health200, log confirma kill switch apagado. Esto acredita arranque/contención, no una conversación live end-to-end.
+- Pruebas incidentales: VM kill switch3/3; Docker proactive+AIharness10/10; Docker guard/dispatcher/routingFailure49/49, con6 expectativas de conversación ajena actualizadas según política aprobada. Refactor hooks55/55. verify aún pendiente: primer intento detectó BOT_LID sin schema y se añadió/documentó (95settings); reintentar después de estabilizar preparativos de olaA.
+- F3 adicionales locales: config central ya gobierna límites chars/tokens (incluye variación de repetición), S10/S11 verdes offline, runbook canario preparado. Gate3 requiere verify actual + revisión de núcleo + excepción explícita; sigue abierto hasta integrar evidencia.
+- Preparación olaA en agentes: QR/OCR/transcripción, documentos/conversión, sticker/voz con puertos inyectados. NO activar ni declarar ola cerrada por tener manifests: faltan adaptadores reales, composición, tests portados/traza y canario por ola.
+- Próximo: verify final y cerrar F3 con F3-E001, commit/push; integrar adaptadores/composición de olaA y sus pruebas. Fases4–6 aún no completas. Observador retirado por instrucción, no volver a activarlo sin nueva petición.
+
+
+## Checkpoint de integración — F3 cerrada / olaA local
+
+- Verify final314/314 y95settings; arquitectura91módulos0violaciones. Refactor55/55, legacy819/819,0skip/cancel; logs/hashes en phase3-evidence.json. Gate3 debe comprobarse tras escribir evidencia; F3-E001 elimina solo el requisito del observador real.
+- OlaA preparada: QR/OCR/transcripción, documentos/conversión/colecciones PDF, sticker/efectos/censura/collage y voz mediante puertos; adaptadores nuevos sin imports legacy; composición concreta en src/v2/composition/media.js, registro rechaza doble dueño OCR/documentos.
+- Deadlines por comando hasta15min para conversiones, cancelación enlazada hasta Evolution; salida QR/OCR/transcripción acotada con aviso, transcripción<=12partes. Composer libera refs en finally tras entrega/fallo/cierre; janitor TTL es respaldo para trabajos cancelados antes del composer.
+- Descargas preservan providerKey original aparte de identidad canónica y verifican chat/id; quote desconocida nunca selecciona otro archivo reciente. URL downloader con DNS/IP públicos, conexión fijada, redirects limitados y bounds/cancelación, sin llamadas reales en sus contratos.
+- Smoke REAL local con archivos sintéticos: QR encode/decode, conversión WAV→MP3 y recorte de la segunda página PDF pasan usando binarios instalados; no red/proveedores/mensajes reales. Archivo tests/smoke/media-local.cjs, evidencia /tmp/botsky-ola-a-local-smoke.log.
+- BRECHAS olaA: extracción de webs/yt-dlp en nuevas URLs (solo archivos directos), destino/metadata completos de voz, implementación real de censura/collage, ZIP runtime ausente, paridad contentReader/multimodal, trazabilidad y canario. Estos preparativos NO cierranGate4A ni fueron activados en producción.
+- PM2 conservóPID3667357, online/health200, PROACTIVE_ENABLED=false, modo legacy, sin preload sombra. Commit/push del checkpoint es el próximo paso; después continuar olaA sin volver a esperar24h.

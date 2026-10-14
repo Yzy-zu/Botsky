@@ -592,7 +592,7 @@ test('Challenger 2 — Tarea 2: Solicitudes no autorizadas a !horafeliz on y !ho
     sentTexts.length = 0;
     const nonAdminUser3 = '5215599990003@s.whatsapp.net';
     await dispatch({
-        text: 'apaga la hora feliz',
+        text: 'Botsky apaga la hora feliz',
         from: TEST_GROUP,
         isGroup: true,
         participant: nonAdminUser3,

@@ -114,6 +114,7 @@ function recordGroupActivity(groupJid, senderJid, text) {
  * Se ejecuta de manera asíncrona (fire-and-forget) sin bloquear el flujo del dispatcher.
  */
 async function maybeTriggerBurstIntervention(groupJid) {
+    if (process.env.PROACTIVE_ENABLED !== 'true') return;
     if (!groupJid || typeof groupJid !== 'string' || !groupJid.endsWith('@g.us')) return;
 
     try {
@@ -164,6 +165,7 @@ async function maybeTriggerBurstIntervention(groupJid) {
         // Simular presencia de tipeo antes de enviar
         evolution.sendTyping(groupJid).catch(() => {});
         await new Promise(res => setTimeout(res, 1800));
+        if (process.env.PROACTIVE_ENABLED !== 'true') return;
         await evolution.sendText(groupJid, decision.message);
         addMessage(groupJid, 'assistant', decision.message, 'Botsky');
         await recordProactiveMessage(groupJid, 'group', decision.message);
@@ -176,6 +178,7 @@ async function maybeTriggerBurstIntervention(groupJid) {
  * Ejecuta un ciclo del pensamiento consciente y espontáneo de Botsky (Heartbeat de fondo).
  */
 async function runProactiveCycle() {
+    if (process.env.PROACTIVE_ENABLED !== 'true') return { skipped: true, reason: 'kill_switch' };
     try {
         // 1. Horario Humano / Modo Nocturno (Hora Ciudad de México)
         const now = new Date();
@@ -295,6 +298,7 @@ async function runProactiveCycle() {
             }
 
             logger.info(`[PROACTIVE] Botsky envía tiro espontáneo en privado a ${targetJid}: "${decision.message}"`);
+            if (process.env.PROACTIVE_ENABLED !== 'true') return { skipped: true, reason: 'kill_switch' };
             await evolution.sendText(targetJid, decision.message);
             await recordProactiveMessage(targetJid, 'private', decision.message);
             await addSocialEvent(groupJid, 'private_intervention', `Mensaje privado autorizado para ${targetJid}.`);
@@ -305,6 +309,7 @@ async function runProactiveCycle() {
             logger.info(`[PROACTIVE] Botsky interviene espontáneamente en el grupo: "${decision.message}"`);
             evolution.sendTyping(groupJid).catch(() => {});
             await new Promise(res => setTimeout(res, 1500));
+            if (process.env.PROACTIVE_ENABLED !== 'true') return { skipped: true, reason: 'kill_switch' };
             await evolution.sendText(groupJid, decision.message);
             addMessage(groupJid, 'assistant', decision.message, 'Botsky');
             await recordProactiveMessage(groupJid, 'group', decision.message);
@@ -322,6 +327,10 @@ async function runProactiveCycle() {
  * Inicializa el worker de consciencia proactiva en el scheduler maestro.
  */
 function initProactiveHeartbeat() {
+    if (process.env.PROACTIVE_ENABLED !== 'true') {
+        logger.info('[PROACTIVE] Disabled by global kill switch.');
+        return;
+    }
     // Tarea registrada cada 25 minutos
     registerTask('proactive-heartbeat', 25, async () => {
         await runProactiveCycle();

@@ -28,6 +28,7 @@ for (const name of ['ALLOWED_GROUPS_NORMAL', 'ALLOWED_NUMBERS_NORMAL', 'ALLOWED_
     define(name, 'list', [], 'Allowlist de JIDs/números separados por coma; comparar igualdad normalizada.', { secret: true });
 }
 define('BOT_NUMBER', 'string', '', 'Número propio para normalizar identidad; sin teléfono hardcodeado.', { secret: true });
+define('BOT_LID', 'string', '', 'Alias LID propio verificado para reconocer menciones y citas; nunca inferido del teléfono.', { secret: true });
 for (const [name, fallback, description] of [
     ['TMP_DIR', '/tmp/whatsapp-bot', 'Directorio temporal multimedia.'],
     ['DATA_DIR', './data', 'Directorio durable de datos.'],

@@ -120,3 +120,17 @@ test('Pipeline disposal waits for active model replay and blocks new live/shadow
  assert.equal((await f.pipeline.handle(raw('new','Botsky'))).reason,'pipeline-closed');assert.equal((await f.pipeline.decideOnly(raw('new-shadow','Botsky'))).reason,'pipeline-closed');
  let disposed=false;disposal.then(()=>{disposed=true;});await Promise.resolve();assert.equal(disposed,false);release();assert.equal((await pending).reason,'pipeline-closed');await disposal;assert.equal(disposed,true);assert.equal(f.sent.length,0);f.dispose();
 });
+
+
+test('composer releases owned media once after delivery, failure or closure without replacing outcome',async()=>{
+ for(const mode of ['success','send-failure','closed','cleanup-failure']) {
+  const released=[];let sends=0;
+  const composer=createComposer({messenger:{sendMedia:async()=>{sends++;if(mode==='send-failure')throw Error('delivery-failed');return{};}},llm:{},isClosed:()=>mode==='closed',releaseMedia:async ref=>{released.push(ref);if(mode==='cleanup-failure')throw Error('cleanup-failed');}});
+  const reply={parts:[{type:'image',ref:'/synthetic/owned.png',mime:'image/png'},{type:'image',ref:'/synthetic/owned.png',mime:'image/png'}]};
+  const operation=composer.compose(context(),reply);
+  if(mode==='send-failure')await assert.rejects(operation,/delivery-failed/);else await operation;
+  assert.deepEqual(released,['/synthetic/owned.png']);
+  assert.equal(sends,mode==='closed'?0:mode==='send-failure'?1:2);
+  assert.equal(composer.observationFailures,mode==='cleanup-failure'?1:0);
+ }
+});

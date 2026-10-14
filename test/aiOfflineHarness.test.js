@@ -31,7 +31,7 @@ function harness({ env = { GEMINI_API_KEY: 'offline-gemini-key', GROQ_API_KEY: '
     };
     return { ai: loadModule('services/ai.js', dependencies, { env, now }), calls, logs, logger, http, env, style, failures, now: now === undefined ? Date.parse('2026-10-12T18:00:00Z') : now };
 }
-function proactiveHarness({history=[],decision={should_act:false},now,env={ALLOWED_GROUPS_NORMAL:'offline@g.us'}}={}) {
+function proactiveHarness({history=[],decision={should_act:false},now,env={ALLOWED_GROUPS_NORMAL:'offline@g.us',PROACTIVE_ENABLED:'true'}}={}) {
     const plans=[],sent=[],events=[];
     const db={db:{all:(_sql,done)=>done(null,[])},canSendProactiveMessage:async()=>true,recordProactiveMessage:async()=>{},getPersonalityState:async()=>({objective_until:Infinity,mood:'atento'}),updatePersonalityState:async()=>{},addSocialEvent:async(...args)=>events.push(args),getRecentSocialEvents:async()=>[]};
     const deps={'./logger':{info(){},warn(){},error(){}},'./evolution':{sendText:async(...args)=>sent.push(args),sendTyping:async()=>{}},'./history':{getHistory:()=>history,addMessage(){}},'./scheduler':{registerTask(){}},'./ai':{evaluateProactiveAction:async plan=>{plans.push(plan);return decision;}},'./db':db,'../commands/cooperacha':{maybeTriggerAutonomousCooperacha:async()=>({triggered:false})}};

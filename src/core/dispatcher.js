@@ -19,6 +19,22 @@ function localExtractAdultUrl(text) {
     if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
     return url;
 }
+function botIdentityKey(value) {
+    if (typeof value !== 'string' || !value.trim()) return '';
+    const identity = value.trim();
+    const match = /^([^@]+)@([^@]+)$/.exec(identity);
+    if (!match) {
+        if (!/^\d+$/.test(identity)) return '';
+        return `pn:${normalizePhoneNumber(identity)}`;
+    }
+    const local = match[1].split(':')[0];
+    const server = match[2].toLowerCase();
+    if (/^(?:s\.whatsapp\.net|c\.us)$/i.test(server) && /^\d+$/.test(local)) {
+        return `pn:${normalizePhoneNumber(local)}`;
+    }
+    if (server === 'lid' && /^[a-z\d_-]+$/i.test(local)) return `lid:${local}`;
+    return '';
+}
 const extractAdultUrl = (text) => (descargarCmd.extractAdultUrl ? descargarCmd.extractAdultUrl(text) : localExtractAdultUrl(text));
 const matchSelection = (text) => (descargarCmd.matchSelection ? descargarCmd.matchSelection(text) : null);
 const ai = require('../services/ai');
@@ -540,14 +556,9 @@ async function dispatch(context) {
 
     // Detectar si el usuario le está respondiendo directamente a un mensaje de Botsky
     const botNumber = (process.env.BOT_NUMBER || '5214437367565').replace(/[^0-9]/g, '');
-    const quotedParticipant = (contextInfo?.participant || '').replace(/[^0-9]/g, '');
-    const isQuotingBotsky = Boolean(
-        (quotedParticipant && botNumber && quotedParticipant.includes(botNumber)) ||
-        (quotedText && chatHistory.some(m => m.role === 'assistant' && (
-            (m.content && m.content.includes(quotedText.slice(0, 30))) ||
-            (quotedText && quotedText.includes((m.content || '').slice(0, 30)))
-        )))
-    );
+    const botIdentityKeys = [botNumber, process.env.BOT_LID].map(botIdentityKey).filter(Boolean);
+    const quotedIdentityKey = botIdentityKey(contextInfo?.participant);
+    const isQuotingBotsky = Boolean(quotedIdentityKey && botIdentityKeys.includes(quotedIdentityKey));
 
     const quotePrefix = isQuotingBotsky
         ? `(respondiendo directamente a un mensaje previo de Botsky: "${quotedText.slice(0, 80).replace(/\n/g, ' ')}") `
@@ -575,26 +586,32 @@ async function dispatch(context) {
         return true;
     };
 
-    // Ingesta inmediata en historial (Memoria pasiva a costo cero para que Botsky siempre recuerde)
-    addMessage(from, 'user', userMsgWithContext, userName);
-    if (isGroup) {
-        recordGroupActivity(from, participant, text);
-    }
-
-    const hasExplicitPrefix = Boolean(context.hasPrefix || parsed.hasPrefix);
+    const hasExplicitPrefix = Boolean(context.hasPrefix || parsed.hasPrefix || /^(?:\/@|\/!|[!/#.])/u.test(text.trim()));
     let affinityContext = '';
     const mentions = Array.isArray(contextInfo?.mentionedJid) ? contextInfo.mentionedJid : [];
     const isMentioned = mentions.some(jid => normalizePhoneNumber(cleanJidNumber(jid)) === normalizePhoneNumber(botNumber));
     let isDirectlyAddressed = !isGroup;
     const isExplicitCommand = hasExplicitPrefix && !context.isTaskDirectCommand && isRegisteredCommand(cmdToSwitch);
 
+    // Group text is private to its participants unless it names Botsky, quotes a
+    // verified bot reply, mentions the bot, or carries an explicit command prefix.
+    // Attachment state is keyed by both chat and participant, so only that owner's
+    // quoted attachment can continue a pending file request.
+    const namesBot = /(?:^|[^\p{L}\p{N}_])(?:botsky|botsito)(?=$|[^\p{L}\p{N}_])/iu.test(parsed.raw || '');
+    const quotedAttachmentId = contextInfo?.stanzaId;
+    const attachmentState = isGroup && quotedAttachmentId
+        ? attachments.getAttachmentState({ from, participant })
+        : null;
+    const ownsQuotedAttachment = Boolean(attachmentState?.attachments?.some(item => item.id === quotedAttachmentId));
+    const isDirectlyAddressedInGroup = isMentioned || isQuotingBotsky || hasExplicitPrefix || namesBot || ownsQuotedAttachment;
+    if (isGroup && !isDirectlyAddressedInGroup) return;
+
+    // Do not retain or count passive group messages after the addressing gate.
+    addMessage(from, 'user', userMsgWithContext, userName);
+    if (isGroup) recordGroupActivity(from, participant, text);
+
     if (!isExplicitCommand) {
         // R1. Fast-Path Pre-LLM para Adultos y Sitios para Adultos
-        const isDirectlyAddressedInGroup = isMentioned ||
-            isQuotingBotsky ||
-            hasExplicitPrefix ||
-            /\b(?:botsky|bot|botsito)\b/i.test(parsed.raw || '') ||
-            Boolean(activeSession && matchSelection(parsed.raw));
         // Fast-Path para Cooperacha de XP en grupos
         const coopText = (parsed.raw || '').trim()
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')

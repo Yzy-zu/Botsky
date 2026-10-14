@@ -1,39 +1,12 @@
-# Fase3 — núcleo y observación
+# Fase3 — cierre con excepción F3-E001
 
-Estado: verificación local verde; Gate3 abierto hasta24h reales de sombra y revisión de diffs. No canario ni migración de negocio.
+Cerrada el 2026-10-14 por instrucción expresa del cliente: «ya olvida el observador, el chiste es q el bot quede ya listo».
 
-## Resultado local
+- Verificación actual:314/314; typecheck, lint, arquitectura91 módulos/0violaciones,95settings env y cobertura cumplen.
+- Pipeline y políticas: evidencia por archivo en phase3-evidence.json; todos>=90%.
+- Escenarios requeridos y S10/S11 verdes; hooks/refactor55/55. Legacy819/819 después del cambio aprobado de addressing; baseline histórico conservado.
+- Revisión del núcleo aprobada tras validación de normalización, límites configurables, apagado/drain, idempotencia, cancelación, deadlines por comando y liberación de referencias multimedia.
+- Sombra real cancelada por cliente, retirada de PM2; se conserva el tramo interrumpido22h27m58s. No se afirma24h ni paridad real completa. La excepción no cancela pruebas ni gates de migración.
+- Producción v1 sigue en servicio con parche mínimo del incidente, proactividad apagada e identidad real configurada en entorno privado. Núcleo v2 y preparativos de olaA todavía no son el dueño productivo.
 
-- npm run verify:219pass0fail; tipo estricto, lint, arquitectura69módulos0violaciones,94env documentadas.
-- Pipeline8etapas y5políticas:100%líneas cada módulo. EscenariosS01–S09,S12–S16:16 archivos verdes (incluyendo a/b). Featureshelp/system-info100%líneas; permisos, salida canónica, naturalintents y CLI compatibles.
-- Telemetría/refactor/hooks:52pass0fail. Legacy auditcerrada814/814; no repetirla como proveedorlive ni retirar trazabilidad.
-- RateLimiter60admisiones por minuto porchat+usuario, cooldown3s despuésde respuesta (opciones inyectables), ráfaga3mensajes conserva1despacho. Identidadúnica domain/jid normaliza c.us/device/521 dentro namespace sin privilegios porsubstring.
-- Revisiones WO031–036 y rootcorrecciones: selecciónsesión sólo gramática actual y cita/mención correctas; prefijos /! /@; schemas de manifiestos; exceptionscontext yobservación no duplican envíos; IDsde respuesta enlazan hilo.
-
-## Activación preparada
-
-El operador manage-phase3-shadow.cjs copia exclusivamente módulos nuevosv2/runtime y preload. No reemplaza server/dispatcher/commands ni bot.db productivos. PM2 conservaenv y Nodeargs, flags sólo sombra; guarda recuperaciónprivada0600. Comprueba checkpoint realoperationalClock antes de declarar arranque; si falla revierte modo y argumentos.
-
-Preloadobserva después de HTTP200 y captura ramas reales mediante módulos originales. No se adivina silencio desde ausencia de respuesta: se marcaunknown. Diffs sólo vocabulario cerrado sintexto/IDs/argumentos. NullMessenger falla ante IO accidental; decideOnly no ejecuta Executor/Composer/passivos/jobs. Replay usa decisionesv1 conocidas, sinllamadasAI adicionales.
-
-## Revisión arquitectónica y límites
-
-La revisión independiente autoriza iniciar **sombra parcial** trasverify yguardas corregidas; no acreditaGate3/canario/24h. Historial/sesionesv1 no se importan: la comparación inicial tieneunknown, pendientes y categorías explicadas. El rate factory ya está integrado y probado despuésde la observación de revisión inicial; someter evidencia/diffs a revisión final antescerrar.
-
-La observación real debe continuar24h sin reinicios, excepciones ni IOnegocio. Un checkpoint stale/reinicio/FakeClock fallaelgate. El reporte porcategorías requiere revisión humana/técnica antescerrar. Si se pausa esta tarea, recordar si usuario pidió detener también observación; guardarstatus real, no declararhoras no transcurridas.
-
-## Retomar
-
-Consultar PROGRESS y estado privado /tmp/botsky-phase3-shadow-state.json mediante comando status (noimprimecredenciales). Leer archivo privado de diffs sólo para agregar categorías; no copiarlogs/DB/env alrepositorio. Actualizarphase3-evidence.json desdecheckpoint vivo+PM2 mismoPID, revisarunknown/v2-more yconfirmar24h. npmrunverify:phase3 se mantiene abierto hasta todaevidencia.
-
-## Observación activada
-
-Inicio real:2026-10-13T03:02:40.938Z; mismo proceso PM2wasa2916445, health200. Primertráfico real cuatrodiffs, sinexcepciones/sinkErrors/drops. Ayuda eligióhelp enambas versiones porwake-word; etiqueta changed corresponde command→intent, no función diferente. Tresreplysinplan quedanunknown explícito. Másdatos/duración/revisiónpendientes; earliest24h2026-10-14T03:02:40.938Z.
-
-El reporte usa checkpoint.enabled/PM2samePID/heartbeat para active; checkpoint.active es busyworker. No interpretar falseidle como apagado. Evidencia porrun se congela trasreinicio/stop y no acumula tiempo ficticio.
-
-## Revisión y correcciones del13deoctubre
-
-Verificación local actual229/229, hooks/refactor52/52;100%líneas pipeline/policies. WO037 documenta identidadinválida trascanonicalización y shutdown con lateoutput reproducidos ycorregidos; WO038 documenta9fallos deidentidades ficticias inválidas yfixde5líneas manteniendoaserciones. El snapshot219/52anterior no certificaba laúltimaprueba defixtures canónicos; nuevaejecución lo corrige.
-
-No se modificó producción: observador3c56f0a permanece idéntico en73archivos, mismoPID yunos7h12m de24. El candidato local usa cierreasíncrono yvalidación adicional, aún no desplegados. Gate3 sigueabierto por24h/revisióndiffs/dictamenoperacional. phase3-diff-review.md revisa4filas ylimitaciones, no todoeldía.
+OlaA tiene manifests, handlers, adaptadores e integración local. Falta cerrar paridad/trazabilidad y canario por ola; Fases4–6 no están cerradas.

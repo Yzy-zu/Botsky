@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "exceptions": [
+    {
+      "id": "F3-E001",
+      "status": "accepted",
+      "authorizedBy": "user",
+      "instruction": "ya olvida el observador, el chiste es q el bot quede ya listo",
+      "authorizedUtc": "2026-10-14T02:07:48.573Z",
+      "scope": "live-shadow-observer",
+      "reason": "El cliente cancela el observador y prioriza terminar el bot tras el incidente de v1.",
+      "limitations": "No se afirma soak de 24 horas ni paridad real completa. Siguen obligatorios tests, cobertura, revisión del núcleo y gates de migración por ola."
+    }
+  ]
+}

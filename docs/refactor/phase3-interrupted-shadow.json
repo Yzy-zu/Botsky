@@ -1,0 +1,33 @@
+{
+  "recordedAt": "2026-10-14T02:04:53.873Z",
+  "active": false,
+  "clock": "SystemClock",
+  "startedAt": 1791860560938,
+  "observedUntil": 1791941438939,
+  "elapsedMs": 80878001,
+  "observed": 465,
+  "processed": 465,
+  "exceptions": 0,
+  "sinkErrors": 0,
+  "dropped": 0,
+  "bridgeDropped": 0,
+  "v1TimedOut": 282,
+  "unmatchedRecords": 1276,
+  "workerBusy": false,
+  "actualDiffs": 465,
+  "categories": {
+    "unknown": 311,
+    "changed": 45,
+    "v2-less": 107,
+    "v2-more": 2
+  },
+  "earliestCompletion": "2026-10-14T03:02:40.938Z",
+  "businessEffects": 0,
+  "additionalProviderCalls": 0,
+  "limitations": [
+    "Read-only replay and NullMessenger construction enforce no business callbacks; this is not a claim that v1 stopped running.",
+    "No imported legacy history/sessions; unknown/unmatched remain explicit, not successful comparisons.",
+    "Elapsed time is real UTC and requires same process/fresh heartbeat; a restart cannot accumulate segments.",
+    "Diff review and final architecture approval remain manual; 24h alone never closes Gate3."
+  ]
+}

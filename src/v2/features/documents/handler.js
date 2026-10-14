@@ -1,0 +1,164 @@
+// @ts-check
+'use strict';
+
+const SESSION_NS = 'feature.documents';
+const SESSION_TTL_MS = 20 * 60_000;
+const MAX_COLLECTED_FILES = 20;
+const PDF_FORMATS = Object.freeze(['pdf', 'docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt', 'odt', 'ods', 'odp']);
+const MEDIA_FORMATS = Object.freeze(['mp3', 'm4a', 'ogg', 'wav', 'opus', 'mp4', 'webm', 'avi', 'gif', 'webp', 'pdf']);
+
+/** @typedef {{attachment:import('../../pipeline/contracts').Attachment,raw:object}} DocumentSource */
+/** @typedef {{process:(request:{operation:string,source?:DocumentSource,sources?:DocumentSource[],args:Record<string,unknown>,signal:AbortSignal})=>Promise<import('../../domain/types').Reply>,readContent:(source:DocumentSource,options:{signal:AbortSignal})=>Promise<string|null|undefined>,clock:import('../../platform/clock').Clock,store:import('../../platform/ttlStore').TtlStore}} DocumentPorts */
+/** @typedef {ReturnType<typeof createDocumentHandlers>['convert']} Handler */
+
+/** @param {DocumentPorts} ports */
+function createDocumentHandlers(ports) {
+    const { process, readContent, clock, store } = ports;
+    if (typeof process !== 'function' || typeof readContent !== 'function' || !clock || !store) throw new TypeError('Document feature requires process, readContent, clock and store ports');
+
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {string} operation @param {Record<string,unknown>} args @param {AbortSignal} signal @param {DocumentSource[]} [sources]
+     * @returns {Promise<import('../../domain/types').Reply>} */
+    async function run(ctx, operation, args, signal, sources) {
+        signal.throwIfAborted();
+        const attachment = ctx.attachment;
+        if (!attachment && !sources?.length && typeof args.url !== 'string') return text(ctx, missingAttachment(operation));
+        try {
+            const reply = await process({ operation, ...(attachment ? { source: sourceOf(ctx) } : {}), ...(sources ? { sources } : {}), args, signal });
+            signal.throwIfAborted();
+            return validReply(reply) ? { ...reply, replyTo: ctx.event.id } : text(ctx, 'No pude procesar el archivo. Revisa que abra correctamente y prueba de nuevo.');
+        } catch (error) {
+            signal.throwIfAborted();
+            return text(ctx, safeFailure(operation));
+        }
+    }
+
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
+    async function convert(ctx, args, signal) {
+        const format = normalizedString(args.format, 'mp3');
+        if (!MEDIA_FORMATS.includes(format)) return text(ctx, `Ese formato no lo manejo. Usa: ${MEDIA_FORMATS.join(', ')}.`);
+        const quality = normalizedString(args.quality, 'media');
+        if (!['alta', 'media', 'baja'].includes(quality)) return text(ctx, 'La calidad puede ser alta, media o baja.');
+        const speed = args.speed === undefined ? 1 : Number(args.speed);
+        if (!Number.isFinite(speed) || speed < 0.25 || speed > 4) return text(ctx, 'La velocidad debe estar entre 0.25x y 4x. Por ejemplo: 1.5x.');
+        const bitrate = args.bitrate === undefined ? undefined : parseBitrate(args.bitrate);
+        if (args.bitrate !== undefined && (!bitrate || bitrate < 8000 || bitrate > 100_000_000)) return text(ctx, 'Dime un bitrate válido para el formato elegido.');
+        const url = args.url;
+        if (url !== undefined && !validHttpUrl(url)) return text(ctx, 'Mándame un enlace HTTP o HTTPS válido y dime a qué formato convertirlo.');
+        if (!ctx.attachment && typeof url !== 'string') return text(ctx, 'Mándame el archivo o su enlace y dime a qué formato lo quieres.');
+        if (format === 'pdf' && typeof url === 'string') return text(ctx, 'Para crear un PDF, mándame una imagen o un documento.');
+        return run(ctx, 'convert-media', { ...args, format, quality, speed, ...(bitrate ? { bitrate } : {}) }, signal);
+    }
+
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
+    async function document(ctx, args, signal) {
+        const format = normalizedString(args.format, 'pdf');
+        if (!PDF_FORMATS.includes(format)) return text(ctx, `Formato inválido. Soportados: ${PDF_FORMATS.join(', ')}.`);
+        const stateKey = ownerKey(ctx);
+        const current = /** @type {{kind:'images'|'pdfs',items:DocumentSource[]}|undefined} */ (store.get(SESSION_NS, stateKey));
+        const intent = normalizedString(args.action, '');
+        if (intent === 'cancel' || args.cancel === true) return cancel(ctx, stateKey, current);
+        if (intent === 'finish' || args.finish === true) return finish(ctx, stateKey, current, signal);
+        const attachment = ctx.attachment;
+        if (attachment && isImage(attachment) && format === 'pdf') {
+            const source = sourceOf(ctx);
+            const items = current?.kind === 'images' ? [...current.items, source] : [source];
+            if (items.length > MAX_COLLECTED_FILES) return text(ctx, `Puedo reunir hasta ${MAX_COLLECTED_FILES} imágenes por PDF. Escribe \`pdf terminar\` o \`pdf cancelar\`.`);
+            store.set(SESSION_NS, stateKey, { kind: 'images', items }, SESSION_TTL_MS);
+            return text(ctx, `Va, imagen ${items.length} agregada.\nEnvía otra o escribe \`pdf terminar\`.`);
+        }
+        if (!attachment) {
+            if (current?.kind === 'images') return text(ctx, `Ya tengo ${current.items.length} imágenes para tu PDF. Envía más o escribe \`pdf terminar\` para recibirlo.`);
+            if (format === 'pdf') {
+                store.set(SESSION_NS, stateKey, { kind: 'images', items: [] }, SESSION_TTL_MS);
+                return text(ctx, 'Va, armamos un PDF. Envía las imágenes en el orden que quieres y escribe `pdf terminar` cuando acabes.\nPara cancelar: `pdf cancelar`.');
+            }
+            return text(ctx, 'Responde al archivo con `doc -f pdf`, por ejemplo.');
+        }
+        return run(ctx, 'convert-document', { ...args, format }, signal);
+    }
+
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
+    async function collectPdfs(ctx, args, signal) {
+        const stateKey = ownerKey(ctx);
+        const current = /** @type {{kind:'images'|'pdfs',items:DocumentSource[]}|undefined} */ (store.get(SESSION_NS, stateKey));
+        if (args.cancel === true || args.action === 'cancel') return cancel(ctx, stateKey, current);
+        if (args.finish === true || args.action === 'finish') return finish(ctx, stateKey, current, signal);
+        const attachment = ctx.attachment;
+        if (!attachment) return text(ctx, 'Adjunta un PDF; cuando termines manda `unir terminar`.');
+        if (!isPdf(attachment)) return text(ctx, 'Solo admite `pdf`.');
+        const source = sourceOf(ctx);
+        const items = current?.kind === 'pdfs' ? [...current.items, source] : [source];
+        if (items.length > MAX_COLLECTED_FILES) return text(ctx, `Puedo unir hasta ${MAX_COLLECTED_FILES} PDFs por lista. Escribe \`unir terminar\` o \`unir cancelar\`.`);
+        store.set(SESSION_NS, stateKey, { kind: 'pdfs', items }, SESSION_TTL_MS);
+        return text(ctx, `PDF ${items.length} en cola.\nEnvía otro o manda \`unir terminar\`.`);
+    }
+
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
+    async function compress(ctx, args, signal) { return run(ctx, 'compress-pdf', args, signal); }
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
+    async function crop(ctx, args, signal) { return run(ctx, 'crop-pdf', args, signal); }
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} args @param {AbortSignal} signal */
+    async function pdfImages(ctx, args, signal) { return run(ctx, 'pdf-to-images', args, signal); }
+
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {Record<string,unknown>} _args @param {AbortSignal} signal */
+    async function read(ctx, _args, signal) {
+        signal.throwIfAborted();
+        const attachment = ctx.attachment;
+        if (!attachment || !(isImage(attachment) || isPdf(attachment))) return text(ctx, 'Responde a la imagen con `leer` y saco el texto.');
+        try {
+            const value = await readContent(sourceOf(ctx), { signal });
+            signal.throwIfAborted();
+            const extracted = typeof value === 'string' ? value.trim() : '';
+            return text(ctx, extracted ? `Esto alcancé a leer:\n\n${extracted}` : 'No alcancé a leer texto. Prueba con una foto más nítida, de frente y con buena luz.');
+        } catch (error) {
+            signal.throwIfAborted();
+            return text(ctx, 'No pude leer esa imagen. Intenta de nuevo con una foto más nítida.');
+        }
+    }
+
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {string} key @param {{kind:'images'|'pdfs',items:DocumentSource[]}|undefined} session */
+    function cancel(ctx, key, session) {
+        if (!session) return text(ctx, 'No hay ningún PDF en preparación aquí.');
+        store.delete(SESSION_NS, key);
+        return text(ctx, session.kind === 'images' ? 'Listo, cancelé el PDF y quité las imágenes de la lista.' : 'Listo, cancelé la unión de PDFs y vacié la lista.');
+    }
+
+    /** @param {import('../../pipeline/contracts').Ctx} ctx @param {string} key @param {{kind:'images'|'pdfs',items:DocumentSource[]}|undefined} session @param {AbortSignal} signal */
+    async function finish(ctx, key, session, signal) {
+        if (!session) return text(ctx, 'Todavía no hay archivos en la lista. Inicia con `pdf` o `unir` y envíame los archivos.');
+        store.delete(SESSION_NS, key);
+        if (!session.items.length) return text(ctx, 'Faltan las imágenes. Envía la primera con `pdf`.');
+        return run(ctx, session.kind === 'images' ? 'images-to-pdf' : 'merge-pdfs', { count: session.items.length }, signal, session.items);
+    }
+
+    return { convert, document, collectPdfs, compress, crop, pdfImages, read };
+}
+
+/** @param {import('../../pipeline/contracts').Ctx} ctx */
+function ownerKey(ctx) { return JSON.stringify([ctx.event.chatId, ctx.event.sender.jid]); }
+/** @param {import('../../pipeline/contracts').Ctx} ctx @returns {DocumentSource} */
+function sourceOf(ctx) { if (!ctx.attachment) throw new TypeError('Attachment required'); return { attachment: ctx.attachment, raw: ctx.event.raw }; }
+/** @param {import('../../pipeline/contracts').Attachment} attachment */
+function isImage(attachment) { return attachment.kind === 'image' || attachment.mime.toLowerCase().startsWith('image/'); }
+/** @param {import('../../pipeline/contracts').Attachment} attachment */
+function isPdf(attachment) { return attachment.mime.toLowerCase() === 'application/pdf' || attachment.ref.toLowerCase().split(/[?#]/, 1)[0].endsWith('.pdf'); }
+/** @param {unknown} value @param {string} fallback */
+function normalizedString(value, fallback) { return typeof value === 'string' ? value.trim().toLowerCase() || fallback : fallback; }
+/** @param {unknown} value @returns {value is string} */
+function validHttpUrl(value) { try { const url = new URL(/** @type {string} */ (value)); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; } }
+/** @param {unknown} value @returns {number|undefined} */
+function parseBitrate(value) {
+    const match = String(value).trim().match(/^(\d+(?:\.\d+)?)\s*([km])?(?:b(?:ps|\/s)?)?$/i);
+    if (!match) return undefined;
+    const bits = Number(match[1]) * ({ k: 1000, m: 1_000_000 }[String(match[2] || '').toLowerCase()] || 1);
+    return Number.isSafeInteger(bits) && bits > 0 ? bits : undefined;
+}
+/** @param {import('../../pipeline/contracts').Ctx} ctx @param {string} message @returns {import('../../domain/types').Reply} */
+function text(ctx, message) { return { parts: [{ type: 'text', text: message }], replyTo: ctx.event.id }; }
+/** @param {unknown} value @returns {value is import('../../domain/types').Reply} */
+function validReply(value) { return Boolean(value && typeof value === 'object' && Array.isArray(/** @type {{parts?:unknown}} */ (value).parts)); }
+/** @param {string} operation */
+function missingAttachment(operation) { return operation === 'convert-media' ? 'Mándame el archivo o su enlace y dime a qué formato lo quieres.' : 'Responde al archivo con el comando que quieres usar.'; }
+/** @param {string} operation */
+function safeFailure(operation) { return operation === 'convert-media' ? 'No pude convertirlo. Prueba con otro archivo o formato.' : 'No pude procesar el archivo. Revisa que abra correctamente y prueba de nuevo.'; }
+module.exports = { createDocumentHandlers, SESSION_NS, SESSION_TTL_MS, MAX_COLLECTED_FILES, parseBitrate, validHttpUrl };

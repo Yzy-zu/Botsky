@@ -9,8 +9,9 @@ test('observe preserves lightweight attachment identity and exact ten minute TTL
     const setupState=setup();const {context,clock,store}=setupState;
     context.observe(event({media:undefined}));context.observe(event({isFromMe:true}));assert.equal(store.size,0);
     context.observe(event()); const attachment=context.addressingMetadata(event()).attachment;
-    assert.deepEqual(attachment,{id:'m',ownerJid:'100@s.whatsapp.net',expiresAt:600100,ref:'ref',mime:'image/jpeg',kind:'image',quotedMatch:false});
+    assert.deepEqual(attachment,{id:'m',ownerJid:'100@s.whatsapp.net',chatId:'g@g.us',expiresAt:600100,ref:'ref',mime:'image/jpeg',kind:'image',quotedMatch:false});
     assert.equal(context.addressingMetadata(event({sender:{jid:'other'}})).attachment,undefined);
+    assert.equal(context.addressingMetadata(event({quoted:{messageId:'unseen'}})).attachment,undefined,'Unknown quote cannot resolve to a different recent attachment');
     const quoted=context.addressingMetadata(event({id:'new',sender:{jid:'other'},quoted:{messageId:'m'}})).attachment;
     assert.equal(quoted.quotedMatch,true); assert.equal(quoted.ownerJid,'100@s.whatsapp.net');
     assert.equal(context.addressingMetadata(event({chatId:'other',quoted:{messageId:'m'}})).attachment,undefined);

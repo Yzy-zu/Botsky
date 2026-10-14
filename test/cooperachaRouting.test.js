@@ -71,9 +71,9 @@ function harness({ active = false, decision = 'pack' } = {}) {
 for (const [text, args] of [
     ['botsky échate una fotito censurada', []],
     ['botsky, arma una cooperación 300', ['300']],
-    ['armar cooperacha 300', ['300']],
-    ['iniciar vaquita 300', ['300']],
-    ['reto de foto 300', ['300']],
+    ['botsky arma cooperacha 300', ['300']],
+    ['botsky inicia vaquita 300', ['300']],
+    ['botsky reto de foto 300', ['300']],
     ['Botsky, mándame una foto censurada para juntar 400 XP.', ['400']]
 ]) {
     test(`Cooperacha natural: ${text}`, async () => {

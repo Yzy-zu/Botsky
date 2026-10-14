@@ -18,7 +18,7 @@ test('Descargar: calidad 480p por defecto sin límites de corte/peso arbitrarios
     const api=downloadHarness();await api.handleDescargar({args:['video largo'],flags:{}},'offline@s.whatsapp.net',{});const session=api.getSearchSession(api.getDownloadSessionKey('offline@s.whatsapp.net',{}));assert.equal(session.quality,'480');assert.equal(session.results.length,1,'Conservar video de una hora');const args=api.buildArgs('https://youtube.com/watch?v=fake','mp4',session.quality,false,'/tmp/out');
     assert.match(args.join(' '),/480/);assert.ok(!args.includes('--max-filesize'));assert.ok(!args.join(' ').includes('00:05:00'));assert.ok(!args.join(' ').includes('filesize<?10M'));
 });
-test('Gatekeeper: ingesta pasiva conserva historial y decisión semántica de silencio',async()=>{
+test('Gatekeeper: mensaje grupal pasivo no se guarda, enruta ni responde',async()=>{
     const source=fs.readFileSync(path.join(__dirname,'../src/core/dispatcher.js'),'utf8');const history=[],sent=[],requests=[];
     const deps=Object.fromEntries([...source.matchAll(/require\('([^']+)'\)/g)].map(m=>[m[1],{}]));
     Object.assign(deps,{'../core/parser':loadModule('core/parser.js',{}),'../services/scheduler':{registerTask(){}},'../services/logger':logger,
@@ -30,7 +30,7 @@ test('Gatekeeper: ingesta pasiva conserva historial y decisión semántica de si
         './auth':loadModule('core/auth.js',{}),'./commandRegistry':{isRegisteredCommand:()=>false}});
     const dispatch=loadModule('core/dispatcher.js',deps,{env:{ALLOWED_GROUPS_NORMAL:'offline'}}).dispatch;
     await dispatch({from:'offline@g.us',text:'jajaja qué calor',messageType:'conversation',messageData:{key:{id:'passive',participant:'19995550001@s.whatsapp.net'}}});
-    assert.equal(history.length,1);assert.match(history[0].content,/jajaja qué calor/);assert.equal(requests.length,1);assert.equal(sent.length,0);
+    assert.equal(history.length,0);assert.equal(requests.length,0);assert.equal(sent.length,0);
 });
 test('Descargar: enlace de foto TikTok se ignora sin ejecutar descargas',async()=>{
     const api=downloadHarness();await api.handleDescargar({flags:{},args:['https://www.tiktok.com/@offline/photo/123']},'offline@s.whatsapp.net',{key:{id:'photo'}});

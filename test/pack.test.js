@@ -473,7 +473,7 @@ test('Pack 13: Verificación de rechazo en grupo no autorizado', async () => {
     assert.strictEqual(after.xp, 300);
 });
 
-test('Pack 14: Lenguaje natural "pásame un pack" en grupo sin prefijo ni mención a Botsky', async () => {
+test('Pack 14: Lenguaje natural "Botsky, pásame un pack" en grupo', async () => {
     clearHistory();
     const testDir = createTestImagesDir(3);
     const userJid = `52155${Date.now().toString().slice(-8)}@s.whatsapp.net`;
@@ -486,7 +486,7 @@ test('Pack 14: Lenguaje natural "pásame un pack" en grupo sin prefijo ni menci�
     try {
         await dispatch({
             from: AUTHORIZED_GROUP,
-            text: 'pásame un pack',
+            text: 'Botsky, pásame un pack',
             messageData: {
                 key: { remoteJid: AUTHORIZED_GROUP, participant: userJid, id: 'NAT_PACK_NOPREFIX' },
                 pushName: 'CompaSinPrefijo'
@@ -523,7 +523,7 @@ test('Pack 15: Lenguaje natural con categoría ("pásame un pack de monas chinas
     try {
         await dispatch({
             from: AUTHORIZED_GROUP,
-            text: 'pásame un pack de monas chinas',
+            text: 'Botsky, pásame un pack de monas chinas',
             messageData: {
                 key: { remoteJid: AUTHORIZED_GROUP, participant: userJid, id: 'NAT_PACK_CAT' },
                 pushName: 'Otaku'
@@ -677,7 +677,7 @@ test('Pack 20: Lenguaje natural expandido ("quiero comprar un pack", "me vendes 
         // Frase 1: "quiero comprar un pack"
         await dispatch({
             from: AUTHORIZED_GROUP,
-            text: 'quiero comprar un pack',
+            text: 'Botsky, quiero comprar un pack',
             messageData: {
                 key: { remoteJid: AUTHORIZED_GROUP, participant: userJid, id: 'NAT_EXP_1' },
                 pushName: 'NaturalExp1'
@@ -693,7 +693,7 @@ test('Pack 20: Lenguaje natural expandido ("quiero comprar un pack", "me vendes 
         // Frase 2: "saca el pack"
         await dispatch({
             from: AUTHORIZED_GROUP,
-            text: 'saca el pack',
+            text: 'Botsky, saca el pack',
             messageData: {
                 key: { remoteJid: AUTHORIZED_GROUP, participant: userJid, id: 'NAT_EXP_2' },
                 pushName: 'NaturalExp2'
@@ -787,7 +787,7 @@ test('Pack 23: Detección natural con signos de puntuación (!, ?), mención @Bo
         // Forma verbal "te compro un pack"
         await dispatch({
             from: AUTHORIZED_GROUP,
-            text: 'te compro un pack',
+            text: 'Botsky, te compro un pack',
             messageData: {
                 key: { remoteJid: AUTHORIZED_GROUP, participant: userJid, id: 'NAT_VERB_1' },
                 pushName: 'VerbUser'
@@ -819,7 +819,7 @@ test('Pack 24: Saneamiento de muletillas de cortesía ("porfa", "por favor") no 
         // "pásame un pack de monas chinas porfa" -> categoría debe ser "monas chinas", no "monas chinas porfa"
         await dispatch({
             from: AUTHORIZED_GROUP,
-            text: 'pásame un pack de monas chinas porfa',
+            text: 'Botsky, pásame un pack de monas chinas porfa',
             messageData: {
                 key: { remoteJid: AUTHORIZED_GROUP, participant: userJid, id: 'NAT_CAT_COURTESY' },
                 pushName: 'PoliteUser'

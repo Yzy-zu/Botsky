@@ -57,3 +57,23 @@ test('Acknowledged delivery errors carry only boolean proof and do not retry at 
   await assert.rejects(client.post('/send',{}),error=>error.deliveryAcknowledged===false&&error.response.data.deliveryAcknowledged===undefined);
  }
 });
+
+test('Media cancellation avoids pre-aborted I/O and aborts an in-flight request without retry timers',async()=>{
+ const localClock=new FakeClock();let fetches=0;let childSignal;let started;
+ const fetchStarted=new Promise(resolve=>{started=resolve;});
+ const client=createClient({baseUrl:'http://fake.invalid',apiKey:'fake',clock:localClock,fetch:async(_url,options)=>{
+  fetches++;childSignal=options.signal;started();
+  return new Promise((_resolve,reject)=>options.signal.addEventListener('abort',()=>reject(Object.assign(new Error('aborted'),{name:'AbortError'})),{once:true}));
+ }});
+ const api=createMedia({client,instance:'test',clock:localClock});
+ const preAborted=new AbortController();preAborted.abort();
+ await assert.rejects(api.downloadMedia({key:{id:'PRE'}},{signal:preAborted.signal}),error=>error.name==='AbortError');
+ assert.equal(fetches,0);assert.equal(localClock.pendingTimers,0);
+
+ const controller=new AbortController();
+ const pending=api.downloadMedia({key:{id:'IN_FLIGHT'}},{signal:controller.signal});
+ await fetchStarted;assert.equal(fetches,1);assert.equal(localClock.pendingTimers,1);
+ controller.abort();
+ await assert.rejects(pending,error=>error.name==='AbortError'||error.code==='ERR_CANCELED');
+ assert.equal(childSignal.aborted,true);assert.equal(fetches,1);assert.equal(localClock.pendingTimers,0);
+});

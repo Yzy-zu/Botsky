@@ -457,7 +457,7 @@ test('Dispatcher: action "ignore" descarta el mensaje y no envía nada a WhatsAp
     }
 });
 
-test('Dispatcher: Una petición grupal conserva el plan chat dirigido del modelo sin bypass por insultos', async () => {
+test('Dispatcher: Un insulto no dirigido en grupo no llega al router ni produce respuesta', async () => {
     _resetCooldowns();
     const origNormal = process.env.ALLOWED_GROUPS_NORMAL;
     const origRoute = ai.routeWithAI;
@@ -496,9 +496,8 @@ test('Dispatcher: Una petición grupal conserva el plan chat dirigido del modelo
             }
         });
 
-        assert.strictEqual(routedWithAI, true, 'La petición completa debe consultar al router semántico');
-        assert.strictEqual(sentMessages.length, 1, 'Debe responder al usuario que insultó');
-        assert.ok(sentMessages[0].text.includes('cabrón'), 'Debe enviar la respuesta de defensa');
+        assert.strictEqual(routedWithAI, false, 'Los mensajes grupales no dirigidos se descartan antes del router');
+        assert.strictEqual(sentMessages.length, 0, 'No debe enviar respuesta a una conversación ajena');
     } finally {
         process.env.ALLOWED_GROUPS_NORMAL = origNormal;
         ai.routeWithAI = origRoute;
@@ -507,7 +506,7 @@ test('Dispatcher: Una petición grupal conserva el plan chat dirigido del modelo
     }
 });
 
-test('Dispatcher: Mensajes breves consultan router semántico y conservan plan ignore sin enviar', async () => {
+test('Dispatcher: Mensajes breves no dirigidos en grupo no consultan el router ni envían', async () => {
     _resetCooldowns();
     const origNormal = process.env.ALLOWED_GROUPS_NORMAL;
     const origRoute = ai.routeWithAI;
@@ -541,7 +540,7 @@ test('Dispatcher: Mensajes breves consultan router semántico y conservan plan i
             }
         });
 
-        assert.strictEqual(routedWithAI, true, 'El plan semántico ignore debe conservar silencio sin heurística local');
+        assert.strictEqual(routedWithAI, false, 'El mensaje no dirigido se descarta antes del router');
         assert.strictEqual(sentMessages.length, 0, 'No debe enviar ningún mensaje');
     } finally {
         process.env.ALLOWED_GROUPS_NORMAL = origNormal;
@@ -550,7 +549,7 @@ test('Dispatcher: Mensajes breves consultan router semántico y conservan plan i
     }
 });
 
-test('Dispatcher: Conversación grupal sin mención ni cita al bot es archivada en historial pero NO envía respuesta (anti-spam)', async () => {
+test('Dispatcher: Conversación grupal sin direccionamiento no se enruta ni responde', async () => {
     _resetCooldowns();
     const origNormal = process.env.ALLOWED_GROUPS_NORMAL;
     const origRoute = ai.routeWithAI;
@@ -588,7 +587,7 @@ test('Dispatcher: Conversación grupal sin mención ni cita al bot es archivada 
             }
         });
 
-        assert.strictEqual(routedWithAI, true, 'El router semántico decide ignorar; no se clasifica por regex');
+        assert.strictEqual(routedWithAI, false, 'La conversación ajena se descarta antes del router');
         assert.strictEqual(sentMessages.length, 0, 'No debe enviar ningún mensaje al grupo');
     } finally {
         process.env.ALLOWED_GROUPS_NORMAL = origNormal;

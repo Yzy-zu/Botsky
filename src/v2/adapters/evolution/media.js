@@ -32,8 +32,9 @@ function createMedia({client:http,instance:INSTANCE,clock,logger={info(){}},maxD
     if (!Number.isSafeInteger(maxDownloadBytes)||maxDownloadBytes<1) throw new RangeError('Invalid download limit');
     /** @param {()=>Promise<any>} fn */
     const withRetry=fn=>retry(fn,clock);
-/** @param {any} messageData @param {any} options1 */
-async function downloadMedia(messageData, { maxBytes = maxDownloadBytes } = {}) {
+/** @param {any} messageData @param {{maxBytes?:number,signal?:AbortSignal}} [options1] */
+async function downloadMedia(messageData, { maxBytes = maxDownloadBytes, signal } = {}) {
+    signal?.throwIfAborted();
     if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1)) {
         throw new RangeError('maxBytes debe ser un entero positivo');
     }
@@ -66,18 +67,22 @@ async function downloadMedia(messageData, { maxBytes = maxDownloadBytes } = {}) 
     const sourceMessage = { key: keyToUse, ...(hasMediaKey ? { message: messageData.message } : {}) };
     try {
         res = await withRetry(async () => {
+            signal?.throwIfAborted();
             try { return await http.post(`/chat/getBase64FromMediaMessage/${INSTANCE}`, {
                 message: sourceMessage,
                 convertToMp4: false,
-            }, maxBytes === undefined ? {} : { maxContentLength: Math.ceil(maxBytes * 4 / 3) + 64 * 1024 });
+            }, { ...(maxBytes === undefined ? {} : { maxContentLength: Math.ceil(maxBytes * 4 / 3) + 64 * 1024 }), ...(signal ? { signal } : {}) });
             } catch (error) {
             const err = /** @type {any} */ (error);
+                if (signal?.aborted || err.name === 'AbortError' || err.code === 'ERR_CANCELED' || err.code === 'ABORT_ERR') throw err;
                 if (maxBytes !== undefined && (/maxContentLength|response.*too.*large/i.test(err.message || '') || err.response?.status === 413)) throw tooLarge();
                 throw err;
             }
         });
+        signal?.throwIfAborted();
     } catch (error) {
             const err = /** @type {any} */ (error);
+        if (signal?.aborted || err.name === 'AbortError' || err.code === 'ERR_CANCELED' || err.code === 'ABORT_ERR') throw err;
         const errorMsg = err.response?.data?.response?.message || err.response?.data?.message || err.message;
         const isMmgError = typeof errorMsg === "string" && (
             errorMsg.includes("Failed to fetch stream") ||

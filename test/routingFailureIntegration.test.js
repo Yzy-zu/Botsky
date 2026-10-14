@@ -113,11 +113,11 @@ test('Routing failure with an image never downloads or reads the attachment', as
     assert.equal(h.sent.length, 1);
 });
 
-test('Routing failure in a passive group does not send unsolicited feedback', async () => {
+test('Unaddressed passive group messages do not route or send unsolicited feedback', async () => {
     const failure = { kind: 'rate_limit', provider: 'gemini', retryable: true };
     const h = harness({ ok: false, failure, attempts: [failure] });
     await h.dispatch({ group: true, text: 'El profe manda el archivo después' });
-    assert.deepEqual(h.calls, ['route']);
+    assert.deepEqual(h.calls, []);
     assert.equal(h.sent.length, 0);
 });
 
@@ -238,21 +238,18 @@ test('R2 Fallback de Rescate: si LLM bloquea una selección con sesión activa, 
     assert.deepEqual(Array.from(h.commands[0].context.parsed.args), ['el 1']);
 });
 
-test('R1 Fast-Path en grupo: selección de lista activa para adultos se procesa en grupos sin consultar al LLM', async () => {
+test('R1 Fast-Path en grupo: selección de lista activa requiere direccionamiento del bot', async () => {
     const activeSession = {
         results: [{ title: 'Video 1', url: 'https://xvideos.com/v1' }, { title: 'Video 2', url: 'https://xvideos.com/v2' }],
         isAdult: true
     };
     const h = harness({ ok: false, failure: { kind: 'blocked' } }, { allowCommand: true, activeSession });
     await h.dispatch({ group: true, text: 'el 1' });
-    assert.deepEqual(h.calls, [], 'No debe llamar al router de IA en selecciones de grupo');
-    assert.equal(h.commands.length, 1);
-    assert.equal(h.commands[0].command, 'descargar');
-    assert.strictEqual(h.commands[0].context.parsed.flags.adult, true);
-    assert.deepEqual(Array.from(h.commands[0].context.parsed.args), ['el 1']);
+    assert.deepEqual(h.calls, [], 'La selección no dirigida se descarta antes del router');
+    assert.equal(h.commands.length, 0, 'No debe ejecutar una selección de sesión sin direccionamiento');
 });
 
-test('R2 Fallback en grupo: si LLM bloquea una selección en grupo con sesión activa, rescata a descargar', async () => {
+test('R2 Fallback en grupo: una selección no dirigida con sesión activa no consulta ni ejecuta', async () => {
     const activeSession = {
         results: [{ title: 'Canción 1', url: 'https://youtube.com/v1' }],
         isAdult: false
@@ -260,10 +257,8 @@ test('R2 Fallback en grupo: si LLM bloquea una selección en grupo con sesión a
     const failure = { kind: 'blocked', provider: 'gemini', finishReason: 'SAFETY', retryable: false };
     const h = harness({ ok: false, failure, attempts: [failure] }, { allowCommand: true, activeSession });
     await h.dispatch({ group: true, text: 'el 1' });
-    assert.deepEqual(h.calls, ['route'], 'Intentó consultar al LLM');
-    assert.equal(h.commands.length, 1, 'Debe rescatar a descargar en grupo');
-    assert.equal(h.commands[0].command, 'descargar');
-    assert.deepEqual(Array.from(h.commands[0].context.parsed.args), ['el 1']);
+    assert.deepEqual(h.calls, [], 'La selección no dirigida se descarta antes del LLM');
+    assert.equal(h.commands.length, 0, 'No debe ejecutar la selección de sesión');
 });
 
 test('R1 Fast-Path: términos de video con porno/xxx ("video porno", "videos xxx") se interceptan antes del LLM', async () => {

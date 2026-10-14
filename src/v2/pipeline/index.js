@@ -11,7 +11,7 @@ const { createExecutor } = require('./executor');
 const { createComposer, errorReply } = require('./composer');
 /** @typedef {import('./contracts').PipelineResult} PipelineResult */
 /** @typedef {import('./contracts').Ctx} Ctx */
-/** @param {{clock:import('../platform/clock').Clock,store:import('../platform/ttlStore').TtlStore,queue:import('../platform/queue').TieredQueue,messenger:import('../domain/ports').Messenger,llm:import('../domain/ports').LLM,features:import('./contracts').Feature[],botJid:string,conversation:Parameters<typeof createContext>[0]['conversation'],roles?:import('./contracts').Roles,accessSnapshot?:import('./gate').AccessSnapshot,rateState?:(event:import('../domain/events').InboundEvent)=>import('./gate').RateState,passive?:(event:import('../domain/events').InboundEvent)=>Promise<unknown>,onAccept?:(event:import('../domain/events').InboundEvent)=>void,onReply?:(event:import('../domain/events').InboundEvent)=>void,sessionGroupRelaxed?:boolean,isSentId?:(chatId:string,id:string)=>boolean,rememberSent?:(chatId:string,id:string)=>void,record?:(ctx:Ctx,text:string)=>Promise<unknown>,recentReplies?:(chatId:string)=>Promise<string[]>}} options */
+/** @param {{clock:import('../platform/clock').Clock,store:import('../platform/ttlStore').TtlStore,queue:import('../platform/queue').TieredQueue,messenger:import('../domain/ports').Messenger,llm:import('../domain/ports').LLM,features:import('./contracts').Feature[],botJid:string,conversation:Parameters<typeof createContext>[0]['conversation'],roles?:import('./contracts').Roles,accessSnapshot?:import('./gate').AccessSnapshot,rateState?:(event:import('../domain/events').InboundEvent)=>import('./gate').RateState,passive?:(event:import('../domain/events').InboundEvent)=>Promise<unknown>,onAccept?:(event:import('../domain/events').InboundEvent)=>void,onReply?:(event:import('../domain/events').InboundEvent)=>void,sessionGroupRelaxed?:boolean,isSentId?:(chatId:string,id:string)=>boolean,rememberSent?:(chatId:string,id:string)=>void,record?:(ctx:Ctx,text:string)=>Promise<unknown>,recentReplies?:(chatId:string)=>Promise<string[]>,releaseMedia?:(ref:string)=>Promise<unknown>,responsePrivateMaxChars?:number,responseGroupMaxChars?:number,llmChatMaxOutputTokens?:number,llmRouteMaxOutputTokens?:number}} options */
 function createPipeline(options) {
     const { clock, store, queue, messenger, llm, features, botJid, conversation, roles, accessSnapshot, sessionGroupRelaxed, isSentId, rememberSent, record, recentReplies } = options;
     let observationFailures = 0;
@@ -22,9 +22,11 @@ function createPipeline(options) {
     function afterReply(event) { try { options.onReply?.(event); } catch { observationFailures++; } }
     const ingest = createIngest({ clock, store, botJid, isSentId });
     const context = createContext({ clock, store, conversation, roles });
-    const router = createRouter({ features, llm });
-    const executor = createExecutor({ features, queue, clock, llm });
-    const composer = createComposer({ messenger, llm, rememberSent, record, recentReplies, isClosed: () => closed });
+    const router = createRouter({ features, llm, routeBudget: { maxOutputTokens: options.llmRouteMaxOutputTokens ?? 120, timeoutMs: 15000 } });
+    const executor = createExecutor({ features, queue, clock, llm, chatMaxOutputTokens: options.llmChatMaxOutputTokens ?? 300 });
+    const composer = createComposer({ messenger, llm, rememberSent, record, recentReplies, releaseMedia: options.releaseMedia,
+        privateMaxChars: options.responsePrivateMaxChars ?? 600, groupMaxChars: options.responseGroupMaxChars ?? 350,
+        chatMaxOutputTokens: options.llmChatMaxOutputTokens ?? 300, isClosed: () => closed });
     /** @param {import('../domain/events').InboundEvent} event @param {boolean} shadow @returns {Promise<PipelineResult>} */
     async function processEvent(event, shadow) {
         if (closed) return { kind: 'ignore', reason: 'pipeline-closed' };

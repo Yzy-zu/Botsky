@@ -34,6 +34,6 @@ test('La iniciativa del bot se evalúa por Gemini sin detectar preguntas o activ
  const plans=[],sent=[];class Clock extends Date{static now(){return Date.parse('2026-10-09T18:00:00Z');}toLocaleTimeString(){return '12:00:00';}}
  const db={db:{all:(_,done)=>done(null,[])},canSendProactiveMessage:async()=>true,getPersonalityState:async()=>({objective_until:Infinity,mood:'curioso'}),getRecentSocialEvents:async()=>[],updatePersonalityState:async()=>{},recordProactiveMessage:async()=>{},addSocialEvent:async()=>{}};
  const deps={'./logger':logger,'./evolution':{sendText:async(...args)=>sent.push(args)},'./history':{getHistory:()=>[{role:'user',content:'Me serviría saber por dónde empezar',timestamp:Clock.now()}],addMessage(){}},'./scheduler':{registerTask(){}},'./ai':{evaluateProactiveAction:async plan=>{plans.push(plan);return {should_act:false};}},'./db':db};
- const module={exports:{}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/services/proactive.js'),'utf8'),{module,exports:module.exports,Date:Clock,process:{env:{}},require:id=>deps[id]});
+ const module={exports:{}};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../src/services/proactive.js'),'utf8'),{module,exports:module.exports,Date:Clock,process:{env:{PROACTIVE_ENABLED:'true'}},require:id=>deps[id]});
  const result=await module.exports.runProactiveCycle();assert.equal(plans[0].mode,'contextual');assert.equal(result.reason,'ai_decided_silence');assert.equal(sent.length,0);
 });

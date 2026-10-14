@@ -2,7 +2,7 @@
 'use strict';
 /** @typedef {import('../../platform/clock').Clock} Clock */
 /** @typedef {{data:unknown,status:number}} HttpResponse */
-/** @typedef {{post:(path:string,body:unknown,options?:{maxContentLength?:number})=>Promise<HttpResponse>,get:(path:string)=>Promise<HttpResponse>,put:(path:string,body:unknown)=>Promise<HttpResponse>}} HttpClient */
+/** @typedef {{post:(path:string,body:unknown,options?:{maxContentLength?:number,signal?:AbortSignal})=>Promise<HttpResponse>,get:(path:string)=>Promise<HttpResponse>,put:(path:string,body:unknown)=>Promise<HttpResponse>}} HttpClient */
 /** Extract public protocol classifications without retaining a raw provider body.
  * @param {unknown} data */
 function sanitizedFailure(data) {
@@ -33,15 +33,22 @@ function createClient({ baseUrl, apiKey, clock, timeoutMs = 60000, maxResponseBy
     const base = new URL(baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
     if (!['http:', 'https:'].includes(base.protocol) || base.username || base.password || !apiKey) throw new TypeError('Invalid Evolution connection configuration');
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0 || !Number.isSafeInteger(maxResponseBytes) || maxResponseBytes <= 0) throw new RangeError('Invalid HTTP bounds');
-    /** @param {string} method @param {string} route @param {unknown} [body] @param {{maxContentLength?:number}} [options] */
+    /** @param {string} method @param {string} route @param {unknown} [body] @param {{maxContentLength?:number,signal?:AbortSignal}} [options] */
     async function request(method, route, body, options = {}) {
         if (!route.startsWith('/') || route.startsWith('//')) throw new TypeError('Expected local API path');
         const destination = new URL(`${base.pathname.replace(/\/$/, '')}${route}`, base);
         if (destination.origin !== base.origin) throw new TypeError('External API path rejected');
+        options.signal?.throwIfAborted();
         const controller = new AbortController();
-        const timer = clock.setTimeout(() => controller.abort(), timeoutMs);
+        const parentSignal = options.signal;
+        const abortFromParent = () => controller.abort(parentSignal?.reason);
+        parentSignal?.addEventListener('abort', abortFromParent, { once: true });
+        let timer;
         const cap = Math.min(options.maxContentLength ?? maxResponseBytes, maxResponseBytes);
         try {
+            parentSignal?.throwIfAborted();
+            timer = clock.setTimeout(() => controller.abort(), timeoutMs);
+            controller.signal.throwIfAborted();
             const response = await fetchImpl(destination, { method, signal: controller.signal, redirect: 'error',
                 headers: { 'Content-Type': 'application/json', apikey: apiKey },
                 ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
@@ -65,17 +72,36 @@ function createClient({ baseUrl, apiKey, clock, timeoutMs = 60000, maxResponseBy
             return { data, status: response.status };
         } catch (error) {
             if (error instanceof EvolutionError) throw error;
-            throw new EvolutionError(controller.signal.aborted ? 'Evolution request timed out' : 'Evolution transport failed');
-        } finally { clock.clearTimeout(timer); }
+            if (parentSignal?.aborted) throw cancellationError(error, parentSignal);
+            if (controller.signal.aborted) throw new EvolutionError('Evolution request timed out');
+            if (isCancellation(error)) throw cancellationError(error, parentSignal);
+            throw new EvolutionError('Evolution transport failed');
+        } finally {
+            if (timer !== undefined) clock.clearTimeout(timer);
+            parentSignal?.removeEventListener('abort', abortFromParent);
+        }
     }
     return {
-        /** @param {string} route @param {unknown} body @param {{maxContentLength?:number}} [options] */
+        /** @param {string} route @param {unknown} body @param {{maxContentLength?:number,signal?:AbortSignal}} [options] */
         post: (route, body, options) => request('POST', route, body, options),
         /** @param {string} route */
         get: route => request('GET', route),
         /** @param {string} route @param {unknown} body */
         put: (route, body) => request('PUT', route, body)
     };
+}
+/** @param {unknown} error */
+function isCancellation(error) {
+    const err = /** @type {any} */ (error);
+    return err?.name === 'AbortError' || err?.code === 'ERR_CANCELED' || err?.code === 'ABORT_ERR';
+}
+/** @param {unknown} error @param {AbortSignal|undefined} signal */
+function cancellationError(error, signal) {
+    const err = /** @type {any} */ (error);
+    if (isCancellation(error)) return error;
+    const reason = signal?.reason;
+    if (isCancellation(reason)) return reason;
+    return Object.assign(new Error('Operation aborted'), { name: 'AbortError', code: 'ERR_CANCELED', cause: err });
 }
 /** Retry legacy-safe operations only; text/media/voice/edit deliberately bypass.
  * @param {()=>Promise<any>} run @param {Clock} clock @param {number} [retries] @param {number} [delayMs] */
@@ -84,7 +110,7 @@ async function withRetry(run, clock, retries = 2, delayMs = 1500) {
         try { return await run(); }
         catch (error) {
             const err = /** @type {any} */ (error);
-            if (err.deliveryAcknowledged === true || err.response?.data?.deliveryAcknowledged === true || err.code === 'MEDIA_TOO_LARGE' || [400, 401, 403, 404].includes(err.response?.status) || attempt >= retries) throw err;
+            if (isCancellation(error) || err.deliveryAcknowledged === true || err.response?.data?.deliveryAcknowledged === true || err.code === 'MEDIA_TOO_LARGE' || [400, 401, 403, 404].includes(err.response?.status) || attempt >= retries) throw err;
             await new Promise(resolve => clock.setTimeout(() => resolve(undefined), delayMs));
         }
     }
