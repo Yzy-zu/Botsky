@@ -458,7 +458,7 @@ function createDocumentsMedia({download,downloadUrl,run=createExecFileRunner(),o
         catch(error) { try { onCleanupError(error); } catch {} return error; }
     }
 
-    return { process,readContent,cleanupExpired,release };
+    return { process,readContent,prepareContent:contentReader.prepareContent,cleanupExpired,release };
 }
 
 /** @param {unknown} value */

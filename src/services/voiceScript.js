@@ -50,7 +50,12 @@ Respuesta JSON exacta: {"mode":"compose|verbatim","text":"texto hablado","voice"
             const options = { systemInstruction, userMessage, generationProfile: 'voice',
                 maxOutputTokens: Math.min(4096, Math.max(800, Math.round((words || 350) * 2.8))), responseMimeType: 'application/json', timeout: 40000, media, returnContent: true, returnMetadata: true };
             let generated = null;
-            try { generated = await callGemini(options); } catch (_) {}
+            try { generated = await callGemini(options); } catch (error) {
+                // A provider safety block is final for this content; do not
+                // send the same request to a second model as a bypass.
+                if (error?.diagnostic?.kind === 'blocked') return { success: false,
+                    error: 'No pude preparar ese audio con el contenido solicitado.' };
+            }
             let raw = generated?.content?.parts?.filter(part => !part.thought).map(part => part.text || '').join('\n').trim() || null;
             if (generated?.finishReason === 'MAX_TOKENS') raw = null;
             if (!raw && !media) {

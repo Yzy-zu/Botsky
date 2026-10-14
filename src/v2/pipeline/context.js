@@ -18,7 +18,7 @@ function createContext({ clock, store, conversation, roles = { admins: [], owner
         if (!event.media || event.isFromMe) return true;
         /** @type {Attachment} */ const attachment = { id:event.id,ownerJid:event.sender.jid,chatId:event.chatId,expiresAt:clock.now()+600000,ref:event.media.ref,mime:event.media.mime,kind:event.kind };
         const providerKey=originalMediaKey(event);
-        if(providerKey)attachment.providerKey=providerKey;
+        if(providerKey){attachment.providerKey=providerKey;const alternate=originalOwnerAlternate(event);if(alternate)attachment.providerOwnerAlt=alternate;}
         const ownerKey=contextKey(event.chatId,event.sender.jid);
         const idKey=contextKey(event.chatId,event.id);
         const hasOwner=!!store.get('pipeline.attachment.owner',ownerKey);
@@ -64,7 +64,7 @@ function createContext({ clock, store, conversation, roles = { admins: [], owner
             metadata.attachment={id:event.id,ownerJid:event.sender.jid,chatId:event.chatId,expiresAt:clock.now()+600000,
                 ref:event.media.ref,mime:event.media.mime,kind:event.kind};
             const providerKey=originalMediaKey(event);
-            if(providerKey)metadata.attachment.providerKey=providerKey;
+            if(providerKey){metadata.attachment.providerKey=providerKey;const alternate=originalOwnerAlternate(event);if(alternate)metadata.attachment.providerOwnerAlt=alternate;}
         }
         /** @type {HistoryMessage[]} */ let history = [];
         if (addressing.respond) history = event.isGroup ? conversation.recentThread ? await conversation.recentThread(event.chatId,event.sender.jid,event.quoted?.messageId,historyLimit) : [] : await conversation.recent(event.chatId,historyLimit);
@@ -100,6 +100,15 @@ function quotedMediaReference(event,now) {
             providerKey:{id:event.quoted.messageId,remoteJid:key.remoteJid,participant:/** @type {string} */(context.participant),fromMe:event.quoted.isFromBot}};
     }
     return undefined;
+}
+/** Keep only an explicit provider alternate that normalized to this event's owner.
+ * @param {InboundEvent} event @returns {string|undefined} */
+function originalOwnerAlternate(event){
+    const raw=/** @type {{data?:unknown,key?:unknown}|undefined} */(event.raw);
+    const source=raw?.data&&typeof raw.data==='object'?raw.data:raw;
+    const key=/** @type {{participantAlt?:unknown,remoteJidAlt?:unknown}|undefined} */(/** @type {{key?:unknown}|undefined} */(source)?.key);
+    const alternate=event.isGroup?key?.participantAlt:key?.remoteJidAlt;
+    return typeof alternate==='string'&&normalizeJid(alternate)===event.sender.jid?alternate:undefined;
 }
 /** Preserve the provider lookup identity for both Evolution envelope shapes.
  * Only copy the key fields; never retain raw message/media bytes in TTL state.

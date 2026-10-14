@@ -132,9 +132,30 @@ async function createRuntime({config,clock,evolutionHttp,llm,http,formData,eleve
         const roles = {admins:normalizeConfiguredJids(config.ALLOWED_NUMBERS_ADMIN || [],'s.whatsapp.net'),owners:[],
             members:normalizeConfiguredJids([...(config.ALLOWED_NUMBERS_NORMAL || []),...(config.ALLOWED_NUMBERS_TASKS || [])],'s.whatsapp.net'),groups:allowedGroups};
         const startedAt = clock.now();
+        const mediaEnabled=!Array.isArray(config.V2_CANARY_FEATURES)||config.V2_CANARY_FEATURES.includes('documents');
+        /** @type {Map<string,{emoji:string,pending:Promise<void>}>} */ const progressState=new Map();
+        /** @type {Set<Promise<void>>} */ const progressTasks=new Set();
+        /** Serialize reactions for one request; never use handler completion as delivery acknowledgement.
+         * @param {string} chatId @param {string} id @param {string} emoji @param {boolean} final */
+        function progressReaction(chatId,id,emoji,final=false){
+            if(disposed)return;
+            const key=JSON.stringify([chatId,id]);let state=progressState.get(key);
+            if(!state){if(final||progressState.size>=1000)return;state={emoji:'',pending:Promise.resolve()};progressState.set(key,state);}
+            if(state.emoji===emoji&&!final)return;state.emoji=emoji;
+            const previous=state.pending;
+            state.pending=previous.catch(()=>{}).then(async()=>{if(!disposed)await evolution.react(chatId,emoji,id);}).catch(()=>{});
+            const pending=state.pending;progressTasks.add(pending);void pending.then(()=>progressTasks.delete(pending));
+            if(final){const current=state;void state.pending.finally(()=>{if(progressState.get(key)===current)progressState.delete(key);});}
+        }
         app = createApplication({clock,botJid,conversation:{recent:conversation.recent,
             recentThread:(chatId,senderJid,quotedId,limit)=>threads.recentThread(chatId,senderJid,quotedId,limit)},
-            messenger:evolution,llm,roles,resolveDelivery,accessSnapshot:{privateNumbers,groups:allowedGroups},sessionGroupRelaxed:config.SESSION_GROUP_RELAXED === true,
+            messenger:evolution,llm,roles,resolveDelivery,
+            prepareChatContext:mediaEnabled?media.prepareChatContext:undefined,
+            onProgress:mediaEnabled?event=>{if(event.phase==='queued'||event.phase==='running')progressReaction(event.chatId,event.correlationId,'⏳');
+                // Terminal reaction belongs only to pipeline delivery completion.
+            }:undefined,
+            onDeliveryFinished:mediaEnabled?(event,outcome)=>progressReaction(event.chatId,event.id,outcome==='error'?'❌':'',true):undefined,
+            accessSnapshot:{privateNumbers,groups:allowedGroups},sessionGroupRelaxed:config.SESSION_GROUP_RELAXED === true,
             config:{RESPONSE_PRIVATE_MAX_CHARS:Number(config.RESPONSE_PRIVATE_MAX_CHARS ?? 600),
                 RESPONSE_GROUP_MAX_CHARS:Number(config.RESPONSE_GROUP_MAX_CHARS ?? 350),
                 LLM_CHAT_MAX_OUTPUT_TOKENS:Number(config.LLM_CHAT_MAX_OUTPUT_TOKENS ?? 300),
@@ -204,6 +225,7 @@ async function createRuntime({config,clock,evolutionHttp,llm,http,formData,eleve
                     }
                 }
                 try { await appDrained; } catch(error) { failures.push(error); }
+                await Promise.allSettled([...progressTasks]);progressState.clear();progressTasks.clear();
                 try { await cleanupPromise; } catch(error) { failures.push(error); }
                 try { await media?.dispose(); } catch(error) { failures.push(error); }
                 try { echoGuard?.dispose();echoStore?.dispose();sentStore?.dispose(); } catch(error) { failures.push(error); }

@@ -491,3 +491,11 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - Cooperacha lleva reserva por grupo, aclaración de categoría sin resultados y filtro de imágenes antes de selección. No se afirma que la concurrencia haya sido causa exacta de la captura; se corrigió un defecto reproducible.
 - Suite NUEVA aplazada por instrucción explícita del cliente. Sólo checks de sintaxis/scope/health. Pruebas focales24/24 de Cooperacha existían antes de cambiar frecuencia. El resultado legacy823 pertenece al checkpoint anterior; no extenderlo a este artefacto.
 - Retomar: ajustar tres pruebas de lluvia para lote5, verificar timer60s en start/recovery y ejecutar suite completa. Luego seguir brechas de Fase4 previamente guardadas. Biblioteca sigue con246imágenes activas publicadas y autoPublish por defecto.
+
+
+## Preparación de PDF/progreso y estabilidad IA — 2026-10-14 UTC
+
+- Gemini: detener rotación redundante de claves tras 503 UNAVAILABLE/sobrecarga de modelo; mantener rotación por cuotas y fallback configurado. Bloqueos del proveedor no pasan al fallback. Diagnósticos filtrados.
+- PDF/imagen nativos conectados al chat v2 después de clasificación; identidad actual/citada/cacheada validada, alias sólo del proveedor original, límites/cancelación y limpieza conservados. Progreso pesado usa reacción temporal, limpiada al terminar composición; no afirma ACK de WhatsApp.
+- Typecheck, lint, arquitectura (101 módulos, cero infracciones), sintaxis legacy y diff-check PASS. PRUEBAS FUNCIONALES APLAZADAS por instrucción del cliente. Actualizar audit de 503, pruebas de lluvia lote5 y escenarios de PDF/progreso antes de cerrar gates. No aplicar resultados históricos a este código.
+- Preparar despliegue de estabilidad legacy conservando canario privado QR/ayuda/estado y proactividad false. PDF/progreso quedan instalados pero inactivos en ese alcance. Fase4 abierta; TR-0166/TR-0437/TR-0368 no se cuentan como portados; luego olas B–D, Fase5 y Fase6. No reactivar observador ni retirar legacy.

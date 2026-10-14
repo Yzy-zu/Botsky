@@ -12,7 +12,7 @@ const { accessPolicy } = require('../policies/access.policy');
 const { createComposer, errorReply } = require('./composer');
 /** @typedef {import('./contracts').PipelineResult} PipelineResult */
 /** @typedef {import('./contracts').Ctx} Ctx */
-/** @param {{clock:import('../platform/clock').Clock,store:import('../platform/ttlStore').TtlStore,queue:import('../platform/queue').TieredQueue,messenger:import('../domain/ports').Messenger,llm:import('../domain/ports').LLM,features:import('./contracts').Feature[],botJid:string,conversation:Parameters<typeof createContext>[0]['conversation'],roles?:import('./contracts').Roles,accessSnapshot?:import('./gate').AccessSnapshot,rateState?:(event:import('../domain/events').InboundEvent)=>import('./gate').RateState,passive?:(event:import('../domain/events').InboundEvent)=>Promise<unknown>,recordInbound?:(ctx:Ctx)=>Promise<unknown>,onAccept?:(event:import('../domain/events').InboundEvent)=>void,onReply?:(event:import('../domain/events').InboundEvent)=>void,sessionGroupRelaxed?:boolean,isSentId?:(chatId:string,id:string)=>boolean,rememberSent?:(chatId:string,id:string)=>void,rememberMedia?:(ctx:Ctx,part:import('../domain/types').Reply['parts'][number],delivery:unknown)=>Promise<unknown>|unknown,record?:(ctx:Ctx,text:string)=>Promise<unknown>,recentReplies?:(chatId:string)=>Promise<string[]>,resolveDelivery?:Parameters<typeof createComposer>[0]['resolveDelivery'],releaseMedia?:(ref:string)=>Promise<unknown>,responsePrivateMaxChars?:number,responseGroupMaxChars?:number,llmChatMaxOutputTokens?:number,llmRouteMaxOutputTokens?:number}} options */
+/** @param {{clock:import('../platform/clock').Clock,store:import('../platform/ttlStore').TtlStore,queue:import('../platform/queue').TieredQueue,messenger:import('../domain/ports').Messenger,llm:import('../domain/ports').LLM,features:import('./contracts').Feature[],botJid:string,conversation:Parameters<typeof createContext>[0]['conversation'],roles?:import('./contracts').Roles,accessSnapshot?:import('./gate').AccessSnapshot,rateState?:(event:import('../domain/events').InboundEvent)=>import('./gate').RateState,passive?:(event:import('../domain/events').InboundEvent)=>Promise<unknown>,recordInbound?:(ctx:Ctx)=>Promise<unknown>,onAccept?:(event:import('../domain/events').InboundEvent)=>void,onReply?:(event:import('../domain/events').InboundEvent)=>void,sessionGroupRelaxed?:boolean,isSentId?:(chatId:string,id:string)=>boolean,rememberSent?:(chatId:string,id:string)=>void,rememberMedia?:(ctx:Ctx,part:import('../domain/types').Reply['parts'][number],delivery:unknown)=>Promise<unknown>|unknown,record?:(ctx:Ctx,text:string)=>Promise<unknown>,recentReplies?:(chatId:string)=>Promise<string[]>,resolveDelivery?:Parameters<typeof createComposer>[0]['resolveDelivery'],prepareChatContext?:Parameters<typeof createExecutor>[0]['prepareChatContext'],onProgress?:import('./contracts').ExecutorProgressHook,onDeliveryFinished?:(event:import('../domain/events').InboundEvent,outcome:'reply'|'error')=>void|Promise<void>,releaseMedia?:(ref:string)=>Promise<unknown>,responsePrivateMaxChars?:number,responseGroupMaxChars?:number,llmChatMaxOutputTokens?:number,llmRouteMaxOutputTokens?:number}} options */
 function createPipeline(options) {
     const { clock, store, queue, messenger, llm, features, botJid, conversation, roles, accessSnapshot, sessionGroupRelaxed, isSentId, rememberSent, record, recentReplies } = options;
     let observationFailures = 0;
@@ -21,10 +21,16 @@ function createPipeline(options) {
     /** @type {Promise<void>|undefined} */ let disposal;
     /** @param {import('../domain/events').InboundEvent} event */
     function afterReply(event) { try { options.onReply?.(event); } catch { observationFailures++; } }
+    /** @param {import('../domain/events').InboundEvent} event @param {'reply'|'error'} outcome */
+    function finishProgress(event,outcome){
+        if(closed)return;
+        try{void Promise.resolve(options.onDeliveryFinished?.(event,outcome)).catch(()=>{observationFailures++;});}
+        catch{observationFailures++;}
+    }
     const ingest = createIngest({ clock, store, botJid, isSentId });
     const context = createContext({ clock, store, conversation, roles });
     const router = createRouter({ features, llm, routeBudget: { maxOutputTokens: options.llmRouteMaxOutputTokens ?? 120, timeoutMs: 15000 } });
-    const executor = createExecutor({ features, queue, clock, llm, chatMaxOutputTokens: options.llmChatMaxOutputTokens ?? 300 });
+    const executor = createExecutor({ features, queue, clock, llm, chatMaxOutputTokens: options.llmChatMaxOutputTokens ?? 300,prepareChatContext:options.prepareChatContext,onProgress:options.onProgress });
     const composer = createComposer({ messenger, llm, rememberSent, rememberMedia:options.rememberMedia, record, recentReplies, releaseMedia: options.releaseMedia, resolveDelivery:options.resolveDelivery,
         privateMaxChars: options.responsePrivateMaxChars ?? 600, groupMaxChars: options.responseGroupMaxChars ?? 350,
         chatMaxOutputTokens: options.llmChatMaxOutputTokens ?? 300, isClosed: () => closed });
@@ -60,6 +66,7 @@ function createPipeline(options) {
                 const args=/** @type {Record<string,unknown>} */ (selected.args||{});
                 const composed=await composer.compose(ctx,reply,{allowLong:command?.allowLong,detailRequested:args.detail===true,status:selected.feature==='system-info'});
                 if (closed) return {kind:'ignore',reason:'pipeline-closed'};
+                finishProgress(event,'reply');
                 if (composed.parts.length) afterReply(event);
                 return {kind:'reply',event,addressing:addressed,decision:selected,reply:composed};
             }
@@ -79,12 +86,13 @@ function createPipeline(options) {
             const command = features.find(feature => feature.id === decision.feature)?.commands.find(item => item.name === decision.name);
             const composed = await composer.compose(ctx, reply, { allowLong: command?.allowLong, detailRequested: /** @type {Record<string,unknown>|undefined} */ (decision.args)?.detail === true, status: decision.feature === 'system-info' });
             if (closed) return { kind: 'ignore', reason: 'pipeline-closed' };
+            finishProgress(event,'reply');
             if (composed.parts.length) afterReply(event);
             return { kind: 'reply', event, addressing: addressed, decision, reply: composed };
         } catch (error) {
             if (closed) return { kind: 'ignore', reason: 'pipeline-closed' };
             const reply = errorReply(error);
-            if (!shadow) await composer.compose(ctx, reply);
+            if (!shadow) {try{await composer.compose(ctx, reply);}finally{finishProgress(event,'error');}}
             return { kind: 'error', reason: 'operation-failed', event, addressing: addressed, reply };
         }
     }

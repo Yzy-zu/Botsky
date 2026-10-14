@@ -377,6 +377,18 @@ async function callGemini({ generationProfile = 'default', systemInstruction, us
             const status = err.response?.status || err.response?.data?.error?.code;
             const code = err.code;
             const msg = String(err.message || '');
+            const providerError = err.response?.data?.error || {};
+
+            // A typed model overload is shared capacity pressure, not evidence
+            // that this API key is unhealthy. Stop this request before rotating
+            // through every configured key and poisoning their cooldown state.
+            const globalModelOverload = status === 503 &&
+                (providerError.status === 'UNAVAILABLE' || /model.{0,40}overload|overload.{0,40}model/i.test(msg) ||
+                    (typeof providerError.message==='string'&&/model.{0,40}overload|overload.{0,40}model/i.test(providerError.message.slice(0,2000))));
+            if (globalModelOverload) {
+                logger.warn('[AI-POOL] Gemini model overloaded (503); skipping key rotation for this request.');
+                break;
+            }
 
             // 1. Error 400 (Bad Request / Invalid Argument): no reintentable por cambio de clave
             if (status === 400 || msg.includes('400') || msg.includes('INVALID_ARGUMENT')) {
@@ -599,7 +611,10 @@ Crónica solicitada por: ${requesterName}. ¡Dale con todo el estilo mexicano!`;
                 timeout: 25000
             });
         } catch (err) {
-            logger.warn(`[AI] Error en Gemini para crónica: ${err.message}. Intentando failover a Groq...`);
+            const failure = classifyAiError(err, 'gemini');
+            logger.warn(`[AI] Gemini crónica falló: ${JSON.stringify(failure)}`);
+            if (failure.kind === 'blocked') throw err instanceof AiProviderError ? err : new AiProviderError(failure);
+            logger.warn('[AI] Intentando failover a Groq para crónica.');
         }
     }
 
@@ -614,7 +629,7 @@ Crónica solicitada por: ${requesterName}. ¡Dale con todo el estilo mexicano!`;
                 timeout: 25000
             });
         } catch (err) {
-            logger.error(`[AI] Error en failover de Groq para crónica: ${err.message}`);
+            logger.error(`[AI] Groq crónica falló: ${JSON.stringify(classifyAiError(err, 'groq'))}`);
         }
     }
 
@@ -741,7 +756,10 @@ ${toolContext}`;
                 } catch (_) { /* Mantener la respuesta válida si falla la reformulación. */ }
             }
         } catch (err) {
-            logger.warn(`[AI] Error en Gemini para chat: ${err.message}. Intentando failover a Groq...`);
+            const failure = classifyAiError(err, 'gemini');
+            logger.warn(`[AI] Gemini chat falló: ${JSON.stringify(failure)}`);
+            if (failure.kind === 'blocked') return 'No puedo ayudar con ese contenido.';
+            logger.warn('[AI] Intentando failover a Groq para chat.');
         }
     }
 
@@ -765,7 +783,7 @@ ${toolContext}`;
                 reply += '\n\nLa respuesta quedó incompleta por el límite de generación. Dime «continúa» para seguir con lo pendiente.';
             }
         } catch (err) {
-            logger.error(`[AI] Error en failover de Groq para chat: ${err.message}`);
+            logger.error(`[AI] Groq chat falló: ${JSON.stringify(classifyAiError(err, 'groq'))}`);
         }
     }
 
