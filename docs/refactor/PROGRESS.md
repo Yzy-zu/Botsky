@@ -482,3 +482,12 @@ No declarar v2 productivo ni migración completa antes de sus gates.
 - HappyHour: lote5 y timer60s, mantiene historial por evento y protección de generación/repetición. Último lote de ciclo puede tener menos de5 para no repetir la cola pendiente; envío fallido tampoco se cuenta como éxito. No activar proactividad ni iniciar evento nuevo manualmente.
 - PENDIENTE al retomar pruebas: actualizar expectativas happyHourRainRandomness del antiguo lote2 al lote5 y agregar frecuencia arranque/recovery; ejecutar suitelegacycompleta. No afirmar823como resultado de esta versión nueva: ese resultado corresponde al checkpoint anterior.
 - Instalar4archivoslegacy trascommit con backup privado y PM2 health; registrar resultado luego. Canaryv2 sigue QR/ayuda/estado en1privado; publicación246activos defaultautoPublish intacta.
+
+
+## Hotfix urgente ACTIVO — 2026-10-14 UTC
+
+- Código `0bd6e53` publicado en GitHub e instalado en los cuatro archivos legacy autorizados, comprobados contra commit. Backup privado `/tmp/botsky-urgent-rain-1791991604434`. Botsky PID4088976 online, health200 y PM2 save. Canary QR/ayuda/estado en1privado y proactividad false conservados.
+- Hora Feliz configurada a cinco medios cada60segundos, incluido timer de recuperación. Selección sin repetición por evento; último lote parcial/fallos pueden reducir entregas. No se disparó reto ni lluvia manual de prueba.
+- Cooperacha lleva reserva por grupo, aclaración de categoría sin resultados y filtro de imágenes antes de selección. No se afirma que la concurrencia haya sido causa exacta de la captura; se corrigió un defecto reproducible.
+- Suite NUEVA aplazada por instrucción explícita del cliente. Sólo checks de sintaxis/scope/health. Pruebas focales24/24 de Cooperacha existían antes de cambiar frecuencia. El resultado legacy823 pertenece al checkpoint anterior; no extenderlo a este artefacto.
+- Retomar: ajustar tres pruebas de lluvia para lote5, verificar timer60s en start/recovery y ejecutar suite completa. Luego seguir brechas de Fase4 previamente guardadas. Biblioteca sigue con246imágenes activas publicadas y autoPublish por defecto.

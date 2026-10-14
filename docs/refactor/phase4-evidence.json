@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-10-14T15:14:23.153359+00:00",
+  "recordedAt": "2026-10-14T15:27:26.017521+00:00",
   "status": "private_minimal_canary_active_full_wave_a_open",
   "verify": {
     "exitCode": 0,
@@ -44,7 +44,7 @@
     "privateChats": 1,
     "groups": 0,
     "sourceCommit": "753b24a",
-    "pid": 4081372,
+    "pid": 4088976,
     "health": 200,
     "proactiveEnabled": false,
     "pm2Saved": true,
@@ -181,5 +181,22 @@
     "pid": 4081372,
     "health": 200,
     "backup": "/tmp/botsky-happy-rain-backup-1791990787373"
+  },
+  "urgentLegacyUpdate": {
+    "sourceCommit": "0bd6e53",
+    "pid": 4088976,
+    "health": 200,
+    "backup": "/tmp/botsky-urgent-rain-1791991604434",
+    "filesVerified": 4,
+    "pm2Saved": true,
+    "proactiveEnabled": false,
+    "happyHourBatch": 5,
+    "happyHourIntervalSeconds": 60,
+    "newSuite": "deferred_by_user",
+    "syntaxChecks": "pass: all four source files",
+    "priorChallengeFocus": "24/24 passed before requested rain-frequency change",
+    "requiredFollowup": "Update rain batch-size expectations and verify startup/recovery cadence; full legacy suite deferred by explicit user instruction",
+    "userInstruction": "apresura, deja las pruebas para después",
+    "frequencyAssumption": "Five media per minute, stated to user; fewer on final unseen tail or send failure"
   }
 }
